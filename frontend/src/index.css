@@ -1,0 +1,269 @@
+/* DeepFake Forensic Tool - Global Styles */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f0f2f5;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Ant Design customizations */
+.ant-layout {
+  background: #f0f2f5;
+}
+
+.ant-layout-content {
+  background: #f0f2f5;
+}
+
+/* Upload component styles */
+.ant-upload-drag {
+  transition: all 0.3s ease;
+}
+
+.ant-upload-drag:hover {
+  border-color: #40a9ff;
+}
+
+.ant-upload-drag.ant-upload-drag-hover {
+  border-color: #1890ff;
+  background-color: #f0f8ff;
+}
+
+/* File upload progress styles */
+.upload-progress-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.upload-progress-item:last-child {
+  border-bottom: none;
+}
+
+/* Table customizations */
+.ant-table-thead > tr > th {
+  background-color: #fafafa;
+  font-weight: 600;
+}
+
+.ant-table-row:hover > td {
+  background-color: #f5f5f5;
+}
+
+/* Card customizations */
+.ant-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+}
+
+.ant-card-head {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Timeline customizations */
+.ant-timeline-item-content {
+  margin-left: 8px;
+}
+
+/* Modal customizations */
+.ant-modal-header {
+  border-radius: 8px 8px 0 0;
+}
+
+.ant-modal-content {
+  border-radius: 8px;
+}
+
+/* Button customizations */
+.ant-btn {
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.ant-btn-primary:hover {
+  background-color: #40a9ff;
+  border-color: #40a9ff;
+}
+
+/* Alert customizations */
+.ant-alert {
+  border-radius: 6px;
+}
+
+/* Progress customizations */
+.ant-progress-circle .ant-progress-text {
+  font-size: 10px;
+}
+
+/* Statistics card styles */
+.statistics-card {
+  text-align: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+}
+
+.statistics-card .ant-statistic-title {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.statistics-card .ant-statistic-content {
+  color: white;
+}
+
+/* File type tags */
+.file-type-tag.image {
+  background-color: #e6f7ff;
+  border-color: #91d5ff;
+  color: #1890ff;
+}
+
+.file-type-tag.video {
+  background-color: #f9f0ff;
+  border-color: #d3adf7;
+  color: #722ed1;
+}
+
+/* Risk level indicators */
+.risk-indicator.low {
+  color: #52c41a;
+}
+
+.risk-indicator.medium {
+  color: #faad14;
+}
+
+.risk-indicator.high {
+  color: #ff4d4f;
+}
+
+/* Metadata tree styles */
+.metadata-tree .ant-tree-treenode {
+  padding: 2px 0;
+}
+
+.metadata-tree .ant-tree-title {
+  font-size: 13px;
+}
+
+/* Loading states */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .ant-layout-sider {
+    position: fixed !important;
+    height: 100vh;
+    z-index: 1000;
+  }
+  
+  .ant-layout-content {
+    margin-left: 0 !important;
+  }
+  
+  .ant-card {
+    margin: 8px;
+  }
+  
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 576px) {
+  .ant-layout-content {
+    padding: 12px !important;
+  }
+  
+  .ant-card-body {
+    padding: 16px;
+  }
+  
+  .ant-col {
+    margin-bottom: 16px;
+  }
+}
+
+/* Drag and drop styles */
+.drag-over {
+  border-color: #1890ff !important;
+  background-color: #f0f8ff !important;
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Print styles */
+@media print {
+  .ant-layout-sider,
+  .ant-layout-header,
+  .no-print {
+    display: none !important;
+  }
+  
+  .ant-layout-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .ant-card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+}
