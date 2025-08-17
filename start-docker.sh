@@ -67,20 +67,40 @@ cleanup_environment() {
     
     read -p "Do you want to clean up existing containers and volumes? (y/N): " cleanup_choice
     if [[ $cleanup_choice =~ ^[Yy]$ ]]; then
-        log_warn "Stopping and removing existing containers..."
-        docker-compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
-        
-        log_warn "Pruning unused Docker resources..."
-        docker system prune -f > /dev/null 2>&1 || true
-        
-        log_info "✓ Environment cleaned up"
+        perform_cleanup
     else
         log_info "Skipping cleanup"
         
         # Stop existing containers gracefully
         log_info "Stopping existing containers..."
-        docker-compose -f "$COMPOSE_FILE" down 2>/dev/null || true
+        timeout 30 docker-compose -f "$COMPOSE_FILE" down 2>/dev/null || {
+            log_warn "Container stop timed out or failed"
+        }
     fi
+}
+
+# Function: Perform cleanup operations with timeouts
+perform_cleanup() {
+    log_warn "Stopping and removing existing containers..."
+    
+    # Stop and remove containers with timeout
+    timeout 60 docker-compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || {
+        log_warn "Container cleanup timed out, forcing removal..."
+        docker ps -aq --filter "name=${PROJECT_NAME}" | xargs -r docker rm -f 2>/dev/null || true
+    }
+    
+    log_warn "Pruning unused Docker resources..."
+    
+    # Prune with timeout
+    timeout 120 docker system prune -f --volumes 2>/dev/null || {
+        log_warn "System prune timed out, skipping..."
+    }
+    
+    # Clean specific project volumes
+    log_info "Cleaning project volumes..."
+    docker volume ls --filter name="${PROJECT_NAME}_" -q | xargs -r docker volume rm 2>/dev/null || true
+    
+    log_info "✓ Environment cleaned up"
 }
 
 # Function: Create necessary directories

@@ -101,44 +101,12 @@ function Clear-Environment {
     Log-Step "=== Step 2: Environment Cleanup ==="
     
     if ($Clean) {
-        Log-Warn "Cleaning up existing containers and volumes..."
-        try {
-            docker-compose -f $ComposeFile down -v --remove-orphans 2>$null
-        }
-        catch {
-            # Ignore errors
-        }
-        
-        Log-Warn "Pruning unused Docker resources..."
-        try {
-            docker system prune -f 2>$null | Out-Null
-        }
-        catch {
-            # Ignore errors
-        }
-        
-        Log-Info "✓ Environment cleaned up"
+        Invoke-Cleanup
     }
     else {
         $cleanupChoice = Read-Host "Do you want to clean up existing containers and volumes? (y/N)"
         if ($cleanupChoice -match "^[Yy]$") {
-            Log-Warn "Stopping and removing existing containers..."
-            try {
-                docker-compose -f $ComposeFile down -v --remove-orphans 2>$null
-            }
-            catch {
-                # Ignore errors
-            }
-            
-            Log-Warn "Pruning unused Docker resources..."
-            try {
-                docker system prune -f 2>$null | Out-Null
-            }
-            catch {
-                # Ignore errors
-            }
-            
-            Log-Info "✓ Environment cleaned up"
+            Invoke-Cleanup
         }
         else {
             Log-Info "Skipping cleanup"
@@ -146,13 +114,94 @@ function Clear-Environment {
             # Stop existing containers gracefully
             Log-Info "Stopping existing containers..."
             try {
-                docker-compose -f $ComposeFile down 2>$null
+                $stopJob = Start-Job -ScriptBlock { 
+                    param($ComposeFile)
+                    docker-compose -f $ComposeFile down 2>$null
+                } -ArgumentList $ComposeFile
+                
+                Wait-Job $stopJob -Timeout 30 | Out-Null
+                
+                if ($stopJob.State -eq "Running") {
+                    Log-Warn "Stop operation taking too long, killing job..."
+                    Stop-Job $stopJob -Force
+                }
+                
+                Remove-Job $stopJob -Force
+                Log-Info "✓ Containers stopped"
             }
             catch {
-                # Ignore errors
+                Log-Warn "Failed to stop containers gracefully"
             }
         }
     }
+}
+
+# Function: Perform cleanup operations
+function Invoke-Cleanup {
+    Log-Warn "Cleaning up existing containers and volumes..."
+    
+    # Step 1: Stop and remove containers
+    try {
+        Log-Info "Stopping project containers..."
+        $downJob = Start-Job -ScriptBlock { 
+            param($ComposeFile)
+            docker-compose -f $ComposeFile down -v --remove-orphans 2>$null
+        } -ArgumentList $ComposeFile
+        
+        Wait-Job $downJob -Timeout 60 | Out-Null
+        
+        if ($downJob.State -eq "Running") {
+            Log-Warn "Container cleanup taking too long, killing job..."
+            Stop-Job $downJob -Force
+        }
+        
+        Remove-Job $downJob -Force
+        Log-Info "✓ Project containers removed"
+    }
+    catch {
+        Log-Warn "Failed to remove project containers: $($_.Exception.Message)"
+    }
+    
+    # Step 2: Prune system resources (with timeout)
+    try {
+        Log-Info "Cleaning unused Docker resources..."
+        $pruneJob = Start-Job -ScriptBlock { 
+            docker system prune -f --volumes 2>$null
+        }
+        
+        Wait-Job $pruneJob -Timeout 120 | Out-Null
+        
+        if ($pruneJob.State -eq "Running") {
+            Log-Warn "Prune operation taking too long, skipping..."
+            Stop-Job $pruneJob -Force
+        }
+        else {
+            Log-Info "✓ Unused resources cleaned"
+        }
+        
+        Remove-Job $pruneJob -Force
+    }
+    catch {
+        Log-Warn "Failed to prune resources: $($_.Exception.Message)"
+    }
+    
+    # Step 3: Clean specific project volumes if they exist
+    try {
+        Log-Info "Checking for project volumes..."
+        $volumes = docker volume ls --filter name="${ProjectName}_" --format "{{.Name}}" 2>$null
+        if ($volumes) {
+            Log-Info "Removing project volumes: $($volumes -join ', ')"
+            $volumes | ForEach-Object {
+                docker volume rm $_ 2>$null | Out-Null
+            }
+        }
+        Log-Info "✓ Project volumes cleaned"
+    }
+    catch {
+        Log-Warn "Failed to clean project volumes: $($_.Exception.Message)"
+    }
+    
+    Log-Info "✓ Environment cleanup completed"
 }
 
 # Function: Create necessary directories
