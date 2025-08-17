@@ -182,9 +182,8 @@ function Show-VolumeInfo {
 # Function: Show Kafka topics
 function Show-KafkaTopics {
     Log-Step "=== Kafka Topics ==="
-    
-    try {
-        $topics = docker exec forensic_kafka kafka-topics.sh --list --bootstrap-server localhost:9092 2>$null
+      try {
+        $topics = docker exec forensic_kafka /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092 2>$null
         if ($topics) {
             Log-Info "Available topics:"
             $topics | ForEach-Object { Write-Host "  📨 $_" }
