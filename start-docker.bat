@@ -1,0 +1,3 @@
+@echo off
+echo Starting DeepFake Forensic Docker Environment...
+powershell.exe -ExecutionPolicy Bypass -File "%~dp0start-docker.ps1" %*

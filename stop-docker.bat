@@ -1,0 +1,3 @@
+@echo off
+echo Stopping DeepFake Forensic Docker Environment...
+powershell.exe -ExecutionPolicy Bypass -File "%~dp0stop-docker.ps1" %*

@@ -1,0 +1,3 @@
+@echo off
+echo Checking DeepFake Forensic Docker Environment Status...
+powershell.exe -ExecutionPolicy Bypass -File "%~dp0status-docker.ps1" %*
