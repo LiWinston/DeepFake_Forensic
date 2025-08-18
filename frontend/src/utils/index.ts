@@ -44,7 +44,7 @@ export const getFileExtension = (filename: string): string => {
  */
 export const isSupportedFileType = (filename: string): boolean => {
   const extension = getFileExtension(filename);
-  return SUPPORTED_FILE_EXTENSIONS.includes(extension);
+  return (SUPPORTED_FILE_EXTENSIONS as any).includes(extension);
 };
 
 /**
@@ -53,9 +53,9 @@ export const isSupportedFileType = (filename: string): boolean => {
 export const getFileCategory = (filename: string): 'image' | 'video' | 'unknown' => {
   const extension = getFileExtension(filename);
   
-  if (FILE_TYPES.IMAGE.includes(extension)) {
+  if ((FILE_TYPES.IMAGE as any).includes(extension)) {
     return 'image';
-  } else if (FILE_TYPES.VIDEO.includes(extension)) {
+  } else if ((FILE_TYPES.VIDEO as any).includes(extension)) {
     return 'video';
   }
   
@@ -76,11 +76,11 @@ export const debounce = <T extends (...args: any[]) => any>(
   func: T,
   delay: number
 ): ((...args: Parameters<T>) => void) => {
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: number;
   
   return (...args: Parameters<T>) => {
     clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func.apply(null, args), delay);
+    timeoutId = window.setTimeout(() => func.apply(null, args), delay);
   };
 };
 
@@ -97,7 +97,7 @@ export const throttle = <T extends (...args: any[]) => any>(
     if (!inThrottle) {
       func.apply(null, args);
       inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
+      window.setTimeout(() => inThrottle = false, limit);
     }
   };
 };

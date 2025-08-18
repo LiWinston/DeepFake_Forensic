@@ -18,15 +18,14 @@ import {
 import {
   DeleteOutlined,
   EyeOutlined,
-  AnalysisOutlined,
   ReloadOutlined,
   SearchOutlined,
-  FilterOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import { useFilesList, useMetadataAnalysis } from '../hooks';
 import { formatFileSize, formatDateTime, getFileCategory } from '../utils';
-import type { UploadFile, TableColumn } from '../types';
+import type { UploadFile } from '../types';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -52,8 +51,8 @@ const FilesList: React.FC<FilesListProps> = ({
   const [searchText, setSearchText] = useState<string>('');
 
   const handleTableChange = useCallback((pagination: TablePaginationConfig) => {
-    loadFiles(pagination.current, pagination.pageSize, filterType);
-  }, [loadFiles, filterType]);
+    loadFiles(pagination.current, pagination.pageSize);
+  }, [loadFiles]);
 
   const handleDelete = useCallback(async (fileId: string) => {
     await deleteFile(fileId);
@@ -73,15 +72,15 @@ const FilesList: React.FC<FilesListProps> = ({
 
   const handleFilterChange = useCallback((value: string) => {
     setFilterType(value);
-    loadFiles(1, pagination.pageSize, value);
+    loadFiles(1, pagination.pageSize);
   }, [loadFiles, pagination.pageSize]);
 
   const handleSearch = useCallback((value: string) => {
     setSearchText(value);
     // Implement search logic here
     // For now, we'll just filter by filename
-    loadFiles(1, pagination.pageSize, filterType);
-  }, [loadFiles, pagination.pageSize, filterType]);
+    loadFiles(1, pagination.pageSize);
+  }, [loadFiles, pagination.pageSize]);
 
   const getFileStatusTag = (status: string) => {
     const statusConfig = {
@@ -185,7 +184,7 @@ const FilesList: React.FC<FilesListProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<AnalysisOutlined />}
+              icon={<BarChartOutlined />}
               onClick={() => handleAnalyze(record.id)}
               disabled={record.status !== 'COMPLETED'}
             />

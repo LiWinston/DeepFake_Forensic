@@ -92,10 +92,16 @@ const FileUpload: React.FC<FileUploadProps> = ({
       setIsDragOver(false);
       console.log('Dropped files', e.dataTransfer.files);
     },
-    onDragEnter: () => setIsDragOver(true),
-    onDragLeave: () => setIsDragOver(false),
     showUploadList: false,
   };
+
+  // Handlers on wrapper to reflect drag state
+  const onWrapperDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+  const onWrapperDragLeave = () => setIsDragOver(false);
+  const onWrapperDrop = () => setIsDragOver(false);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -144,30 +150,32 @@ const FileUpload: React.FC<FileUploadProps> = ({
           )
         }
       >
-        <Dragger 
-          {...uploadProps}
-          className={isDragOver ? 'drag-over' : ''}
-          style={{
-            padding: '20px',
-            border: isDragOver ? '2px dashed #1890ff' : undefined,
-            backgroundColor: isDragOver ? '#f0f8ff' : undefined,
-          }}
-        >
-          <p className="ant-upload-drag-icon">
-            <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
-          </p>
-          <p className="ant-upload-text">
-            Click or drag files to this area to upload
-          </p>
-          <p className="ant-upload-hint">
-            Support for image and video files. Maximum file size: {formatFileSize(maxSize)}
-          </p>
-          <p className="ant-upload-hint">
-            <Text type="secondary">
-              Supported formats: {SUPPORTED_FILE_EXTENSIONS.join(', ')}
-            </Text>
-          </p>
-        </Dragger>
+        <div onDragOver={onWrapperDragOver} onDragLeave={onWrapperDragLeave} onDrop={onWrapperDrop}>
+          <Dragger 
+            {...uploadProps}
+            className={isDragOver ? 'drag-over' : ''}
+            style={{
+              padding: '20px',
+              border: isDragOver ? '2px dashed #1890ff' : undefined,
+              backgroundColor: isDragOver ? '#f0f8ff' : undefined,
+            }}
+          >
+            <p className="ant-upload-drag-icon">
+              <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
+            </p>
+            <p className="ant-upload-text">
+              Click or drag files to this area to upload
+            </p>
+            <p className="ant-upload-hint">
+              Support for image and video files. Maximum file size: {formatFileSize(maxSize)}
+            </p>
+            <p className="ant-upload-hint">
+              <Text type="secondary">
+                Supported formats: {SUPPORTED_FILE_EXTENSIONS.join(', ')}
+              </Text>
+            </p>
+          </Dragger>
+        </div>
 
         {showProgress && uploadProgress.length > 0 && (
           <div style={{ marginTop: 16 }}>
@@ -242,13 +250,6 @@ const FileUpload: React.FC<FileUploadProps> = ({
           </Col>
         </Row>
       </Card>
-
-      <style jsx>{`
-        .drag-over {
-          border-color: #1890ff !important;
-          background-color: #f0f8ff !important;
-        }
-      `}</style>
     </div>
   );
 };

@@ -1,4 +1,5 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios from 'axios';
+import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { message } from 'antd';
 import { API_BASE_URL } from '../constants';
 import type { ApiResponse } from '../types';
@@ -14,15 +15,15 @@ const httpClient: AxiosInstance = axios.create({
 
 // Request interceptor
 httpClient.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+  (config: InternalAxiosRequestConfig) => {
     // Add auth token if available
     const token = localStorage.getItem('token');
     if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+      (config.headers as any).Authorization = `Bearer ${token}`;
     }
     
     // Log request in development
-    if (import.meta.env.DEV) {
+    if ((import.meta as any).env?.DEV) {
       console.log('API Request:', {
         method: config.method?.toUpperCase(),
         url: config.url,
@@ -42,7 +43,7 @@ httpClient.interceptors.request.use(
 httpClient.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     // Log response in development
-    if (import.meta.env.DEV) {
+    if ((import.meta as any).env?.DEV) {
       console.log('API Response:', {
         status: response.status,
         url: response.config.url,
@@ -52,9 +53,9 @@ httpClient.interceptors.response.use(
     
     // Handle API response format
     if (response.data && typeof response.data === 'object') {
-      if (response.data.success === false) {
-        message.error(response.data.message || 'Request failed');
-        return Promise.reject(new Error(response.data.message || 'Request failed'));
+      if ((response.data as any).success === false) {
+        message.error((response.data as any).message || 'Request failed');
+        return Promise.reject(new Error((response.data as any).message || 'Request failed'));
       }
     }
     

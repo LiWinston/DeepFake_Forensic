@@ -18,7 +18,6 @@ import {
   Tree,
 } from 'antd';
 import {
-  AnalysisOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   LoadingOutlined,
@@ -26,13 +25,14 @@ import {
   InfoCircleOutlined,
   EyeOutlined,
   DeleteOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useMetadataAnalysis } from '../hooks';
 import { formatDateTime } from '../utils';
 import type { MetadataAnalysis, MetadataResult, UploadFile } from '../types';
 
-const { Text, Title, Paragraph } = Typography;
+const { Text, Title } = Typography;
 const { Panel } = Collapse;
 
 interface MetadataAnalysisProps {
@@ -60,7 +60,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
     if (!file) return;
     
     try {
-      await analyzeFile(file.id, 'FULL');
+      await analyzeFile(file.id);
       // Reload analyses to show the new one
       setTimeout(() => loadAnalyses(file.id), 1000);
     } catch (error) {
@@ -159,10 +159,10 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
                 type="circle"
                 size="small"
                 percent={record.result.suspicious.riskScore}
-                format={(percent) => `${percent}%`}
+                format={(p) => `${p}%`}
                 strokeColor={
-                  (percent || 0) <= 30 ? '#52c41a' :
-                  (percent || 0) <= 70 ? '#faad14' : '#ff4d4f'
+                  record.result.suspicious.riskScore <= 30 ? '#52c41a' :
+                  record.result.suspicious.riskScore <= 70 ? '#faad14' : '#ff4d4f'
                 }
               />
               {getRiskLevelTag(record.result.suspicious.riskScore)}
@@ -206,7 +206,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
     },
   ];
 
-  const renderMetadataTree = (data: Record<string, any>, prefix = '') => {
+  const renderMetadataTree = (data: Record<string, any>, prefix = ''): any[] => {
     return Object.entries(data).map(([key, value]) => {
       const nodeKey = prefix ? `${prefix}.${key}` : key;
       
@@ -363,7 +363,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
       <Card
         title={
           <Space>
-            <AnalysisOutlined />
+            <BarChartOutlined />
             <Title level={4} style={{ margin: 0 }}>
               Metadata Analysis
             </Title>
@@ -373,7 +373,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
           file && (
             <Button
               type="primary"
-              icon={<AnalysisOutlined />}
+              icon={<BarChartOutlined />}
               onClick={handleStartAnalysis}
               loading={loading}
               disabled={!file || file.status !== 'COMPLETED'}
@@ -412,7 +412,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
       <Modal
         title={
           <Space>
-            <AnalysisOutlined />
+            <BarChartOutlined />
             <Text>Analysis Details</Text>
             {selectedAnalysis && getAnalysisTypeTag(selectedAnalysis.analysisType)}
           </Space>

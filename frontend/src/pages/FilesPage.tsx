@@ -13,7 +13,7 @@ import {
 } from 'antd';
 import {
   FileTextOutlined,
-  AnalysisOutlined,
+  BarChartOutlined,
   EyeOutlined,
 } from '@ant-design/icons';
 import FilesList from '../components/FilesList';
@@ -141,7 +141,7 @@ const FilesPage: React.FC = () => {
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Button
                       type="primary"
-                      icon={<AnalysisOutlined />}
+                      icon={<BarChartOutlined />}
                       onClick={handleAnalyzeFile}
                       disabled={selectedFile.status !== 'COMPLETED'}
                       block
@@ -165,7 +165,6 @@ const FilesPage: React.FC = () => {
                     description="File analysis and preview are only available for completed uploads."
                     type="warning"
                     showIcon
-                    size="small"
                     style={{ marginTop: 16 }}
                   />
                 )}
