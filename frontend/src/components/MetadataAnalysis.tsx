@@ -49,20 +49,23 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
   useEffect(() => {
-    if (file) {
-      loadAnalyses(file.id);
+    if (file && file.md5Hash) {
+      loadAnalyses(file.md5Hash);
     } else {
       loadAnalyses();
     }
   }, [file, loadAnalyses]);
 
   const handleStartAnalysis = useCallback(async () => {
-    if (!file) return;
+    if (!file || !file.md5Hash) {
+      console.error('文件MD5哈希缺失，无法进行元数据分析');
+      return;
+    }
     
     try {
-      await analyzeFile(file.id);
+      await analyzeFile(file.md5Hash);
       // Reload analyses to show the new one
-      setTimeout(() => loadAnalyses(file.id), 1000);
+      setTimeout(() => loadAnalyses(file.md5Hash), 1000);
     } catch (error) {
       console.error('Failed to start analysis:', error);
     }

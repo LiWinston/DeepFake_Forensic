@@ -143,7 +143,7 @@ const FilesPage: React.FC = () => {
                       type="primary"
                       icon={<BarChartOutlined />}
                       onClick={handleAnalyzeFile}
-                      disabled={selectedFile.status !== 'COMPLETED'}
+                      disabled={selectedFile.status !== 'COMPLETED' || !selectedFile.md5Hash}
                       block
                     >
                       Analyze Metadata

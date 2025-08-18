@@ -58,11 +58,17 @@ const FilesList: React.FC<FilesListProps> = ({
     await deleteFile(fileId);
   }, [deleteFile]);
 
-  const handleAnalyze = useCallback(async (fileId: string) => {
+  const handleAnalyze = useCallback(async (file: UploadFile) => {
     try {
-      await analyzeFile(fileId);
+      if (!file.md5Hash) {
+        message.error('文件MD5哈希缺失，无法进行分析');
+        return;
+      }
+      await analyzeFile(file.md5Hash);
+      message.success('元数据分析已开始');
     } catch (error) {
       console.error('Analysis failed:', error);
+      message.error('分析启动失败');
     }
   }, [analyzeFile]);
 
@@ -185,8 +191,8 @@ const FilesList: React.FC<FilesListProps> = ({
               type="text"
               size="small"
               icon={<BarChartOutlined />}
-              onClick={() => handleAnalyze(record.id)}
-              disabled={record.status !== 'COMPLETED'}
+              onClick={() => handleAnalyze(record)}
+              disabled={record.status !== 'COMPLETED' || !record.md5Hash}
             />
           </Tooltip>
           <Tooltip title="Delete">
