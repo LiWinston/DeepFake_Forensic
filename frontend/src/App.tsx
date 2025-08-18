@@ -24,6 +24,9 @@ import {
 
 // Import pages
 import HomePage from './pages/HomePage';
+import UploadPage from './pages/UploadPage';
+import FilesPage from './pages/FilesPage';
+import AnalysisPage from './pages/AnalysisPage';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -111,9 +114,9 @@ const AppNavigation: React.FC = () => {
           <div style={{ padding: 24, background: '#fff', minHeight: 360 }}>
             <Routes>
               <Route path="/" element={<HomePage />} />
-              <Route path="/upload" element={<div>Upload Page - Coming Soon</div>} />
-              <Route path="/files" element={<div>File Management - Coming Soon</div>} />
-              <Route path="/analysis" element={<div>Analysis Page - Coming Soon</div>} />
+              <Route path="/upload" element={<UploadPage />} />
+              <Route path="/files" element={<FilesPage />} />
+              <Route path="/analysis" element={<AnalysisPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

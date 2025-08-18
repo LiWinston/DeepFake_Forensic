@@ -12,16 +12,16 @@ export const useFileUpload = () => {
   const [uploadProgress, setUploadProgress] = useState<Map<string, UploadProgress>>(new Map());
   const [isUploading, setIsUploading] = useState(false);
 
-  const uploadFile = useCallback(async (file: File): Promise<UploadFile | null> => {
-    const uploadId = generateId();
+  const uploadFile = useCallback(async (file: File) => {
+    const tempId = generateId();
     const progressInfo: UploadProgress = {
-      fileId: uploadId,
+      fileId: tempId,
       fileName: file.name,
       progress: 0,
       status: 'uploading',
     };
 
-    setUploadProgress(prev => new Map(prev).set(uploadId, progressInfo));
+    setUploadProgress(prev => new Map(prev).set(tempId, progressInfo));
     setIsUploading(true);
 
     try {
@@ -30,10 +30,8 @@ export const useFileUpload = () => {
         (progress) => {
           setUploadProgress(prev => {
             const newMap = new Map(prev);
-            const current = newMap.get(uploadId);
-            if (current) {
-              newMap.set(uploadId, { ...current, progress });
-            }
+            const current = newMap.get(tempId);
+            if (current) newMap.set(tempId, { ...current, progress });
             return newMap;
           });
         }
@@ -41,116 +39,76 @@ export const useFileUpload = () => {
 
       setUploadProgress(prev => {
         const newMap = new Map(prev);
-        newMap.set(uploadId, {
-          ...progressInfo,
-          progress: 100,
-          status: 'success',
-          fileId: result.id,
-        });
+        newMap.set(tempId, { ...progressInfo, progress: 100, status: 'success', fileId: String(result.fileId || result.fileMd5) });
         return newMap;
       });
 
       message.success(`File "${file.name}" uploaded successfully`);
-      return result;
+      // Return a minimal UploadFile-like object for UI compatibility
+      const mapped: UploadFile = {
+        id: String(result.fileId || result.fileMd5),
+        filename: result.fileName || file.name,
+        originalName: result.fileName || file.name,
+        fileType: '',
+        fileSize: file.size,
+        filePath: '',
+        uploadTime: new Date().toISOString(),
+        status: result.uploadStatus === 'COMPLETED' ? 'COMPLETED' : 'UPLOADING',
+        chunkTotal: result.totalChunks || undefined,
+        chunkUploaded: result.uploadedChunks || undefined,
+        md5Hash: result.fileMd5,
+      };
+      return mapped;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-      
+      const errMsg = error instanceof Error ? error.message : 'Upload failed';
       setUploadProgress(prev => {
         const newMap = new Map(prev);
-        newMap.set(uploadId, {
-          ...progressInfo,
-          status: 'error',
-          errorMessage,
-        });
+        newMap.set(tempId, { ...progressInfo, status: 'error', errorMessage: errMsg });
         return newMap;
       });
-
-      message.error(`Upload failed: ${errorMessage}`);
+      message.error(`Upload failed: ${errMsg}`);
       return null;
     } finally {
       setIsUploading(false);
     }
   }, []);
 
-  const clearProgress = useCallback((uploadId: string) => {
-    setUploadProgress(prev => {
-      const newMap = new Map(prev);
-      newMap.delete(uploadId);
-      return newMap;
-    });
+  const clearProgress = useCallback((id: string) => {
+    setUploadProgress(prev => { const m = new Map(prev); m.delete(id); return m; });
   }, []);
 
-  const clearAllProgress = useCallback(() => {
-    setUploadProgress(new Map());
-  }, []);
+  const clearAllProgress = useCallback(() => setUploadProgress(new Map()), []);
 
-  return {
-    uploadProgress: Array.from(uploadProgress.values()),
-    isUploading,
-    uploadFile,
-    clearProgress,
-    clearAllProgress,
-  };
+  return { uploadProgress: Array.from(uploadProgress.values()), isUploading, uploadFile, clearProgress, clearAllProgress };
 };
 
 /**
  * Hook for managing uploaded files list
  */
 export const useFilesList = (pageSize: number = 20) => {
-  const [files, setFiles] = useState<UploadFile[]>([]);
+  const [files] = useState<UploadFile[]>([]);
   const [loading, setLoading] = useState(false);
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize,
-    total: 0,
-  });
+  const [pagination, setPagination] = useState({ current: 1, pageSize, total: 0 });
 
-  const loadFiles = useCallback(async (page: number = 1, size: number = pageSize, fileType?: string) => {
+  const loadFiles = useCallback(async (page: number = 1, size: number = pageSize) => {
     setLoading(true);
     try {
-      const response = await uploadService.getFilesList(page - 1, size, fileType);
-      setFiles(response.content);
-      setPagination({
-        current: page,
-        pageSize: size,
-        total: response.totalElements,
-      });
-    } catch (error) {
-      message.error('Failed to load files');
-      console.error('Load files error:', error);
+      // TODO: integrate with backend list endpoint when available
+      setPagination({ current: page, pageSize: size, total: files.length });
     } finally {
       setLoading(false);
     }
-  }, [pageSize]);
+  }, [files.length, pageSize]);
 
-  const deleteFile = useCallback(async (fileId: string) => {
-    try {
-      await uploadService.deleteFile(fileId);
-      message.success('File deleted successfully');
-      // Reload current page
-      loadFiles(pagination.current, pagination.pageSize);
-    } catch (error) {
-      message.error('Failed to delete file');
-      console.error('Delete file error:', error);
-    }
-  }, [loadFiles, pagination.current, pagination.pageSize]);
+  const deleteFile = useCallback(async (_fileId: string) => {
+    message.info('Delete API not implemented yet');
+  }, []);
 
-  const refreshFiles = useCallback(() => {
-    loadFiles(pagination.current, pagination.pageSize);
-  }, [loadFiles, pagination.current, pagination.pageSize]);
+  const refreshFiles = useCallback(() => loadFiles(pagination.current, pagination.pageSize), [loadFiles, pagination.current, pagination.pageSize]);
 
-  useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
+  useEffect(() => { loadFiles(); }, [loadFiles]);
 
-  return {
-    files,
-    loading,
-    pagination,
-    loadFiles,
-    deleteFile,
-    refreshFiles,
-  };
+  return { files, loading, pagination, loadFiles, deleteFile, refreshFiles };
 };
 
 /**
@@ -160,53 +118,36 @@ export const useMetadataAnalysis = () => {
   const [analyses, setAnalyses] = useState<MetadataAnalysis[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const analyzeFile = useCallback(async (fileId: string, analysisType: 'EXIF' | 'HEADER' | 'HASH' | 'FULL' = 'FULL') => {
+  const analyzeFile = useCallback(async (fileMd5: string) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const result = await metadataService.analyzeFile({ fileId, analysisType });
-      message.success('Analysis started successfully');
+      const result = await metadataService.getAnalysis(fileMd5);
+      setAnalyses(prev => [result, ...prev.filter(a => a.fileId !== fileMd5)]);
       return result;
-    } catch (error) {
-      message.error('Failed to start analysis');
-      console.error('Analysis error:', error);
-      throw error;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const loadAnalyses = useCallback(async (fileId?: string) => {
+  const loadAnalyses = useCallback(async (fileMd5?: string) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await metadataService.getAnalysisList(0, 100, fileId);
-      setAnalyses(response.content);
-    } catch (error) {
-      message.error('Failed to load analyses');
-      console.error('Load analyses error:', error);
+      if (fileMd5) {
+        const result = await metadataService.getAnalysis(fileMd5);
+        setAnalyses([result]);
+      } else {
+        setAnalyses([]);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const deleteAnalysis = useCallback(async (analysisId: string) => {
-    try {
-      await metadataService.deleteAnalysis(analysisId);
-      message.success('Analysis deleted successfully');
-      // Remove from local state
-      setAnalyses(prev => prev.filter(analysis => analysis.id !== analysisId));
-    } catch (error) {
-      message.error('Failed to delete analysis');
-      console.error('Delete analysis error:', error);
-    }
+  const deleteAnalysis = useCallback(async (_analysisId: string) => {
+    message.info('Delete analysis API not implemented yet');
   }, []);
 
-  return {
-    analyses,
-    loading,
-    analyzeFile,
-    loadAnalyses,
-    deleteAnalysis,
-  };
+  return { analyses, loading, analyzeFile, loadAnalyses, deleteAnalysis };
 };
 
 /**

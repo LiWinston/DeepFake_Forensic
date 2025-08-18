@@ -1,104 +1,75 @@
 import httpClient from './http';
 import { API_ENDPOINTS } from '../constants';
-import type { 
-  MetadataAnalysis, 
-  ApiResponse,
-  PaginationResponse 
-} from '../types';
+import type { MetadataAnalysis, MetadataResult, ApiResponse } from '../types';
 
-export interface AnalyzeRequest {
-  fileId: string;
-  analysisType: 'EXIF' | 'HEADER' | 'HASH' | 'FULL';
+// Backend DTO shape
+export interface MetadataAnalysisResponseDTO {
+  success: boolean;
+  message?: string;
+  fileMd5: string;
+  extractionStatus?: string;
+  basicMetadata?: Record<string, any>;
+  exifData?: Record<string, any>;
+  videoMetadata?: Record<string, any>;
+  hashValues?: { md5?: string; sha256?: string } & Record<string, any>;
+  suspiciousIndicators?: { hasAnomalies?: boolean; anomalies?: string[]; riskScore?: number } & Record<string, any>;
+  analysisTime?: string;
 }
 
+const mapToMetadataAnalysis = (dto: MetadataAnalysisResponseDTO): MetadataAnalysis => {
+  const result: MetadataResult = {
+    exifData: dto.exifData || undefined,
+    fileHeaders: dto.basicMetadata || undefined,
+    hashData: dto.hashValues ? { md5: (dto.hashValues as any).md5, sha256: (dto.hashValues as any).sha256 } : undefined,
+    technicalData: dto.videoMetadata || undefined,
+    suspicious: dto.suspiciousIndicators ? {
+      hasAnomalies: !!dto.suspiciousIndicators.hasAnomalies,
+      anomalies: dto.suspiciousIndicators.anomalies || [],
+      riskScore: dto.suspiciousIndicators.riskScore ?? 0,
+    } : undefined,
+  };
+  return {
+    id: `${dto.fileMd5}-${dto.analysisTime || 'now'}`,
+    fileId: dto.fileMd5,
+    analysisType: 'FULL',
+    status: dto.success ? 'COMPLETED' : 'FAILED',
+    result,
+    createdTime: dto.analysisTime || new Date().toISOString(),
+    completedTime: dto.analysisTime || new Date().toISOString(),
+    errorMessage: dto.success ? undefined : (dto.message || 'Analysis not available'),
+  };
+};
+
 class MetadataService {
-  /**
-   * Start metadata analysis for a file
-   */
-  async analyzeFile(request: AnalyzeRequest): Promise<MetadataAnalysis> {
-    const response = await httpClient.post<ApiResponse<MetadataAnalysis>>(
-      API_ENDPOINTS.METADATA_ANALYZE,
-      request
+  // GET /metadata/analysis/{fileMd5}
+  async getAnalysis(fileMd5: string): Promise<MetadataAnalysis> {
+    const res = await httpClient.get<ApiResponse<MetadataAnalysisResponseDTO>>(
+      `${API_ENDPOINTS.METADATA_ANALYSIS}/${fileMd5}`
     );
-    return response.data.data;
+    const dto = (res.data?.data as any) || (res.data as any);
+    return mapToMetadataAnalysis(dto as MetadataAnalysisResponseDTO);
   }
 
-  /**
-   * Get metadata analysis list
-   */
-  async getAnalysisList(
-    page: number = 0,
-    size: number = 20,
-    fileId?: string,
-    status?: string
-  ): Promise<PaginationResponse<MetadataAnalysis>> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      size: size.toString(),
-    });
-
-    if (fileId) {
-      params.append('fileId', fileId);
-    }
-
-    if (status) {
-      params.append('status', status);
-    }
-
-    const response = await httpClient.get<ApiResponse<PaginationResponse<MetadataAnalysis>>>(
-      `${API_ENDPOINTS.METADATA_LIST}?${params}`
-    );
-    return response.data.data;
+  // Additional granular fetchers (optional usage)
+  async getBasic(fileMd5: string) {
+    const res = await httpClient.get<ApiResponse<any>>(`${API_ENDPOINTS.METADATA_BASIC}/${fileMd5}`);
+    return (res.data?.data as any) || (res.data as any);
   }
-
-  /**
-   * Get metadata analysis detail
-   */
-  async getAnalysisDetail(analysisId: string): Promise<MetadataAnalysis> {
-    const response = await httpClient.get<ApiResponse<MetadataAnalysis>>(
-      `${API_ENDPOINTS.METADATA_DETAIL}/${analysisId}`
-    );
-    return response.data.data;
+  async getExif(fileMd5: string) {
+    const res = await httpClient.get<ApiResponse<any>>(`${API_ENDPOINTS.METADATA_EXIF}/${fileMd5}`);
+    return (res.data?.data as any) || (res.data as any);
   }
-
-  /**
-   * Delete metadata analysis
-   */
-  async deleteAnalysis(analysisId: string): Promise<boolean> {
-    const response = await httpClient.delete<ApiResponse<boolean>>(
-      `${API_ENDPOINTS.METADATA_DELETE}/${analysisId}`
-    );
-    return response.data.data;
+  async getVideo(fileMd5: string) {
+    const res = await httpClient.get<ApiResponse<any>>(`${API_ENDPOINTS.METADATA_VIDEO}/${fileMd5}`);
+    return (res.data?.data as any) || (res.data as any);
   }
-
-  /**
-   * Get analyses for a specific file
-   */
-  async getFileAnalyses(fileId: string): Promise<MetadataAnalysis[]> {
-    const response = await this.getAnalysisList(0, 100, fileId);
-    return response.content;
+  async getSuspicious(fileMd5: string) {
+    const res = await httpClient.get<ApiResponse<any>>(`${API_ENDPOINTS.METADATA_SUSPICIOUS}/${fileMd5}`);
+    return (res.data?.data as any) || (res.data as any);
   }
-
-  /**
-   * Check if analysis is in progress for a file
-   */
-  async isAnalysisInProgress(fileId: string): Promise<boolean> {
-    const analyses = await this.getFileAnalyses(fileId);
-    return analyses.some(analysis => 
-      analysis.status === 'PENDING' || analysis.status === 'PROCESSING'
-    );
-  }
-
-  /**
-   * Get latest completed analysis for a file
-   */
-  async getLatestAnalysis(fileId: string): Promise<MetadataAnalysis | null> {
-    const analyses = await this.getFileAnalyses(fileId);
-    const completedAnalyses = analyses
-      .filter(analysis => analysis.status === 'COMPLETED')
-      .sort((a, b) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
-    
-    return completedAnalyses.length > 0 ? completedAnalyses[0] : null;
+  async getHashes(fileMd5: string) {
+    const res = await httpClient.get<ApiResponse<any>>(`${API_ENDPOINTS.METADATA_HASHES}/${fileMd5}`);
+    return (res.data?.data as any) || (res.data as any);
   }
 }
 
