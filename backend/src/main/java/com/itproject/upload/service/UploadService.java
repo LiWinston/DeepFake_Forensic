@@ -312,22 +312,152 @@ public class UploadService {
         // Get all chunks in order
         List<ChunkInfo> chunks = chunkInfoRepository.findByFileMd5OrderByChunkIndex(mediaFile.getFileMd5());
         
-        // Create temporary merged file
-        // In production, you might want to stream this directly to final location
-        // For now, we'll create a composed object in MinIO
-        
         log.info("Merging {} chunks for file: {}", chunks.size(), mediaFile.getFileName());
         
-        // Clean up individual chunks after successful merge
-        for (ChunkInfo chunk : chunks) {
-            try {
-                minioClient.removeObject(RemoveObjectArgs.builder()
-                        .bucket(minioBucketName)
-                        .object(chunk.getChunkPath())
-                        .build());
-            } catch (Exception e) {
-                log.warn("Failed to clean up chunk: {}", chunk.getChunkPath(), e);
+        // Validate all chunks are present
+        if (chunks.size() != mediaFile.getTotalChunks()) {
+            throw new IllegalStateException(String.format(
+                "Missing chunks: expected %d, found %d", mediaFile.getTotalChunks(), chunks.size()));
+        }
+        
+        // Create merged file by streaming chunks
+        java.io.PipedInputStream mergedStream = null;
+        java.io.PipedOutputStream outputStream = null;
+        Thread mergeThread = null;
+        boolean mergeSuccessful = false;
+        
+        try {
+            // Use PipedInputStream/PipedOutputStream to create a streaming merge
+            mergedStream = new java.io.PipedInputStream(1048576); // 1MB buffer
+            outputStream = new java.io.PipedOutputStream(mergedStream);
+            
+            final java.io.PipedOutputStream finalOutputStream = outputStream;
+            
+            // Start a separate thread to write chunks to the piped stream
+            mergeThread = new Thread(() -> {
+                try {
+                    log.debug("Starting chunk merge thread for {} chunks", chunks.size());
+                    
+                    for (int i = 0; i < chunks.size(); i++) {
+                        ChunkInfo chunk = chunks.get(i);
+                        log.debug("Processing chunk {} of {}: {}", i + 1, chunks.size(), chunk.getChunkPath());
+                        
+                        try (InputStream chunkStream = minioClient.getObject(GetObjectArgs.builder()
+                                .bucket(minioBucketName)
+                                .object(chunk.getChunkPath())
+                                .build())) {
+                            
+                            byte[] buffer = new byte[16384]; // 16KB buffer
+                            int bytesRead;
+                            long totalBytesRead = 0;
+                            
+                            while ((bytesRead = chunkStream.read(buffer)) != -1) {
+                                finalOutputStream.write(buffer, 0, bytesRead);
+                                totalBytesRead += bytesRead;
+                            }
+                            
+                            log.debug("Merged chunk {}: {} bytes", i + 1, totalBytesRead);
+                        } catch (Exception e) {
+                            log.error("Failed to read chunk {}: {}", chunk.getChunkPath(), e.getMessage());
+                            throw e;
+                        }
+                    }
+                    
+                    log.info("All chunks merged successfully in thread");
+                    
+                } catch (Exception e) {
+                    log.error("Error merging chunks in thread", e);
+                    throw new RuntimeException(e);
+                } finally {
+                    try {
+                        finalOutputStream.close();
+                        log.debug("Closed output stream in merge thread");
+                    } catch (IOException e) {
+                        log.warn("Error closing output stream", e);
+                    }
+                }
+            }, "chunk-merge-thread-" + mediaFile.getFileMd5().substring(0, 8));
+            
+            mergeThread.start();
+            
+            // Upload the merged stream to final location
+            log.info("Uploading merged file to MinIO: {}", finalPath);
+            minioClient.putObject(PutObjectArgs.builder()
+                    .bucket(minioBucketName)
+                    .object(finalPath)
+                    .stream(mergedStream, -1, 10485760) // 10MB part size
+                    .build());
+            
+            // Wait for merge thread to complete with timeout
+            mergeThread.join(300000); // 5 minutes timeout
+            
+            if (mergeThread.isAlive()) {
+                log.error("Merge thread timeout, interrupting...");
+                mergeThread.interrupt();
+                throw new Exception("Chunk merge timeout after 5 minutes");
             }
+            
+            mergeSuccessful = true;
+            log.info("Successfully merged {} chunks into: {}", chunks.size(), finalPath);
+            
+        } catch (Exception e) {
+            log.error("Failed to merge chunks for file: {}", mediaFile.getFileMd5(), e);
+            
+            // Clean up partial file if it exists
+            if (!mergeSuccessful) {
+                try {
+                    minioClient.removeObject(RemoveObjectArgs.builder()
+                            .bucket(minioBucketName)
+                            .object(finalPath)
+                            .build());
+                    log.info("Cleaned up partial merged file: {}", finalPath);
+                } catch (Exception cleanupException) {
+                    log.warn("Failed to clean up partial file: {}", finalPath, cleanupException);
+                }
+            }
+            
+            throw new Exception("Chunk merge failed: " + e.getMessage(), e);
+            
+        } finally {
+            // Clean up resources
+            if (mergeThread != null && mergeThread.isAlive()) {
+                mergeThread.interrupt();
+            }
+            
+            try {
+                if (outputStream != null) outputStream.close();
+            } catch (IOException e) {
+                log.warn("Error closing output stream in finally block", e);
+            }
+            
+            try {
+                if (mergedStream != null) mergedStream.close();
+            } catch (IOException e) {
+                log.warn("Error closing merged stream in finally block", e);
+            }
+        }
+        
+        // Clean up individual chunks only after successful merge
+        if (mergeSuccessful) {
+            int cleanedChunks = 0;
+            for (ChunkInfo chunk : chunks) {
+                try {
+                    minioClient.removeObject(RemoveObjectArgs.builder()
+                            .bucket(minioBucketName)
+                            .object(chunk.getChunkPath())
+                            .build());
+                    
+                    // Update chunk status
+                    chunk.setStatus(ChunkInfo.ChunkStatus.MERGED);
+                    chunkInfoRepository.save(chunk);
+                    cleanedChunks++;
+                    
+                } catch (Exception e) {
+                    log.warn("Failed to clean up chunk: {}", chunk.getChunkPath(), e);
+                }
+            }
+            
+            log.info("Cleaned up {} of {} chunk files", cleanedChunks, chunks.size());
         }
         
         return finalPath;
