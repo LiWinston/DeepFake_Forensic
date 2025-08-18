@@ -86,27 +86,62 @@ export const useFileUpload = () => {
  * Hook for managing uploaded files list
  */
 export const useFilesList = (pageSize: number = 20) => {
-  const [files] = useState<UploadFile[]>([]);
+  const [files, setFiles] = useState<UploadFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize, total: 0 });
 
   const loadFiles = useCallback(async (page: number = 1, size: number = pageSize) => {
     setLoading(true);
     try {
-      // TODO: integrate with backend list endpoint when available
-      setPagination({ current: page, pageSize: size, total: files.length });
+      // Call API to get files list
+      const result = await uploadService.getFiles(page, size);
+      setFiles(result.files || []);
+      setPagination({
+        current: result.current,
+        pageSize: result.pageSize,
+        total: result.total
+      });
+      
+      if (result.files.length === 0) {
+        message.info('暂无文件数据，请先上传文件');
+      }
+    } catch (error) {
+      message.error('加载文件列表失败');
+      console.error('Failed to load files:', error);
+      setFiles([]);
+      setPagination({ current: page, pageSize: size, total: 0 });
     } finally {
       setLoading(false);
     }
-  }, [files.length, pageSize]);
+  }, [pageSize]);
 
-  const deleteFile = useCallback(async (_fileId: string) => {
-    message.info('Delete API not implemented yet');
-  }, []);
+  const deleteFile = useCallback(async (fileId: string) => {
+    try {
+      setLoading(true);
+      const success = await uploadService.deleteFile(fileId);
+      if (success) {
+        message.success('文件删除成功');
+        // Refresh the current page
+        await loadFiles(pagination.current, pagination.pageSize);
+      } else {
+        message.warning('删除功能暂未实现');
+      }
+    } catch (error) {
+      message.error('删除文件失败');
+      console.error('Failed to delete file:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadFiles, pagination.current, pagination.pageSize]);
 
-  const refreshFiles = useCallback(() => loadFiles(pagination.current, pagination.pageSize), [loadFiles, pagination.current, pagination.pageSize]);
+  const refreshFiles = useCallback(() => {
+    console.log('刷新文件列表...');
+    loadFiles(pagination.current, pagination.pageSize);
+  }, [loadFiles, pagination.current, pagination.pageSize]);
 
-  useEffect(() => { loadFiles(); }, [loadFiles]);
+  useEffect(() => { 
+    loadFiles(1, pageSize); 
+  }, [loadFiles, pageSize]);
 
   return { files, loading, pagination, loadFiles, deleteFile, refreshFiles };
 };

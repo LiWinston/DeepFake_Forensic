@@ -10,17 +10,19 @@ import io.minio.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
  * Service for handling file uploads with chunked upload support
@@ -511,5 +513,114 @@ public class UploadService {
         response.setFileId(mediaFile.getId());
         
         return response;
+    }
+    
+    /**
+     * Get files list with pagination and filtering
+     */
+    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type) {
+        try {
+            log.debug("Getting files list: pageable={}, status={}, type={}", pageable, status, type);
+            
+            // Apply filters if provided
+            if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
+                MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
+                MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
+                return mediaFileRepository.findByUploadStatusAndMediaType(uploadStatus, mediaType, pageable);
+            } else if (StringUtils.hasText(status)) {
+                MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
+                return mediaFileRepository.findByUploadStatus(uploadStatus, pageable);
+            } else if (StringUtils.hasText(type)) {
+                MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
+                return mediaFileRepository.findByMediaType(mediaType, pageable);
+            } else {
+                return mediaFileRepository.findAll(pageable);
+            }
+            
+        } catch (Exception e) {
+            log.error("Error getting files list", e);
+            throw new RuntimeException("Failed to get files list: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Delete file by ID
+     */
+    @Transactional
+    public boolean deleteFile(String fileId) {
+        try {
+            log.info("Deleting file with ID: {}", fileId);
+            
+            // Find the file
+            Optional<MediaFile> mediaFileOpt = mediaFileRepository.findById(Long.valueOf(fileId));
+            if (mediaFileOpt.isEmpty()) {
+                log.warn("File not found with ID: {}", fileId);
+                return false;
+            }
+            
+            MediaFile mediaFile = mediaFileOpt.get();
+            
+            // Delete file from MinIO storage
+            try {
+                if (StringUtils.hasText(mediaFile.getFilePath())) {
+                    minioClient.removeObject(RemoveObjectArgs.builder()
+                            .bucket(minioBucketName)
+                            .object(mediaFile.getFilePath())
+                            .build());
+                    log.info("Deleted file from MinIO: {}", mediaFile.getFilePath());
+                }
+            } catch (Exception minioException) {
+                log.warn("Failed to delete file from MinIO: {}", mediaFile.getFilePath(), minioException);
+                // Continue with database cleanup even if MinIO deletion fails
+            }
+            
+            // Delete related chunk info records
+            try {
+                chunkInfoRepository.deleteByFileMd5(mediaFile.getFileMd5());
+                log.info("Deleted chunk info for file: {}", mediaFile.getFileMd5());
+            } catch (Exception chunkException) {
+                log.warn("Failed to delete chunk info: {}", mediaFile.getFileMd5(), chunkException);
+            }
+            
+            // Delete any remaining chunks from MinIO
+            try {
+                List<ChunkInfo> chunks = chunkInfoRepository.findByFileMd5OrderByChunkIndex(mediaFile.getFileMd5());
+                for (ChunkInfo chunk : chunks) {
+                    try {
+                        minioClient.removeObject(RemoveObjectArgs.builder()
+                                .bucket(minioBucketName)
+                                .object(chunk.getChunkPath())
+                                .build());
+                    } catch (Exception e) {
+                        log.warn("Failed to delete chunk: {}", chunk.getChunkPath(), e);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to clean up chunks for file: {}", mediaFile.getFileMd5(), e);
+            }
+            
+            // Delete file record from database
+            mediaFileRepository.delete(mediaFile);
+            
+            // Clear cached progress
+            String progressKey = UPLOAD_PROGRESS_PREFIX + mediaFile.getFileMd5();
+            String chunkCacheKey = CHUNK_CACHE_PREFIX + mediaFile.getFileMd5();
+            try {
+                redisTemplate.delete(progressKey);
+                redisTemplate.delete(chunkCacheKey);
+            } catch (Exception redisException) {
+                log.warn("Failed to clear Redis cache for file: {}", mediaFile.getFileMd5(), redisException);
+            }
+            
+            log.info("Successfully deleted file: {} ({})", mediaFile.getOriginalFileName(), fileId);
+            return true;
+            
+        } catch (NumberFormatException e) {
+            log.error("Invalid file ID format: {}", fileId, e);
+            return false;
+        } catch (Exception e) {
+            log.error("Error deleting file: {}", fileId, e);
+            throw new RuntimeException("Failed to delete file: " + e.getMessage(), e);
+        }
     }
 }

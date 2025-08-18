@@ -9,6 +9,8 @@ export const API_ENDPOINTS = {
   UPLOAD_CHECK: '/upload/check',
   UPLOAD_SUPPORTED_TYPES: '/upload/supported-types',
   UPLOAD_VALIDATE: '/upload/validate',
+  UPLOAD_FILES: '/upload/files',
+  UPLOAD_DELETE: '/upload/files',
   
   // Metadata Analysis (match backend)
   METADATA_ANALYSIS: '/metadata/analysis',

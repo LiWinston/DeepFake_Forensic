@@ -1,6 +1,8 @@
 package com.itproject.upload.repository;
 
 import com.itproject.upload.entity.MediaFile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,9 +28,24 @@ public interface MediaFileRepository extends JpaRepository<MediaFile, Long> {
     List<MediaFile> findByUploadStatus(MediaFile.UploadStatus uploadStatus);
     
     /**
+     * Find media files by upload status with pagination
+     */
+    Page<MediaFile> findByUploadStatus(MediaFile.UploadStatus uploadStatus, Pageable pageable);
+    
+    /**
      * Find media files by media type
      */
     List<MediaFile> findByMediaType(MediaFile.MediaType mediaType);
+    
+    /**
+     * Find media files by media type with pagination
+     */
+    Page<MediaFile> findByMediaType(MediaFile.MediaType mediaType, Pageable pageable);
+    
+    /**
+     * Find media files by upload status and media type with pagination
+     */
+    Page<MediaFile> findByUploadStatusAndMediaType(MediaFile.UploadStatus uploadStatus, MediaFile.MediaType mediaType, Pageable pageable);
     
     /**
      * Find media files by uploader

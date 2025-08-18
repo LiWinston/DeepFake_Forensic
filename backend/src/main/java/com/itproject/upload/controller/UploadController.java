@@ -2,16 +2,22 @@ package com.itproject.upload.controller;
 
 import com.itproject.upload.dto.ChunkUploadRequest;
 import com.itproject.upload.dto.UploadResponse;
+import com.itproject.upload.entity.MediaFile;
 import com.itproject.upload.service.FileTypeValidationService;
 import com.itproject.upload.service.UploadService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -186,5 +192,93 @@ public class UploadController {
             errorResponse.put("message", "Validation error: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
+    }
+    
+    /**
+     * Get files list with pagination
+     */
+    @GetMapping("/files")
+    public ResponseEntity<Map<String, Object>> getFiles(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "type", required = false) String type) {
+        
+        try {
+            log.info("Getting files list: page={}, size={}, status={}, type={}", page, size, status, type);
+            
+            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            Page<MediaFile> filesPage = uploadService.getFilesList(pageable, status, type);
+            
+            // Convert to response format
+            List<Map<String, Object>> fileList = filesPage.getContent().stream()
+                .map(this::convertToFileResponse)
+                .toList();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("files", fileList);
+            response.put("total", filesPage.getTotalElements());
+            response.put("current", page + 1); // Frontend uses 1-based pagination
+            response.put("pageSize", size);
+            response.put("totalPages", filesPage.getTotalPages());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error getting files list", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to get files: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Delete file by ID
+     */
+    @DeleteMapping("/files/{fileId}")
+    public ResponseEntity<Map<String, Object>> deleteFile(@PathVariable String fileId) {
+        try {
+            log.info("Deleting file: {}", fileId);
+            
+            boolean deleted = uploadService.deleteFile(fileId);
+            
+            Map<String, Object> response = new HashMap<>();
+            if (deleted) {
+                response.put("success", true);
+                response.put("message", "File deleted successfully");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "File not found or already deleted");
+                return ResponseEntity.notFound().build();
+            }
+            
+        } catch (Exception e) {
+            log.error("Error deleting file: {}", fileId, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Failed to delete file: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Convert MediaFile entity to response format
+     */
+    private Map<String, Object> convertToFileResponse(MediaFile mediaFile) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("id", mediaFile.getId().toString());
+        response.put("filename", mediaFile.getFileName());
+        response.put("originalName", mediaFile.getOriginalFileName());
+        response.put("fileType", mediaFile.getFileType());
+        response.put("fileSize", mediaFile.getFileSize());
+        response.put("filePath", mediaFile.getFilePath());
+        response.put("uploadTime", mediaFile.getCreatedAt().toString());
+        response.put("status", mediaFile.getUploadStatus().name());
+        response.put("chunkTotal", mediaFile.getTotalChunks());
+        response.put("chunkUploaded", mediaFile.getUploadedChunks());
+        response.put("md5Hash", mediaFile.getFileMd5());
+        response.put("uploadedBy", mediaFile.getUploadedBy());
+        return response;
     }
 }

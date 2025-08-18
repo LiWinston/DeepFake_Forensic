@@ -131,6 +131,44 @@ class UploadService {
     return (res.data?.data as any) || (res.data as any);
   }
 
+  // GET /upload/files
+  async getFiles(page: number = 1, pageSize: number = 20, status?: string, type?: string): Promise<{
+    files: any[],
+    total: number,
+    current: number,
+    pageSize: number
+  }> {
+    const params: Record<string, string | number> = {
+      page: page - 1, // Backend uses 0-based pagination
+      size: pageSize
+    };
+    
+    if (status) params.status = status;
+    if (type) params.type = type;
+
+    const res = await httpClient.get<ApiResponse<any>>(API_ENDPOINTS.UPLOAD_FILES, { params });
+    const data = (res.data?.data as any) || (res.data as any);
+    
+    return {
+      files: data.files || [],
+      total: data.total || 0,
+      current: data.current || page,
+      pageSize: data.pageSize || pageSize
+    };
+  }
+
+  // DELETE /upload/files/{fileId}
+  async deleteFile(fileId: string): Promise<boolean> {
+    try {
+      const res = await httpClient.delete<ApiResponse<any>>(`${API_ENDPOINTS.UPLOAD_DELETE}/${fileId}`);
+      const data = (res.data?.data as any) || (res.data as any);
+      return data.success === true;
+    } catch (error) {
+      console.error('Failed to delete file:', error);
+      return false;
+    }
+  }
+
   // High-level upload that matches backend contract
   async uploadFileWithChunks(
     file: File,
