@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
   UPLOAD_VALIDATE: '/upload/validate',
   UPLOAD_FILES: '/upload/files',
   UPLOAD_DELETE: '/upload/files',
+  UPLOAD_PREVIEW: '/upload/files', // GET /{fileId}/preview
   
   // Metadata Analysis (match backend)
   METADATA_ANALYSIS: '/metadata/analysis',

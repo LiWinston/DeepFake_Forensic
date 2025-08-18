@@ -623,4 +623,121 @@ public class UploadService {
             throw new RuntimeException("Failed to delete file: " + e.getMessage(), e);
         }
     }
+    
+    /**
+     * Get file stream for preview
+     */
+    public InputStream getFileStream(String fileId) throws Exception {
+        try {
+            log.info("Getting file stream for ID: {}", fileId);
+            
+            MediaFile mediaFile = getMediaFileByIdOrMd5(fileId);
+            
+            if (mediaFile == null) {
+                throw new RuntimeException("File not found: " + fileId);
+            }
+            
+            log.info("Found media file: id={}, md5={}, filename={}, status={}", 
+                    mediaFile.getId(), mediaFile.getFileMd5(), mediaFile.getFileName(), mediaFile.getUploadStatus());
+            
+            if (mediaFile.getUploadStatus() != MediaFile.UploadStatus.COMPLETED) {
+                throw new RuntimeException("File not completed: " + fileId + ", status: " + mediaFile.getUploadStatus());
+            }
+            
+            // Get file from MinIO
+            String objectPath = String.format("%s/%s", mediaFile.getFileMd5(), mediaFile.getFileName());
+            log.info("Getting object from MinIO: bucket={}, path={}", minioBucketName, objectPath);
+            
+            return minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(minioBucketName)
+                    .object(objectPath)
+                    .build());
+                    
+        } catch (Exception e) {
+            log.error("Failed to get file stream for: {}", fileId, e);
+            throw new RuntimeException("Failed to get file stream: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get file content type for preview
+     */
+    public String getFileContentType(String fileId) throws Exception {
+        MediaFile mediaFile = getMediaFileByIdOrMd5(fileId);
+        if (mediaFile == null) {
+            throw new RuntimeException("File not found: " + fileId);
+        }
+        
+        // Return MIME type based on file extension
+        String fileName = mediaFile.getFileName().toLowerCase();
+        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+            return "image/jpeg";
+        } else if (fileName.endsWith(".png")) {
+            return "image/png";
+        } else if (fileName.endsWith(".gif")) {
+            return "image/gif";
+        } else if (fileName.endsWith(".bmp")) {
+            return "image/bmp";
+        } else if (fileName.endsWith(".webp")) {
+            return "image/webp";
+        } else if (fileName.endsWith(".mp4")) {
+            return "video/mp4";
+        } else if (fileName.endsWith(".avi")) {
+            return "video/x-msvideo";
+        } else if (fileName.endsWith(".mov")) {
+            return "video/quicktime";
+        } else if (fileName.endsWith(".wmv")) {
+            return "video/x-ms-wmv";
+        } else if (fileName.endsWith(".webm")) {
+            return "video/webm";
+        } else if (fileName.endsWith(".mkv")) {
+            return "video/x-matroska";
+        } else {
+            return "application/octet-stream";
+        }
+    }
+    
+    /**
+     * Get file name for preview
+     */
+    public String getFileName(String fileId) throws Exception {
+        MediaFile mediaFile = getMediaFileByIdOrMd5(fileId);
+        if (mediaFile == null) {
+            throw new RuntimeException("File not found: " + fileId);
+        }
+        return mediaFile.getFileName();
+    }
+    
+    /**
+     * Helper method to get MediaFile by ID or MD5
+     */
+    private MediaFile getMediaFileByIdOrMd5(String fileId) {
+        log.debug("Looking for file with identifier: {}", fileId);
+        
+        // First check if it's a numeric ID (short string, only digits)
+        if (fileId.matches("\\d+")) {
+            try {
+                Long id = Long.parseLong(fileId);
+                log.debug("Searching by numeric ID: {}", id);
+                MediaFile result = mediaFileRepository.findById(id).orElse(null);
+                if (result != null) {
+                    log.debug("Found file by ID: {} -> {}", id, result.getFileName());
+                    return result;
+                }
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse numeric ID: {}", fileId);
+            }
+        }
+        
+        // If not found by ID or not numeric, try MD5 hash
+        log.debug("Searching by MD5 hash: {}", fileId);
+        MediaFile result = mediaFileRepository.findByFileMd5(fileId).orElse(null);
+        if (result != null) {
+            log.debug("Found file by MD5: {} -> {}", fileId, result.getFileName());
+            return result;
+        }
+        
+        log.warn("File not found by ID or MD5: {}", fileId);
+        return null;
+    }
 }

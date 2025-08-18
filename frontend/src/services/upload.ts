@@ -1,5 +1,5 @@
 import httpClient from './http';
-import { API_ENDPOINTS, CHUNK_SIZE } from '../constants';
+import { API_ENDPOINTS, API_BASE_URL, CHUNK_SIZE } from '../constants';
 import type { ApiResponse } from '../types';
 import SparkMD5 from 'spark-md5';
 
@@ -167,6 +167,11 @@ class UploadService {
       console.error('Failed to delete file:', error);
       return false;
     }
+  }
+
+  // Get file preview URL
+  getPreviewUrl(fileId: string): string {
+    return `${API_BASE_URL}${API_ENDPOINTS.UPLOAD_PREVIEW}/${fileId}/preview`;
   }
 
   // High-level upload that matches backend contract

@@ -7,15 +7,19 @@ import com.itproject.upload.service.FileTypeValidationService;
 import com.itproject.upload.service.UploadService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -280,5 +284,33 @@ public class UploadController {
         response.put("md5Hash", mediaFile.getFileMd5());
         response.put("uploadedBy", mediaFile.getUploadedBy());
         return response;
+    }
+    
+    /**
+     * Preview file content
+     */
+    @GetMapping("/files/{fileId}/preview")
+    public ResponseEntity<InputStreamResource> previewFile(@PathVariable String fileId) {
+        try {
+            log.info("Previewing file: {}", fileId);
+            
+            // Get file stream from service
+            InputStream fileStream = uploadService.getFileStream(fileId);
+            String contentType = uploadService.getFileContentType(fileId);
+            String fileName = uploadService.getFileName(fileId);
+            
+            // Set appropriate headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(contentType));
+            headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileName + "\"");
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(new InputStreamResource(fileStream));
+                    
+        } catch (Exception e) {
+            log.error("Error previewing file: {}", fileId, e);
+            return ResponseEntity.notFound().build();
+        }
     }
 }

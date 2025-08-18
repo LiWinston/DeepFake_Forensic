@@ -19,6 +19,7 @@ import {
 import FilesList from '../components/FilesList';
 import MetadataAnalysis from '../components/MetadataAnalysis';
 import type { UploadFile } from '../types';
+import uploadService from '../services/upload';
 
 const { Content } = Layout;
 const { Title, Paragraph } = Typography;
@@ -210,7 +211,7 @@ const FilesPage: React.FC = () => {
           <div style={{ textAlign: 'center' }}>
             {selectedFile.originalName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp)$/) ? (
               <img
-                src={`/api/files/preview/${selectedFile.id}`}
+                src={uploadService.getPreviewUrl(selectedFile.id)}
                 alt={selectedFile.originalName}
                 style={{ maxWidth: '100%', maxHeight: '500px' }}
                 onError={(e) => {
@@ -221,7 +222,7 @@ const FilesPage: React.FC = () => {
               <video
                 controls
                 style={{ maxWidth: '100%', maxHeight: '500px' }}
-                src={`/api/files/preview/${selectedFile.id}`}
+                src={uploadService.getPreviewUrl(selectedFile.id)}
               >
                 Your browser does not support the video tag.
               </video>
