@@ -14,6 +14,8 @@ export const API_ENDPOINTS = {
   
   // Metadata Analysis (match backend)
   METADATA_ANALYSIS: '/metadata/analysis',
+  METADATA_ANALYSIS_START: '/metadata/analysis',  // POST /{fileMd5}/start
+  METADATA_ANALYSIS_STATUS: '/metadata/analysis', // GET /{fileMd5}/status
   METADATA_BASIC: '/metadata/basic',
   METADATA_EXIF: '/metadata/exif',
   METADATA_VIDEO: '/metadata/video',

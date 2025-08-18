@@ -56,14 +56,21 @@ public class MetadataAnalysisService {
             String fileName = (String) message.get("fileName");
             String fileType = (String) message.get("fileType");
             String filePath = (String) message.get("filePath");
+            Boolean forceReAnalysis = (Boolean) message.get("forceReAnalysis");
             
-            log.info("Processing metadata analysis for file: {} (MD5: {})", fileName, fileMd5);
+            log.info("Processing metadata analysis for file: {} (MD5: {}), forceReAnalysis: {}", fileName, fileMd5, forceReAnalysis);
             
             // Check if metadata already exists
             Optional<MediaMetadata> existingMetadata = metadataRepository.findByFileMd5(fileMd5);
-            if (existingMetadata.isPresent()) {
-                log.info("Metadata already exists for file: {}", fileMd5);
+            if (existingMetadata.isPresent() && !Boolean.TRUE.equals(forceReAnalysis)) {
+                log.info("Metadata already exists for file: {}, skipping analysis", fileMd5);
                 return;
+            }
+            
+            // If forcing re-analysis, delete existing metadata
+            if (existingMetadata.isPresent() && Boolean.TRUE.equals(forceReAnalysis)) {
+                log.info("Force re-analysis requested, deleting existing metadata for file: {}", fileMd5);
+                metadataRepository.delete(existingMetadata.get());
             }
             
             // Analyze metadata based on file type

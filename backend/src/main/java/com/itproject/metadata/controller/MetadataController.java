@@ -2,14 +2,18 @@ package com.itproject.metadata.controller;
 
 import com.itproject.metadata.dto.MetadataAnalysisResponse;
 import com.itproject.metadata.service.MetadataAnalysisService;
+import com.itproject.upload.entity.MediaFile;
+import com.itproject.upload.repository.MediaFileRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Controller for metadata analysis operations
@@ -22,6 +26,15 @@ public class MetadataController {
     
     @Autowired
     private MetadataAnalysisService metadataAnalysisService;
+    
+    @Autowired
+    private MediaFileRepository mediaFileRepository;
+    
+    @Autowired
+    private KafkaTemplate<String, Object> kafkaTemplate;
+    
+    @Autowired
+    private String metadataAnalysisTopic;
     
     /**
      * Get metadata analysis for a file
@@ -177,6 +190,95 @@ public class MetadataController {
             log.error("Error retrieving hash verification for file: {}", fileMd5, e);
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("error", "Failed to retrieve hash verification: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Start metadata analysis for a file
+     */
+    @PostMapping("/analysis/{fileMd5}/start")
+    public ResponseEntity<Map<String, Object>> startAnalysis(@PathVariable String fileMd5) {
+        try {
+            log.info("Starting metadata analysis for file: {}", fileMd5);
+            
+            // Check if file exists and is completed
+            Optional<MediaFile> mediaFileOpt = mediaFileRepository.findByFileMd5(fileMd5);
+            if (mediaFileOpt.isEmpty()) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("success", false);
+                errorResponse.put("message", "文件不存在: " + fileMd5);
+                return ResponseEntity.notFound().build();
+            }
+            
+            MediaFile mediaFile = mediaFileOpt.get();
+            if (mediaFile.getUploadStatus() != MediaFile.UploadStatus.COMPLETED) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("success", false);
+                errorResponse.put("message", "文件上传未完成，无法进行分析");
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
+            
+            // Send Kafka message to start analysis
+            Map<String, Object> analysisMessage = new HashMap<>();
+            analysisMessage.put("fileMd5", mediaFile.getFileMd5());
+            analysisMessage.put("fileName", mediaFile.getOriginalFileName());
+            analysisMessage.put("fileType", mediaFile.getMediaType().name());
+            analysisMessage.put("filePath", mediaFile.getFilePath());
+            analysisMessage.put("forceReAnalysis", true); // 强制重新分析
+            
+            kafkaTemplate.send(metadataAnalysisTopic, analysisMessage);
+            
+            log.info("Metadata analysis task sent to Kafka for file: {}", fileMd5);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "元数据分析已启动");
+            response.put("fileMd5", fileMd5);
+            response.put("status", "PROCESSING");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error starting metadata analysis for file: {}", fileMd5, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "启动分析失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    /**
+     * Get analysis status for a file
+     */
+    @GetMapping("/analysis/{fileMd5}/status")
+    public ResponseEntity<Map<String, Object>> getAnalysisStatus(@PathVariable String fileMd5) {
+        try {
+            log.info("Getting analysis status for file: {}", fileMd5);
+            
+            // Check if analysis exists
+            MetadataAnalysisResponse analysis = metadataAnalysisService.getMetadataAnalysis(fileMd5);
+            
+            Map<String, Object> response = new HashMap<>();
+            if (analysis.isSuccess()) {
+                response.put("hasAnalysis", true);
+                response.put("status", analysis.getExtractionStatus());
+                response.put("analysisTime", analysis.getAnalysisTime());
+                response.put("message", analysis.getMessage());
+            } else {
+                response.put("hasAnalysis", false);
+                response.put("status", "NOT_FOUND");
+                response.put("message", "暂无分析结果");
+            }
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error getting analysis status for file: {}", fileMd5, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("hasAnalysis", false);
+            errorResponse.put("status", "ERROR");
+            errorResponse.put("message", "获取状态失败: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }

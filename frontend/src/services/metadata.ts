@@ -71,6 +71,42 @@ class MetadataService {
     const res = await httpClient.get<ApiResponse<any>>(`${API_ENDPOINTS.METADATA_HASHES}/${fileMd5}`);
     return (res.data?.data as any) || (res.data as any);
   }
+
+  // POST /metadata/analysis/{fileMd5}/start - 启动分析
+  async startAnalysis(fileMd5: string): Promise<{
+    success: boolean;
+    message: string;
+    status?: string;
+  }> {
+    const res = await httpClient.post<ApiResponse<any>>(
+      `${API_ENDPOINTS.METADATA_ANALYSIS_START}/${fileMd5}/start`
+    );
+    const data = (res.data?.data as any) || (res.data as any);
+    return {
+      success: data.success || false,
+      message: data.message || '启动分析失败',
+      status: data.status
+    };
+  }
+
+  // GET /metadata/analysis/{fileMd5}/status - 获取分析状态
+  async getAnalysisStatus(fileMd5: string): Promise<{
+    hasAnalysis: boolean;
+    status: string;
+    message: string;
+    analysisTime?: string;
+  }> {
+    const res = await httpClient.get<ApiResponse<any>>(
+      `${API_ENDPOINTS.METADATA_ANALYSIS_STATUS}/${fileMd5}/status`
+    );
+    const data = (res.data?.data as any) || (res.data as any);
+    return {
+      hasAnalysis: data.hasAnalysis || false,
+      status: data.status || 'UNKNOWN',
+      message: data.message || '未知状态',
+      analysisTime: data.analysisTime
+    };
+  }
 }
 
 export default new MetadataService();

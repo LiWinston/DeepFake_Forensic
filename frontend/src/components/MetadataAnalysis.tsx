@@ -16,6 +16,7 @@ import {
   Timeline,
   Collapse,
   Tree,
+  message,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -44,32 +45,96 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
   file,
   showFileInfo = true,
 }) => {
-  const { analyses, loading, analyzeFile, loadAnalyses, deleteAnalysis } = useMetadataAnalysis();
+  const { 
+    analyses, 
+    loading, 
+    startAnalysis, 
+    getAnalysis,
+    getAnalysisStatus,
+    loadAnalyses, 
+    deleteAnalysis 
+  } = useMetadataAnalysis();
+  
   const [selectedAnalysis, setSelectedAnalysis] = useState<MetadataAnalysis | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [currentFileStatus, setCurrentFileStatus] = useState<string>('');
+  const [pollingTimer, setPollingTimer] = useState<number | null>(null);
 
+  // 加载分析状态和结果
   useEffect(() => {
     if (file && file.md5Hash) {
       loadAnalyses(file.md5Hash);
+      // 获取当前分析状态
+      getAnalysisStatus(file.md5Hash).then(status => {
+        setCurrentFileStatus(status.status);
+        // 如果正在处理中，开始轮询
+        if (status.status === 'PROCESSING' && file.md5Hash) {
+          startPolling(file.md5Hash);
+        }
+      });
     } else {
       loadAnalyses();
+      setCurrentFileStatus('');
     }
-  }, [file, loadAnalyses]);
+  }, [file, loadAnalyses, getAnalysisStatus]);
+
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (pollingTimer) {
+        clearInterval(pollingTimer);
+      }
+    };
+  }, [pollingTimer]);
+
+  // 开始轮询检查分析状态
+  const startPolling = useCallback((fileMd5: string) => {
+    const timer = window.setInterval(async () => {
+      const status = await getAnalysisStatus(fileMd5);
+      setCurrentFileStatus(status.status);
+      
+      if (status.status !== 'PROCESSING') {
+        clearInterval(timer);
+        setPollingTimer(null);
+        // 重新加载分析结果
+        if (status.hasAnalysis) {
+          loadAnalyses(fileMd5);
+        }
+      }
+    }, 3000); // 每3秒检查一次
+    
+    setPollingTimer(timer);
+  }, [getAnalysisStatus, loadAnalyses]);
 
   const handleStartAnalysis = useCallback(async () => {
     if (!file || !file.md5Hash) {
-      console.error('文件MD5哈希缺失，无法进行元数据分析');
+      message.error('文件MD5哈希缺失，无法进行元数据分析');
       return;
     }
     
     try {
-      await analyzeFile(file.md5Hash);
-      // Reload analyses to show the new one
-      setTimeout(() => loadAnalyses(file.md5Hash), 1000);
+      const success = await startAnalysis(file.md5Hash);
+      if (success) {
+        setCurrentFileStatus('PROCESSING');
+        // 开始轮询检查状态
+        startPolling(file.md5Hash);
+      }
     } catch (error) {
       console.error('Failed to start analysis:', error);
+      message.error('启动分析失败');
     }
-  }, [file, analyzeFile, loadAnalyses]);
+  }, [file, startAnalysis, startPolling]);
+
+  const handleViewResults = useCallback(async () => {
+    if (!file || !file.md5Hash) return;
+    
+    try {
+      await getAnalysis(file.md5Hash);
+    } catch (error) {
+      console.error('Failed to get analysis results:', error);
+      message.error('获取分析结果失败');
+    }
+  }, [file, getAnalysis]);
 
   const handleViewDetails = useCallback((analysis: MetadataAnalysis) => {
     setSelectedAnalysis(analysis);
@@ -374,15 +439,64 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
         }
         extra={
           file && (
-            <Button
-              type="primary"
-              icon={<BarChartOutlined />}
-              onClick={handleStartAnalysis}
-              loading={loading}
-              disabled={!file || file.status !== 'COMPLETED'}
-            >
-              Start Analysis
-            </Button>
+            <Space>
+              {/* 分析状态指示器 */}
+              {currentFileStatus && (
+                <span>
+                  状态: <Tag color={
+                    currentFileStatus === 'SUCCESS' ? 'green' : 
+                    currentFileStatus === 'PROCESSING' ? 'blue' :
+                    currentFileStatus === 'FAILED' ? 'red' : 'default'
+                  }>
+                    {currentFileStatus === 'SUCCESS' ? '已完成' :
+                     currentFileStatus === 'PROCESSING' ? '分析中' :
+                     currentFileStatus === 'FAILED' ? '失败' :
+                     currentFileStatus === 'NOT_FOUND' ? '未分析' : currentFileStatus}
+                  </Tag>
+                </span>
+              )}
+              
+              {/* 根据状态显示不同的按钮 */}
+              {currentFileStatus === 'SUCCESS' ? (
+                <Button
+                  type="primary"
+                  icon={<EyeOutlined />}
+                  onClick={handleViewResults}
+                  loading={loading}
+                >
+                  查看结果
+                </Button>
+              ) : currentFileStatus === 'FAILED' ? (
+                <Button
+                  type="primary"
+                  icon={<BarChartOutlined />}
+                  onClick={handleStartAnalysis}
+                  loading={loading}
+                  disabled={!file || file.status !== 'COMPLETED'}
+                >
+                  重新分析
+                </Button>
+              ) : currentFileStatus === 'PROCESSING' ? (
+                <Button
+                  type="primary"
+                  icon={<LoadingOutlined />}
+                  loading={true}
+                  disabled={true}
+                >
+                  分析中...
+                </Button>
+              ) : (
+                <Button
+                  type="primary"
+                  icon={<BarChartOutlined />}
+                  onClick={handleStartAnalysis}
+                  loading={loading}
+                  disabled={!file || file.status !== 'COMPLETED' || !file.md5Hash}
+                >
+                  开始分析
+                </Button>
+              )}
+            </Space>
           )
         }
       >

@@ -152,37 +152,100 @@ export const useFilesList = (pageSize: number = 20) => {
 export const useMetadataAnalysis = () => {
   const [analyses, setAnalyses] = useState<MetadataAnalysis[]>([]);
   const [loading, setLoading] = useState(false);
+  const [analysisStatus, setAnalysisStatus] = useState<Record<string, string>>({});
 
-  const analyzeFile = useCallback(async (fileMd5: string) => {
+  // 启动分析
+  const startAnalysis = useCallback(async (fileMd5: string) => {
     setLoading(true);
     try {
-      const result = await metadataService.getAnalysis(fileMd5);
-      setAnalyses(prev => [result, ...prev.filter(a => a.fileId !== fileMd5)]);
-      return result;
+      const result = await metadataService.startAnalysis(fileMd5);
+      if (result.success) {
+        message.success(result.message || '分析已启动');
+        setAnalysisStatus(prev => ({ ...prev, [fileMd5]: 'PROCESSING' }));
+        return true;
+      } else {
+        message.error(result.message || '启动分析失败');
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to start analysis:', error);
+      message.error('启动分析失败');
+      return false;
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // 获取分析结果（已有的逻辑，用于查看结果）
+  const getAnalysis = useCallback(async (fileMd5: string) => {
+    setLoading(true);
+    try {
+      const result = await metadataService.getAnalysis(fileMd5);
+      setAnalyses(prev => [result, ...prev.filter(a => a.fileId !== fileMd5)]);
+      return result;
+    } catch (error) {
+      console.error('Failed to get analysis:', error);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 获取分析状态
+  const getAnalysisStatus = useCallback(async (fileMd5: string) => {
+    try {
+      const status = await metadataService.getAnalysisStatus(fileMd5);
+      setAnalysisStatus(prev => ({ ...prev, [fileMd5]: status.status }));
+      return status;
+    } catch (error) {
+      console.error('Failed to get analysis status:', error);
+      return { hasAnalysis: false, status: 'ERROR', message: '获取状态失败' };
+    }
+  }, []);
+
+  // 加载分析结果
   const loadAnalyses = useCallback(async (fileMd5?: string) => {
     setLoading(true);
     try {
       if (fileMd5) {
-        const result = await metadataService.getAnalysis(fileMd5);
-        setAnalyses([result]);
+        // 先获取状态
+        const status = await getAnalysisStatus(fileMd5);
+        
+        // 如果有完成的分析结果，获取详细内容
+        if (status.hasAnalysis && status.status === 'SUCCESS') {
+          const result = await metadataService.getAnalysis(fileMd5);
+          setAnalyses([result]);
+        } else {
+          setAnalyses([]);
+        }
       } else {
         setAnalyses([]);
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getAnalysisStatus]);
 
   const deleteAnalysis = useCallback(async (_analysisId: string) => {
     message.info('Delete analysis API not implemented yet');
   }, []);
 
-  return { analyses, loading, analyzeFile, loadAnalyses, deleteAnalysis };
+  // 兼容性：保持原有的analyzeFile方法（实际调用启动分析）
+  const analyzeFile = useCallback(async (fileMd5: string) => {
+    return await startAnalysis(fileMd5);
+  }, [startAnalysis]);
+
+  return { 
+    analyses, 
+    loading, 
+    analysisStatus,
+    analyzeFile,           // 启动分析（兼容性）
+    startAnalysis,         // 明确的启动分析
+    getAnalysis,          // 获取分析结果
+    getAnalysisStatus,    // 获取分析状态
+    loadAnalyses, 
+    deleteAnalysis 
+  };
 };
 
 /**
