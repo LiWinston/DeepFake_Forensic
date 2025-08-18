@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   UPLOAD_FILES: '/upload/files',
   UPLOAD_DELETE: '/upload/files',
   UPLOAD_PREVIEW: '/upload/files', // GET /{fileId}/preview
+  UPLOAD_THUMBNAIL: '/upload/files', // GET /{fileId}/thumbnail
   
   // Metadata Analysis (match backend)
   METADATA_ANALYSIS: '/metadata/analysis',

@@ -19,10 +19,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import net.coobird.thumbnailator.Thumbnails;
 
 /**
  * Service for handling file uploads with chunked upload support
@@ -739,5 +741,214 @@ public class UploadService {
         
         log.warn("File not found by ID or MD5: {}", fileId);
         return null;
+    }
+    
+    /**
+     * Get file thumbnail with Redis caching
+     */
+    public byte[] getFileThumbnail(String fileId) throws Exception {
+        try {
+            log.info("Getting thumbnail for file: {}", fileId);
+            
+            // Check Redis cache first
+            String thumbnailKey = "thumbnail:" + fileId;
+            String errorKey = "thumbnail_error:" + fileId;
+            Object cachedThumbnail = redisTemplate.opsForValue().get(thumbnailKey);
+            
+            if (cachedThumbnail instanceof byte[]) {
+                log.info("Returning cached thumbnail for file: {}", fileId);
+                return (byte[]) cachedThumbnail;
+            }
+            
+            // Check if we've already failed to generate thumbnail for this file
+            if (redisTemplate.hasKey(errorKey)) {
+                log.info("Returning fallback thumbnail for previously failed file: {}", fileId);
+                return generateFallbackThumbnail();
+            }
+            
+            // Get media file info
+            MediaFile mediaFile = getMediaFileByIdOrMd5(fileId);
+            if (mediaFile == null) {
+                throw new RuntimeException("File not found: " + fileId);
+            }
+            
+            if (mediaFile.getUploadStatus() != MediaFile.UploadStatus.COMPLETED) {
+                throw new RuntimeException("File not completed: " + fileId);
+            }
+            
+            // Only generate thumbnails for images
+            String fileName = mediaFile.getFileName().toLowerCase();
+            if (!isImageFile(fileName)) {
+                log.warn("Thumbnail not supported for file type: {}, returning fallback", fileName);
+                byte[] fallbackThumbnail = generateFallbackThumbnail();
+                // Cache the fallback for non-image files
+                redisTemplate.opsForValue().set(thumbnailKey, fallbackThumbnail, 24, TimeUnit.HOURS);
+                return fallbackThumbnail;
+            }
+            
+            // Try to generate thumbnail with robust error handling
+            return generateThumbnailWithFallback(fileId, mediaFile, thumbnailKey, errorKey);
+            
+        } catch (Exception e) {
+            log.error("Failed to get thumbnail for file: {}", fileId, e);
+            // Return fallback thumbnail instead of throwing exception
+            return generateFallbackThumbnail();
+        }
+    }
+    
+    /**
+     * Generate thumbnail with fallback mechanism
+     */
+    private byte[] generateThumbnailWithFallback(String fileId, MediaFile mediaFile, String thumbnailKey, String errorKey) {
+        String objectPath = String.format("%s/%s", mediaFile.getFileMd5(), mediaFile.getFileName());
+        
+        try {
+            log.info("Generating thumbnail for file: {} ({})", fileId, mediaFile.getFileName());
+            
+            try (InputStream originalStream = minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(minioBucketName)
+                    .object(objectPath)
+                    .build())) {
+                
+                // Generate thumbnail using Thumbnailator with error handling
+                ByteArrayOutputStream thumbnailStream = new ByteArrayOutputStream();
+                
+                try {
+                    Thumbnails.of(originalStream)
+                            .size(150, 150) // Max size 150x150px
+                            .keepAspectRatio(true)
+                            .outputQuality(0.8) // 80% quality for smaller file size
+                            .outputFormat("JPEG") // Always output as JPEG for smaller size
+                            .toOutputStream(thumbnailStream);
+                    
+                    byte[] thumbnailData = thumbnailStream.toByteArray();
+                    
+                    // Validate generated thumbnail
+                    if (thumbnailData.length == 0) {
+                        throw new RuntimeException("Generated thumbnail is empty");
+                    }
+                    
+                    // Cache in Redis for 24 hours
+                    redisTemplate.opsForValue().set(thumbnailKey, thumbnailData, 24, TimeUnit.HOURS);
+                    
+                    log.info("Generated and cached thumbnail for file: {} (size: {} bytes)", fileId, thumbnailData.length);
+                    return thumbnailData;
+                    
+                } catch (Exception thumbnailException) {
+                    log.warn("Failed to generate thumbnail for file: {} ({}), reason: {}", 
+                            fileId, mediaFile.getFileName(), thumbnailException.getMessage());
+                    
+                    // Mark this file as having thumbnail generation issues
+                    redisTemplate.opsForValue().set(errorKey, "failed", 1, TimeUnit.HOURS);
+                    
+                    // Return fallback thumbnail
+                    byte[] fallbackThumbnail = generateFallbackThumbnail();
+                    redisTemplate.opsForValue().set(thumbnailKey, fallbackThumbnail, 1, TimeUnit.HOURS); // Cache fallback for 1 hour
+                    
+                    return fallbackThumbnail;
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("Failed to access file for thumbnail generation: {} ({})", fileId, mediaFile.getFileName(), e);
+            
+            // Mark error and return fallback
+            redisTemplate.opsForValue().set(errorKey, "access_failed", 1, TimeUnit.HOURS);
+            return generateFallbackThumbnail();
+        }
+    }
+    
+    /**
+     * Generate a fallback thumbnail for files that can't be processed
+     */
+    private byte[] generateFallbackThumbnail() {
+        try {
+            // Create a simple 150x150 placeholder image
+            ByteArrayOutputStream fallbackStream = new ByteArrayOutputStream();
+            
+            // Generate a simple colored rectangle as fallback
+            java.awt.image.BufferedImage fallbackImage = new java.awt.image.BufferedImage(150, 150, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D g2d = fallbackImage.createGraphics();
+            
+            // Set background color (light gray)
+            g2d.setColor(new java.awt.Color(240, 240, 240));
+            g2d.fillRect(0, 0, 150, 150);
+            
+            // Draw border
+            g2d.setColor(new java.awt.Color(200, 200, 200));
+            g2d.drawRect(0, 0, 149, 149);
+            
+            // Draw icon/text indicating this is a placeholder
+            g2d.setColor(new java.awt.Color(100, 100, 100));
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 12));
+            java.awt.FontMetrics fm = g2d.getFontMetrics();
+            String text = "IMAGE";
+            int textWidth = fm.stringWidth(text);
+            int textHeight = fm.getHeight();
+            g2d.drawString(text, (150 - textWidth) / 2, (150 + textHeight) / 2 - 3);
+            
+            g2d.dispose();
+            
+            // Convert to JPEG
+            javax.imageio.ImageIO.write(fallbackImage, "JPEG", fallbackStream);
+            
+            return fallbackStream.toByteArray();
+            
+        } catch (Exception e) {
+            log.error("Failed to generate fallback thumbnail", e);
+            // Return minimal byte array as last resort
+            return new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9}; // Minimal JPEG header/footer
+        }
+    }
+    
+    /**
+     * Get error thumbnail for controller fallback
+     */
+    public byte[] getErrorThumbnail() {
+        try {
+            // Create a red-tinted error thumbnail
+            ByteArrayOutputStream errorStream = new ByteArrayOutputStream();
+            
+            java.awt.image.BufferedImage errorImage = new java.awt.image.BufferedImage(150, 150, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D g2d = errorImage.createGraphics();
+            
+            // Set background color (light red)
+            g2d.setColor(new java.awt.Color(255, 230, 230));
+            g2d.fillRect(0, 0, 150, 150);
+            
+            // Draw border (red)
+            g2d.setColor(new java.awt.Color(255, 100, 100));
+            g2d.drawRect(0, 0, 149, 149);
+            
+            // Draw error text
+            g2d.setColor(new java.awt.Color(150, 0, 0));
+            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 11));
+            java.awt.FontMetrics fm = g2d.getFontMetrics();
+            String text = "ERROR";
+            int textWidth = fm.stringWidth(text);
+            int textHeight = fm.getHeight();
+            g2d.drawString(text, (150 - textWidth) / 2, (150 + textHeight) / 2 - 3);
+            
+            g2d.dispose();
+            
+            javax.imageio.ImageIO.write(errorImage, "JPEG", errorStream);
+            return errorStream.toByteArray();
+            
+        } catch (Exception e) {
+            log.error("Failed to generate error thumbnail", e);
+            return new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9};
+        }
+    }
+    
+    /**
+     * Check if file is an image
+     */
+    private boolean isImageFile(String fileName) {
+        return fileName.endsWith(".jpg") || 
+               fileName.endsWith(".jpeg") || 
+               fileName.endsWith(".png") || 
+               fileName.endsWith(".gif") || 
+               fileName.endsWith(".bmp") || 
+               fileName.endsWith(".webp");
     }
 }

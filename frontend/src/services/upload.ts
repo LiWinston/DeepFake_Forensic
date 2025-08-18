@@ -174,6 +174,11 @@ class UploadService {
     return `${API_BASE_URL}${API_ENDPOINTS.UPLOAD_PREVIEW}/${fileId}/preview`;
   }
 
+  // Get file thumbnail URL
+  getThumbnailUrl(fileId: string): string {
+    return `${API_BASE_URL}${API_ENDPOINTS.UPLOAD_THUMBNAIL}/${fileId}/thumbnail`;
+  }
+
   // High-level upload that matches backend contract
   async uploadFileWithChunks(
     file: File,

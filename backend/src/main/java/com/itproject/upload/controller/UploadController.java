@@ -313,4 +313,39 @@ public class UploadController {
             return ResponseEntity.notFound().build();
         }
     }
+    
+    /**
+     * Get file thumbnail (cached small-size preview)
+     */
+    @GetMapping("/files/{fileId}/thumbnail")
+    public ResponseEntity<byte[]> getThumbnail(@PathVariable String fileId) {
+        try {
+            log.info("Getting thumbnail for file: {}", fileId);
+            
+            // Get thumbnail from service (with Redis caching)
+            byte[] thumbnailData = uploadService.getFileThumbnail(fileId);
+            
+            // Thumbnails are always JPEG format (including fallback thumbnails)
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.IMAGE_JPEG);
+            headers.set(HttpHeaders.CACHE_CONTROL, "max-age=3600"); // Cache for 1 hour
+            headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline");
+            
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(thumbnailData);
+                    
+        } catch (Exception e) {
+            log.error("Error getting thumbnail for file: {}", fileId, e);
+            // Return a minimal error response instead of 404
+            try {
+                byte[] errorThumbnail = uploadService.getErrorThumbnail();
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.IMAGE_JPEG);
+                return ResponseEntity.ok().headers(headers).body(errorThumbnail);
+            } catch (Exception fallbackError) {
+                return ResponseEntity.notFound().build();
+            }
+        }
+    }
 }
