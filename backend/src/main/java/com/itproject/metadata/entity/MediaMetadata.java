@@ -29,7 +29,7 @@ public class MediaMetadata {
     @Column(length = 64)
     private String sha256Hash;
     
-    @Column(length = 32)
+    @Column(length = 40)
     private String sha1Hash;
     
     // EXIF Data
