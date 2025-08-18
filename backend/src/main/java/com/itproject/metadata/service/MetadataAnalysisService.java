@@ -11,7 +11,9 @@ import com.itproject.metadata.dto.MetadataAnalysisResponse;
 import com.itproject.metadata.entity.MediaMetadata;
 import com.itproject.metadata.repository.MediaMetadataRepository;
 import io.minio.GetObjectArgs;
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
+import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
@@ -357,10 +359,24 @@ public class MetadataAnalysisService {
                     metadata.getFileMd5(), metadata.getSuspiciousIndicators());
         }
     }
-    
-    private String getVideoFilePath(String filePath) {
-        // For production, implement proper MinIO URL handling or temporary file download
-        return filePath;
+      private String getVideoFilePath(String filePath) {
+        try {
+            // Generate presigned URL for MinIO object access
+            String presignedUrl = minioClient.getPresignedObjectUrl(
+                GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(minioBucketName)
+                    .object(filePath)
+                    .expiry(60 * 10) // 10 minutes expiry
+                    .build()
+            );
+            log.debug("Generated presigned URL for video analysis: {}", presignedUrl);
+            return presignedUrl;
+        } catch (Exception e) {
+            log.error("Failed to generate presigned URL for file: {}", filePath, e);
+            // Fallback to original path (will likely fail but maintains original behavior)
+            return filePath;
+        }
     }
     
     private String buildRawMetadataString(Metadata metadata) {
