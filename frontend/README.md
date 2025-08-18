@@ -48,7 +48,7 @@ A modern React TypeScript application for detecting and analyzing deepfake, digi
 
 - Node.js 20.16+ 
 - npm or yarn
-- Backend API running on http://localhost:8080
+- Backend API running on http://localhost:8082
 
 ### Installation
 

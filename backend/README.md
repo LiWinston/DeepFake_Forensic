@@ -159,7 +159,7 @@ java -jar target/forensic-0.0.1-SNAPSHOT.jar
 
 ```bash
 # Upload first chunk
-curl -X POST "http://localhost:8080/api/v1/upload/chunk" \
+curl -X POST "http://localhost:8082/api/v1/upload/chunk" \
   -F "file=@/path/to/chunk_0" \
   -F "fileMd5=abc123def456" \
   -F "fileName=test_image.jpg" \
@@ -169,20 +169,20 @@ curl -X POST "http://localhost:8080/api/v1/upload/chunk" \
   -F "uploadedBy=investigator"
 
 # Check upload progress
-curl "http://localhost:8080/api/v1/upload/progress/abc123def456"
+curl "http://localhost:8082/api/v1/upload/progress/abc123def456"
 ```
 
 ### Get Metadata Analysis
 
 ```bash
 # Get complete analysis
-curl "http://localhost:8080/api/v1/metadata/analysis/abc123def456"
+curl "http://localhost:8082/api/v1/metadata/analysis/abc123def456"
 
 # Get EXIF data only
-curl "http://localhost:8080/api/v1/metadata/exif/abc123def456"
+curl "http://localhost:8082/api/v1/metadata/exif/abc123def456"
 
 # Get suspicious indicators
-curl "http://localhost:8080/api/v1/metadata/suspicious/abc123def456"
+curl "http://localhost:8082/api/v1/metadata/suspicious/abc123def456"
 ```
 
 ## Forensic Analysis Features
