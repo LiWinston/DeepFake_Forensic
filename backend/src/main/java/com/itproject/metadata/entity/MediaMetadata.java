@@ -1,5 +1,6 @@
 package com.itproject.metadata.entity;
 
+import com.itproject.auth.entity.User;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -110,6 +111,11 @@ public class MediaMetadata {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+    
+    // User relationship
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
     
     public enum ExtractionStatus {
         PENDING,
