@@ -24,6 +24,7 @@ import {
   MenuUnfoldOutlined,
   UserOutlined,
   LogoutOutlined,
+  ProjectOutlined,
 } from '@ant-design/icons';
 
 // Import pages
@@ -31,6 +32,8 @@ import HomePage from './pages/HomePage';
 import UploadPage from './pages/UploadPage';
 import FilesPage from './pages/FilesPage';
 import AnalysisPage from './pages/AnalysisPage';
+import ProjectsPage from './pages/ProjectsPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
 import AuthPage from './pages/AuthPage';
 
 // Import components and contexts
@@ -74,6 +77,11 @@ const AppNavigation: React.FC = () => {
       key: '/',
       icon: <HomeOutlined />,
       label: 'Home',
+    },
+    {
+      key: '/projects',
+      icon: <ProjectOutlined />,
+      label: 'Projects',
     },
     {
       key: '/upload',
@@ -162,6 +170,8 @@ const AppNavigation: React.FC = () => {
           <div style={{ padding: 24, background: '#fff', minHeight: 360 }}>
             <Routes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/files" element={<FilesPage />} />
               <Route path="/analysis" element={<AnalysisPage />} />
