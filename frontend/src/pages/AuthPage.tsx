@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Form, Input, Button, Card, message, Tabs } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import authService from '../services/auth';
 import type { LoginRequest, RegisterRequest } from '../services/auth';
 import './AuthPage.css';
@@ -10,12 +11,13 @@ const { TabPane } = Tabs;
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (values: LoginRequest) => {
     setLoading(true);
     try {
-      await authService.login(values);
+      await login(values.username, values.password);
       message.success('登录成功！');
       navigate('/');
     } catch (error: any) {
@@ -23,13 +25,13 @@ const AuthPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRegister = async (values: RegisterRequest) => {
+  };  const handleRegister = async (values: RegisterRequest) => {
     setLoading(true);
     try {
       await authService.register(values);
       message.success('注册成功！');
+      // 注册成功后自动登录
+      await login(values.username, values.password);
       navigate('/');
     } catch (error: any) {
       message.error(error.response?.data?.message || '注册失败');
