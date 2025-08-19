@@ -51,6 +51,7 @@ public class UploadController {
             @RequestParam("chunkIndex") Integer chunkIndex,
             @RequestParam("totalChunks") Integer totalChunks,
             @RequestParam("totalSize") Long totalSize,
+            @RequestParam("projectId") Long projectId,
             @RequestParam(value = "chunkMd5", required = false) String chunkMd5,
             @RequestParam(value = "uploadedBy", required = false, defaultValue = "anonymous") String uploadedBy,
             @RequestParam("file") MultipartFile file) {
@@ -81,6 +82,7 @@ public class UploadController {
             request.setChunkSize(file.getSize());
             request.setChunkMd5(chunkMd5);
             request.setUploadedBy(uploadedBy);
+            request.setProjectId(projectId);
             
             // Process upload
             UploadResponse response = uploadService.uploadChunk(request, file);

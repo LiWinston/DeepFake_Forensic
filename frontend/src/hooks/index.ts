@@ -12,7 +12,7 @@ export const useFileUpload = () => {
   const [uploadProgress, setUploadProgress] = useState<Map<string, UploadProgress>>(new Map());
   const [isUploading, setIsUploading] = useState(false);
 
-  const uploadFile = useCallback(async (file: File) => {
+  const uploadFile = useCallback(async (file: File, projectId: number) => {
     const tempId = generateId();
     const progressInfo: UploadProgress = {
       fileId: tempId,
@@ -27,6 +27,7 @@ export const useFileUpload = () => {
     try {
       const result = await uploadService.uploadFileWithChunks(
         file,
+        projectId,
         (progress) => {
           setUploadProgress(prev => {
             const newMap = new Map(prev);

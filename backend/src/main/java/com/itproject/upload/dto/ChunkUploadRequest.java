@@ -20,4 +20,5 @@ public class ChunkUploadRequest {
     private Long chunkSize;
     private String chunkMd5;
     private String uploadedBy;
+    private Long projectId;
 }

@@ -2,6 +2,8 @@ package com.itproject.upload.service;
 
 import com.itproject.auth.entity.User;
 import com.itproject.auth.security.SecurityUtils;
+import com.itproject.project.entity.Project;
+import com.itproject.project.repository.ProjectRepository;
 import com.itproject.upload.dto.ChunkUploadRequest;
 import com.itproject.upload.dto.UploadResponse;
 import com.itproject.upload.entity.ChunkInfo;
@@ -40,6 +42,9 @@ public class UploadService {
     
     @Autowired
     private ChunkInfoRepository chunkInfoRepository;
+    
+    @Autowired
+    private ProjectRepository projectRepository;
     
     @Autowired
     private MinioClient minioClient;
@@ -199,10 +204,25 @@ public class UploadService {
             throw new RuntimeException("用户未登录");
         }
         
+        // Get project
+        Project project = projectRepository.findById(request.getProjectId())
+            .orElseThrow(() -> new RuntimeException("项目不存在: " + request.getProjectId()));
+        
+        // Check if user has access to the project
+        if (!project.getUser().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("没有权限访问该项目");
+        }
+        
         Optional<MediaFile> existingFile = mediaFileRepository.findByFileMd5AndUser(request.getFileMd5(), currentUser);
         
         if (existingFile.isPresent()) {
-            return existingFile.get();
+            MediaFile existing = existingFile.get();
+            // Update project if different
+            if (!existing.getProject().getId().equals(project.getId())) {
+                existing.setProject(project);
+                return mediaFileRepository.save(existing);
+            }
+            return existing;
         }
         
         // Create new media file record
@@ -216,6 +236,7 @@ public class UploadService {
         mediaFile.setUploadStatus(MediaFile.UploadStatus.UPLOADING);
         mediaFile.setUploadedBy(currentUser.getUsername());
         mediaFile.setUser(currentUser); // Set user relationship
+        mediaFile.setProject(project); // Set project relationship
         
         // Determine media type and file type
         FileTypeValidationService.FileTypeValidationResult validation = 

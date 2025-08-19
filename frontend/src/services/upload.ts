@@ -65,6 +65,7 @@ class UploadService {
     totalChunks: number;
     totalSize: number;
     file: Blob;
+    projectId: number;
     chunkMd5?: string;
     uploadedBy?: string;
   }, onProgress?: (progress: number) => void): Promise<UploadProgressDTO> {
@@ -74,6 +75,7 @@ class UploadService {
     form.append('chunkIndex', String(params.chunkIndex));
     form.append('totalChunks', String(params.totalChunks));
     form.append('totalSize', String(params.totalSize));
+    form.append('projectId', String(params.projectId));
     if (params.chunkMd5) form.append('chunkMd5', params.chunkMd5);
     if (params.uploadedBy) form.append('uploadedBy', params.uploadedBy);
     form.append('file', params.file);
@@ -182,6 +184,7 @@ class UploadService {
   // High-level upload that matches backend contract
   async uploadFileWithChunks(
     file: File,
+    projectId: number,
     onProgress?: (progress: number) => void,
     onChunkProgress?: (chunkIndex: number, progress: number) => void
   ): Promise<UploadProgressDTO> {
@@ -211,6 +214,7 @@ class UploadService {
         totalChunks: chunks.length,
         totalSize: file.size,
         file: chunk,
+        projectId,
         chunkMd5,
       }, (p) => onChunkProgress && onChunkProgress(i, p));
 

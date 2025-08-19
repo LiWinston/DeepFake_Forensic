@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   Upload,
   Button,
@@ -11,6 +11,11 @@ import {
   Alert,
   Row,
   Col,
+  Select,
+  Form,
+  Modal,
+  Input,
+  message,
 } from 'antd';
 import {
   InboxOutlined,
@@ -18,12 +23,14 @@ import {
   DeleteOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { useFileUpload } from '../hooks';
 import { formatFileSize, isSupportedFileType, getFileCategory } from '../utils';
 import { SUPPORTED_FILE_EXTENSIONS, MAX_FILE_SIZE } from '../constants';
-import type { UploadFile as ApiUploadFile } from '../types';
+import type { UploadFile as ApiUploadFile, Project } from '../types';
+import { projectApi } from '../services/project';
 
 const { Dragger } = Upload;
 const { Text, Title } = Typography;
@@ -34,6 +41,8 @@ interface FileUploadProps {
   accept?: string;
   maxSize?: number;
   showProgress?: boolean;
+  showProjectSelector?: boolean;
+  defaultProjectId?: number;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({
@@ -42,9 +51,32 @@ const FileUpload: React.FC<FileUploadProps> = ({
   accept,
   maxSize = MAX_FILE_SIZE,
   showProgress = true,
+  showProjectSelector = true,
+  defaultProjectId,
 }) => {
   const { uploadProgress, isUploading, uploadFile, clearProgress, clearAllProgress } = useFileUpload();
   const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(defaultProjectId);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [newProjectForm] = Form.useForm();
+
+  // Load projects on component mount
+  useEffect(() => {
+    if (showProjectSelector) {
+      loadProjects();
+    }
+  }, [showProjectSelector]);
+
+  const loadProjects = async () => {
+    try {
+      const response = await projectApi.getProjects();
+      setProjects(response.data);
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+      message.error('加载项目列表失败');
+    }
+  };
 
   const validateFile = useCallback((file: File): boolean => {
     // Check file size
@@ -69,8 +101,19 @@ const FileUpload: React.FC<FileUploadProps> = ({
       return;
     }
 
+    if (showProjectSelector && !selectedProjectId) {
+      onUploadError?.('请先选择一个项目');
+      return;
+    }
+
+    const projectId = selectedProjectId || defaultProjectId;
+    if (!projectId) {
+      onUploadError?.('项目ID无效');
+      return;
+    }
+
     try {
-      const result = await uploadFile(file);
+      const result = await uploadFile(file, projectId);
       if (result) {
         onUploadSuccess?.(result);
       }
@@ -78,7 +121,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       const errorMsg = error instanceof Error ? error.message : 'Upload failed';
       onUploadError?.(errorMsg);
     }
-  }, [uploadFile, validateFile, onUploadSuccess, onUploadError]);
+  }, [uploadFile, validateFile, onUploadSuccess, onUploadError, selectedProjectId, defaultProjectId, showProjectSelector]);
 
   const uploadProps: UploadProps = {
     name: 'file',
@@ -150,6 +193,43 @@ const FileUpload: React.FC<FileUploadProps> = ({
           )
         }
       >
+        {/* Project Selector */}
+        {showProjectSelector && (
+          <div style={{ marginBottom: 16 }}>
+            <Form layout="vertical">
+              <Form.Item label="选择项目" required>
+                <Select
+                  placeholder="请选择或创建项目"
+                  value={selectedProjectId}
+                  onChange={setSelectedProjectId}
+                  style={{ width: '100%' }}
+                  dropdownRender={menu => (
+                    <div>
+                      {menu}
+                      <div style={{ padding: '8px', borderTop: '1px solid #f0f0f0' }}>
+                        <Button
+                          type="text"
+                          icon={<PlusOutlined />}
+                          onClick={() => setShowNewProjectModal(true)}
+                          style={{ width: '100%' }}
+                        >
+                          创建新项目
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                >
+                  {projects.map(project => (
+                    <Select.Option key={project.id} value={project.id}>
+                      {project.name} ({project.caseNumber})
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Form>
+          </div>
+        )}
+
         <div onDragOver={onWrapperDragOver} onDragLeave={onWrapperDragLeave} onDrop={onWrapperDrop}>
           <Dragger 
             {...uploadProps}
@@ -250,6 +330,64 @@ const FileUpload: React.FC<FileUploadProps> = ({
           </Col>
         </Row>
       </Card>
+
+      {/* New Project Modal */}
+      <Modal
+        title="创建新项目"
+        open={showNewProjectModal}
+        onCancel={() => {
+          setShowNewProjectModal(false);
+          newProjectForm.resetFields();
+        }}
+        onOk={async () => {
+          try {
+            const values = await newProjectForm.validateFields();
+            const response = await projectApi.createProject(values);
+            const newProject = response.data;
+            setProjects(prev => [...prev, newProject]);
+            setSelectedProjectId(newProject.id);
+            setShowNewProjectModal(false);
+            newProjectForm.resetFields();
+            message.success('项目创建成功');
+          } catch (error) {
+            console.error('Failed to create project:', error);
+            message.error('创建项目失败');
+          }
+        }}
+      >
+        <Form form={newProjectForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="项目名称"
+            rules={[{ required: true, message: '请输入项目名称' }]}
+          >
+            <Input placeholder="请输入项目名称" />
+          </Form.Item>
+          <Form.Item
+            name="caseNumber"
+            label="案件编号"
+            rules={[{ required: true, message: '请输入案件编号' }]}
+          >
+            <Input placeholder="请输入案件编号" />
+          </Form.Item>
+          <Form.Item name="description" label="项目描述">
+            <Input.TextArea placeholder="请输入项目描述" rows={3} />
+          </Form.Item>
+          <Form.Item
+            name="projectType"
+            label="项目类型"
+            rules={[{ required: true, message: '请选择项目类型' }]}
+          >
+            <Select placeholder="请选择项目类型">
+              <Select.Option value="GENERAL">一般案件</Select.Option>
+              <Select.Option value="CRIMINAL">刑事案件</Select.Option>
+              <Select.Option value="CIVIL">民事案件</Select.Option>
+              <Select.Option value="CORPORATE">企业案件</Select.Option>
+              <Select.Option value="ACADEMIC_RESEARCH">学术研究</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };
