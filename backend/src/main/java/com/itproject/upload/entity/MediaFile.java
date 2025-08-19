@@ -1,6 +1,7 @@
 package com.itproject.upload.entity;
 
 import com.itproject.auth.entity.User;
+import com.itproject.project.entity.Project;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -77,6 +78,11 @@ public class MediaFile {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    // Project relationship
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id", nullable = false)
+    private Project project;
     
     public enum UploadStatus {
         UPLOADING,
