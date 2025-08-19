@@ -18,10 +18,10 @@ const AuthPage: React.FC = () => {
     setLoading(true);
     try {
       await login(values.username, values.password);
-      message.success('登录成功！');
+      message.success('Login successful!');
       navigate('/');
     } catch (error: any) {
-      message.error(error.response?.data?.message || '登录失败');
+      message.error(error.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -29,12 +29,12 @@ const AuthPage: React.FC = () => {
     setLoading(true);
     try {
       await authService.register(values);
-      message.success('注册成功！');
-      // 注册成功后自动登录
+      message.success('Registration successful!');
+      // Auto login after successful registration
       await login(values.username, values.password);
       navigate('/');
     } catch (error: any) {
-      message.error(error.response?.data?.message || '注册失败');
+      message.error(error.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ const AuthPage: React.FC = () => {
     <div className="auth-page">
       <Card className="auth-card" title="DeepFake Forensic System">
         <Tabs defaultActiveKey="login" centered>
-          <TabPane tab="登录" key="login">
+          <TabPane tab="Login" key="login">
             <Form
               name="login"
               onFinish={handleLogin}
@@ -52,25 +52,25 @@ const AuthPage: React.FC = () => {
               layout="vertical"
             >
               <Form.Item
-                label="用户名"
+                label="Username"
                 name="username"
-                rules={[{ required: true, message: '请输入用户名!' }]}
+                rules={[{ required: true, message: 'Please enter username!' }]}
               >
                 <Input
                   prefix={<UserOutlined />}
-                  placeholder="用户名"
+                  placeholder="Username"
                   size="large"
                 />
               </Form.Item>
 
               <Form.Item
-                label="密码"
+                label="Password"
                 name="password"
-                rules={[{ required: true, message: '请输入密码!' }]}
+                rules={[{ required: true, message: 'Please enter password!' }]}
               >
                 <Input.Password
                   prefix={<LockOutlined />}
-                  placeholder="密码"
+                  placeholder="Password"
                   size="large"
                 />
               </Form.Item>
@@ -83,13 +83,13 @@ const AuthPage: React.FC = () => {
                   size="large"
                   block
                 >
-                  登录
+                  Login
                 </Button>
               </Form.Item>
             </Form>
           </TabPane>
 
-          <TabPane tab="注册" key="register">
+          <TabPane tab="Register" key="register">
             <Form
               name="register"
               onFinish={handleRegister}
@@ -97,79 +97,79 @@ const AuthPage: React.FC = () => {
               layout="vertical"
             >
               <Form.Item
-                label="用户名"
+                label="Username"
                 name="username"
                 rules={[
-                  { required: true, message: '请输入用户名!' },
-                  { min: 3, message: '用户名至少3个字符!' },
-                  { max: 50, message: '用户名不能超过50个字符!' },
+                  { required: true, message: 'Please enter username!' },
+                  { min: 3, message: 'Username must be at least 3 characters!' },
+                  { max: 50, message: 'Username cannot exceed 50 characters!' },
                 ]}
               >
                 <Input
                   prefix={<UserOutlined />}
-                  placeholder="用户名"
+                  placeholder="Username"
                   size="large"
                 />
               </Form.Item>
 
               <Form.Item
-                label="邮箱"
+                label="Email"
                 name="email"
                 rules={[
-                  { required: true, message: '请输入邮箱!' },
-                  { type: 'email', message: '请输入有效的邮箱地址!' },
+                  { required: true, message: 'Please enter email!' },
+                  { type: 'email', message: 'Please enter a valid email address!' },
                 ]}
               >
                 <Input
                   prefix={<MailOutlined />}
-                  placeholder="邮箱"
+                  placeholder="Email"
                   size="large"
                 />
               </Form.Item>
 
               <Form.Item
-                label="密码"
+                label="Password"
                 name="password"
                 rules={[
-                  { required: true, message: '请输入密码!' },
-                  { min: 6, message: '密码至少6个字符!' },
+                  { required: true, message: 'Please enter password!' },
+                  { min: 6, message: 'Password must be at least 6 characters!' },
                 ]}
               >
                 <Input.Password
                   prefix={<LockOutlined />}
-                  placeholder="密码"
+                  placeholder="Password"
                   size="large"
                 />
               </Form.Item>
 
               <Form.Item
-                label="确认密码"
+                label="Confirm Password"
                 name="confirmPassword"
                 dependencies={['password']}
                 rules={[
-                  { required: true, message: '请确认密码!' },
+                  { required: true, message: 'Please confirm password!' },
                   ({ getFieldValue }) => ({
                     validator(_, value) {
                       if (!value || getFieldValue('password') === value) {
                         return Promise.resolve();
                       }
-                      return Promise.reject(new Error('两次输入的密码不一致!'));
+                      return Promise.reject(new Error('Passwords do not match!'));
                     },
                   }),
                 ]}
               >
                 <Input.Password
                   prefix={<LockOutlined />}
-                  placeholder="确认密码"
+                  placeholder="Confirm Password"
                   size="large"
                 />
               </Form.Item>
 
               <Form.Item
-                label="姓名"
+                label="Name"
                 name="firstName"
               >
-                <Input placeholder="姓名（可选）" size="large" />
+                <Input placeholder="Name (Optional)" size="large" />
               </Form.Item>
 
               <Form.Item>
@@ -180,7 +180,7 @@ const AuthPage: React.FC = () => {
                   size="large"
                   block
                 >
-                  注册
+                  Register
                 </Button>
               </Form.Item>
             </Form>

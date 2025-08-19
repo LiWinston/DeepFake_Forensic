@@ -65,7 +65,7 @@ const ProjectDetailPage: React.FC = () => {
     failedTasks: 0
   });
 
-  // 加载项目详情
+  // Load project details
   const loadProject = async () => {
     if (!projectId) return;
     
@@ -73,12 +73,12 @@ const ProjectDetailPage: React.FC = () => {
       const response = await projectApi.getProject(Number(projectId));
       setProject(response.data);
     } catch (error) {
-      message.error('加载项目详情失败');
+      message.error('Failed to load project details');
       navigate('/projects');
     }
   };
 
-  // 加载分析任务
+  // Load analysis tasks
   const loadAnalysisTasks = async () => {
     if (!projectId) return;
     
@@ -87,13 +87,13 @@ const ProjectDetailPage: React.FC = () => {
       const response = await analysisTaskApi.getProjectAnalysisTasks(Number(projectId));
       setAnalysisTasks(response.data);
     } catch (error) {
-      message.error('加载分析任务失败');
+      message.error('Failed to load analysis tasks');
     } finally {
       setLoading(false);
     }
   };
 
-  // 加载任务统计
+  // Load task statistics
   const loadTaskStatistics = async () => {
     if (!projectId) return;
     
@@ -101,7 +101,7 @@ const ProjectDetailPage: React.FC = () => {
       const response = await analysisTaskApi.getAnalysisTaskStatistics(Number(projectId));
       setTaskStatistics(response.data);
     } catch (error) {
-      console.error('加载任务统计失败:', error);
+      console.error('Failed to load task statistics:', error);
     }
   };
 
@@ -111,60 +111,60 @@ const ProjectDetailPage: React.FC = () => {
     loadTaskStatistics();
   }, [projectId]);
 
-  // 创建分析任务
+  // Create analysis task
   const handleCreateTask = async (values: CreateAnalysisTaskRequest) => {
     try {
       await analysisTaskApi.createAnalysisTask({
         ...values,
         projectId: Number(projectId)
       });
-      message.success('分析任务创建成功');
+      message.success('Analysis task created successfully');
       setTaskModalVisible(false);
       form.resetFields();
       loadAnalysisTasks();
       loadTaskStatistics();
     } catch (error) {
-      message.error('分析任务创建失败');
+      message.error('Failed to create analysis task');
     }
   };
 
-  // 开始任务
+  // Start task
   const handleStartTask = async (taskId: number) => {
     try {
       await analysisTaskApi.startAnalysisTask(taskId);
-      message.success('任务已开始');
+      message.success('Task started');
       loadAnalysisTasks();
       loadTaskStatistics();
     } catch (error) {
-      message.error('启动任务失败');
+      message.error('Failed to start task');
     }
   };
 
-  // 取消任务
+  // Cancel task
   const handleCancelTask = async (taskId: number) => {
     try {
       await analysisTaskApi.cancelAnalysisTask(taskId);
-      message.success('任务已取消');
+      message.success('Task cancelled');
       loadAnalysisTasks();
       loadTaskStatistics();
     } catch (error) {
-      message.error('取消任务失败');
+      message.error('Failed to cancel task');
     }
   };
 
-  // 删除任务
+  // Delete task
   const handleDeleteTask = async (taskId: number) => {
     try {
       await analysisTaskApi.deleteAnalysisTask(taskId);
-      message.success('任务删除成功');
+      message.success('Task deleted successfully');
       loadAnalysisTasks();
       loadTaskStatistics();
     } catch (error) {
-      message.error('删除任务失败');
+      message.error('Failed to delete task');
     }
   };
 
-  // 获取任务状态颜色
+  // Get task status color
   const getTaskStatusColor = (status: TaskStatus): string => {
     const colorMap: Record<TaskStatus, string> = {
       PENDING: 'default',
@@ -177,39 +177,39 @@ const ProjectDetailPage: React.FC = () => {
     return colorMap[status] || 'default';
   };
 
-  // 获取任务状态中文名
+  // Get task status display names
   const getTaskStatusLabel = (status: TaskStatus): string => {
     const labelMap: Record<TaskStatus, string> = {
-      PENDING: '等待中',
-      RUNNING: '运行中',
-      COMPLETED: '已完成',
-      FAILED: '失败',
-      CANCELLED: '已取消',
-      PAUSED: '已暂停'
+      PENDING: 'Pending',
+      RUNNING: 'Running',
+      COMPLETED: 'Completed',
+      FAILED: 'Failed',
+      CANCELLED: 'Cancelled',
+      PAUSED: 'Paused'
     };
     return labelMap[status] || status;
   };
 
-  // 获取分析类型中文名
+  // Get analysis type display names
   const getAnalysisTypeLabel = (type: AnalysisType): string => {
     const labelMap: Record<AnalysisType, string> = {
-      METADATA_ANALYSIS: '元数据分析',
-      DEEPFAKE_DETECTION: '深度伪造检测',
-      EDIT_DETECTION: '编辑痕迹检测',
-      COMPRESSION_ANALYSIS: '压缩分析',
-      HASH_VERIFICATION: '哈希验证',
-      EXIF_ANALYSIS: 'EXIF数据分析',
-      STEGANOGRAPHY_DETECTION: '隐写术检测',
-      SIMILARITY_ANALYSIS: '相似性分析',
-      TEMPORAL_ANALYSIS: '时间序列分析',
-      QUALITY_ASSESSMENT: '质量评估'
+      METADATA_ANALYSIS: 'Metadata Analysis',
+      DEEPFAKE_DETECTION: 'Deepfake Detection',
+      EDIT_DETECTION: 'Edit Detection',
+      COMPRESSION_ANALYSIS: 'Compression Analysis',
+      HASH_VERIFICATION: 'Hash Verification',
+      EXIF_ANALYSIS: 'EXIF Data Analysis',
+      STEGANOGRAPHY_DETECTION: 'Steganography Detection',
+      SIMILARITY_ANALYSIS: 'Similarity Analysis',
+      TEMPORAL_ANALYSIS: 'Temporal Analysis',
+      QUALITY_ASSESSMENT: 'Quality Assessment'
     };
     return labelMap[type] || type;
   };
 
   const taskColumns: ColumnsType<AnalysisTask> = [
     {
-      title: '任务名称',
+      title: 'Task Name',
       dataIndex: 'taskName',
       key: 'taskName',
       width: 200,
@@ -223,7 +223,7 @@ const ProjectDetailPage: React.FC = () => {
       ),
     },
     {
-      title: '分析类型',
+      title: 'Analysis Type',
       dataIndex: 'analysisType',
       key: 'analysisType',
       width: 150,
@@ -232,7 +232,7 @@ const ProjectDetailPage: React.FC = () => {
       ),
     },
     {
-      title: '状态',
+      title: 'Status',
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -243,7 +243,7 @@ const ProjectDetailPage: React.FC = () => {
       ),
     },
     {
-      title: '置信度',
+      title: 'Confidence',
       dataIndex: 'confidenceScore',
       key: 'confidenceScore',
       width: 120,
@@ -255,14 +255,14 @@ const ProjectDetailPage: React.FC = () => {
       },
     },
     {
-      title: '创建时间',
+      title: 'Created Time',
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 120,
       render: (createdAt) => dayjs(createdAt).format('MM-DD HH:mm'),
     },
     {
-      title: '完成时间',
+      title: 'Completed Time',
       dataIndex: 'completedAt',
       key: 'completedAt',
       width: 120,
@@ -270,13 +270,13 @@ const ProjectDetailPage: React.FC = () => {
         completedAt ? dayjs(completedAt).format('MM-DD HH:mm') : '-',
     },
     {
-      title: '操作',
+      title: 'Actions',
       key: 'action',
       width: 200,
       render: (_, record) => (
         <Space size="small">
           {record.status === 'PENDING' && (
-            <Tooltip title="开始任务">
+            <Tooltip title="Start Task">
               <Button
                 type="link"
                 icon={<PlayCircleOutlined />}
@@ -286,12 +286,12 @@ const ProjectDetailPage: React.FC = () => {
           )}
           
           {(record.status === 'RUNNING' || record.status === 'PENDING') && (
-            <Tooltip title="取消任务">
+            <Tooltip title="Cancel Task">
               <Popconfirm
-                title="确认取消此任务？"
+                title="Confirm canceling this task?"
                 onConfirm={() => handleCancelTask(record.id)}
-                okText="确认"
-                cancelText="取消"
+                okText="Confirm"
+                cancelText="Cancel"
               >
                 <Button
                   type="link"
@@ -301,12 +301,12 @@ const ProjectDetailPage: React.FC = () => {
             </Tooltip>
           )}
           
-          <Tooltip title="删除任务">
+          <Tooltip title="Delete Task">
             <Popconfirm
-              title="确认删除此任务？此操作不可逆转。"
+              title="Confirm deleting this task? This action cannot be undone."
               onConfirm={() => handleDeleteTask(record.id)}
-              okText="确认"
-              cancelText="取消"
+              okText="Confirm"
+              cancelText="Cancel"
             >
               <Button
                 type="link"
@@ -322,12 +322,12 @@ const ProjectDetailPage: React.FC = () => {
   ];
 
   if (!project) {
-    return <div>加载中...</div>;
+    return <div>Loading...</div>;
   }
 
   return (
     <div style={{ padding: '24px' }}>
-      {/* 项目信息头部 */}
+      {/* Project information header */}
       <Card style={{ marginBottom: 24 }}>
         <Row>
           <Col span={24}>
@@ -336,7 +336,7 @@ const ProjectDetailPage: React.FC = () => {
                 icon={<ArrowLeftOutlined />} 
                 onClick={() => navigate('/projects')}
               >
-                返回项目列表
+                Back to Project List
               </Button>
               <Title level={3} style={{ margin: 0 }}>
                 {project.name}
@@ -347,42 +347,42 @@ const ProjectDetailPage: React.FC = () => {
         </Row>
         
         <Descriptions style={{ marginTop: 16 }} column={3}>
-          <Descriptions.Item label="项目类型">
+          <Descriptions.Item label="Project Type">
             <Tag>{project.projectType}</Tag>
           </Descriptions.Item>
-          <Descriptions.Item label="状态">
+          <Descriptions.Item label="Status">
             <Tag color="processing">{project.status}</Tag>
           </Descriptions.Item>
-          <Descriptions.Item label="委托方">
+          <Descriptions.Item label="Client">
             {project.clientName || '-'}
           </Descriptions.Item>
-          <Descriptions.Item label="截止日期">
+          <Descriptions.Item label="Deadline">
             {project.deadline ? dayjs(project.deadline).format('YYYY-MM-DD') : '-'}
           </Descriptions.Item>
-          <Descriptions.Item label="案件日期">
+          <Descriptions.Item label="Case Date">
             {project.caseDate ? dayjs(project.caseDate).format('YYYY-MM-DD') : '-'}
           </Descriptions.Item>
-          <Descriptions.Item label="创建时间">
+          <Descriptions.Item label="Created Time">
             {dayjs(project.createdAt).format('YYYY-MM-DD HH:mm')}
           </Descriptions.Item>
         </Descriptions>
         
         {project.description && (
           <div style={{ marginTop: 16 }}>
-            <strong>项目描述：</strong>
+            <strong>Project Description:</strong>
             <div style={{ marginTop: 8 }}>{project.description}</div>
           </div>
         )}
       </Card>
 
       <Tabs defaultActiveKey="tasks">
-        <TabPane tab="分析任务" key="tasks">
-          {/* 任务统计 */}
+        <TabPane tab="Analysis Tasks" key="tasks">
+          {/* Task statistics */}
           <Row gutter={16} style={{ marginBottom: 24 }}>
             <Col span={5}>
               <Card>
                 <Statistic
-                  title="总任务数"
+                  title="Total Tasks"
                   value={taskStatistics.totalTasks}
                 />
               </Card>
@@ -390,7 +390,7 @@ const ProjectDetailPage: React.FC = () => {
             <Col span={5}>
               <Card>
                 <Statistic
-                  title="等待中"
+                  title="Pending"
                   value={taskStatistics.pendingTasks}
                   valueStyle={{ color: '#8c8c8c' }}
                 />
@@ -399,7 +399,7 @@ const ProjectDetailPage: React.FC = () => {
             <Col span={5}>
               <Card>
                 <Statistic
-                  title="运行中"
+                  title="Running"
                   value={taskStatistics.runningTasks}
                   valueStyle={{ color: '#1890ff' }}
                 />
@@ -408,7 +408,7 @@ const ProjectDetailPage: React.FC = () => {
             <Col span={5}>
               <Card>
                 <Statistic
-                  title="已完成"
+                  title="Completed"
                   value={taskStatistics.completedTasks}
                   valueStyle={{ color: '#52c41a' }}
                 />
@@ -417,7 +417,7 @@ const ProjectDetailPage: React.FC = () => {
             <Col span={4}>
               <Card>
                 <Statistic
-                  title="失败"
+                  title="Failed"
                   value={taskStatistics.failedTasks}
                   valueStyle={{ color: '#ff4d4f' }}
                 />
@@ -425,9 +425,9 @@ const ProjectDetailPage: React.FC = () => {
             </Col>
           </Row>
 
-          {/* 分析任务表格 */}
+          {/* Analysis task table */}
           <Card
-            title="分析任务"
+            title="Analysis Tasks"
             extra={
               <Button
                 type="primary"
@@ -438,7 +438,7 @@ const ProjectDetailPage: React.FC = () => {
                   setTaskModalVisible(true);
                 }}
               >
-                新建分析任务
+                Create Analysis Task
               </Button>
             }
           >
@@ -450,25 +450,25 @@ const ProjectDetailPage: React.FC = () => {
               pagination={{
                 pageSize: 10,
                 showSizeChanger: true,
-                showTotal: (total) => `共 ${total} 个任务`,
+                showTotal: (total) => `Total ${total} tasks`,
               }}
             />
           </Card>
         </TabPane>
 
-        <TabPane tab="项目文件" key="files">
-          {/* TODO: 这里可以添加项目相关文件的管理 */}
-          <Card title="项目文件">
+        <TabPane tab="Project Files" key="files">
+          {/* TODO: Add project file management here */}
+          <Card title="Project Files">
             <div style={{ textAlign: 'center', padding: '50px', color: '#999' }}>
-              文件管理功能开发中...
+              File management feature under development...
             </div>
           </Card>
         </TabPane>
       </Tabs>
 
-      {/* 创建分析任务模态框 */}
+      {/* Create analysis task modal */}
       <Modal
-        title="新建分析任务"
+        title="Create Analysis Task"
         open={taskModalVisible}
         onCancel={() => {
           setTaskModalVisible(false);
@@ -485,27 +485,27 @@ const ProjectDetailPage: React.FC = () => {
         >
           <Form.Item
             name="taskName"
-            label="任务名称"
+            label="Task Name"
           >
-            <Input placeholder="可选，系统将自动生成" />
+            <Input placeholder="Optional, system will auto-generate" />
           </Form.Item>
 
           <Form.Item
             name="analysisType"
-            label="分析类型"
-            rules={[{ required: true, message: '请选择分析类型' }]}
+            label="Analysis Type"
+            rules={[{ required: true, message: 'Please select analysis type' }]}
           >
-            <Select placeholder="请选择分析类型">
-              <Option value="METADATA_ANALYSIS">元数据分析</Option>
-              <Option value="DEEPFAKE_DETECTION">深度伪造检测</Option>
-              <Option value="EDIT_DETECTION">编辑痕迹检测</Option>
-              <Option value="COMPRESSION_ANALYSIS">压缩分析</Option>
-              <Option value="HASH_VERIFICATION">哈希验证</Option>
-              <Option value="EXIF_ANALYSIS">EXIF数据分析</Option>
-              <Option value="STEGANOGRAPHY_DETECTION">隐写术检测</Option>
-              <Option value="SIMILARITY_ANALYSIS">相似性分析</Option>
-              <Option value="TEMPORAL_ANALYSIS">时间序列分析</Option>
-              <Option value="QUALITY_ASSESSMENT">质量评估</Option>
+            <Select placeholder="Please select analysis type">
+              <Option value="METADATA_ANALYSIS">Metadata Analysis</Option>
+              <Option value="DEEPFAKE_DETECTION">Deepfake Detection</Option>
+              <Option value="EDIT_DETECTION">Edit Detection</Option>
+              <Option value="COMPRESSION_ANALYSIS">Compression Analysis</Option>
+              <Option value="HASH_VERIFICATION">Hash Verification</Option>
+              <Option value="EXIF_ANALYSIS">EXIF Data Analysis</Option>
+              <Option value="STEGANOGRAPHY_DETECTION">Steganography Detection</Option>
+              <Option value="SIMILARITY_ANALYSIS">Similarity Analysis</Option>
+              <Option value="TEMPORAL_ANALYSIS">Temporal Analysis</Option>
+              <Option value="QUALITY_ASSESSMENT">Quality Assessment</Option>
             </Select>
           </Form.Item>
 

@@ -26,7 +26,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!isLoggedIn) {
-    // 重定向到登录页面，并保存当前尝试访问的页面
+    // Redirect to login page and save the current attempted access page
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 

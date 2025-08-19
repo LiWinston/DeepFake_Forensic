@@ -66,7 +66,7 @@ const AppNavigation: React.FC = () => {
     },
     {
       key: 'logout',
-      label: '退出登录',
+      label: 'Logout',
       icon: <LogoutOutlined />,
       onClick: handleLogout,
     },

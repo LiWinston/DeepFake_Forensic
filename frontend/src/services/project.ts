@@ -8,55 +8,55 @@ import type {
 
 // Project API
 export const projectApi = {
-  // 获取用户所有项目
+  // Get all user projects
   getProjects: () => 
     http.get<Project[]>('/projects'),
 
-  // 根据ID获取项目
+  // Get project by ID
   getProject: (projectId: number) => 
     http.get<Project>(`/projects/${projectId}`),
 
-  // 创建新项目
+  // Create new project
   createProject: (data: CreateProjectRequest) => 
     http.post<Project>('/projects', data),
 
-  // 更新项目
+  // Update project
   updateProject: (projectId: number, data: Partial<CreateProjectRequest>) => 
     http.put<Project>(`/projects/${projectId}`, data),
 
-  // 删除项目（归档）
+  // Delete project (archive)
   deleteProject: (projectId: number) => 
     http.delete(`/projects/${projectId}`),
 
-  // 归档项目
+  // Archive project
   archiveProject: (projectId: number) => 
     http.put<Project>(`/projects/${projectId}/archive`),
 
-  // 根据状态获取项目
+  // Get projects by status
   getProjectsByStatus: (status: string) => 
     http.get<Project[]>(`/projects/status/${status}`),
 
-  // 根据类型获取项目
+  // Get projects by type
   getProjectsByType: (type: string) => 
     http.get<Project[]>(`/projects/type/${type}`),
 
-  // 搜索项目
+  // Search projects
   searchProjects: (keyword: string) => 
     http.get<Project[]>(`/projects/search?keyword=${encodeURIComponent(keyword)}`),
 
-  // 根据案件编号获取项目
+  // Get project by case number
   getProjectByCaseNumber: (caseNumber: string) => 
     http.get<Project>(`/projects/case/${encodeURIComponent(caseNumber)}`),
 
-  // 获取活跃项目
+  // Get active projects
   getActiveProjects: () => 
     http.get<Project[]>('/projects/active'),
 
-  // 获取即将到期的项目
+  // Get projects with deadlines
   getProjectsWithDeadlines: (daysAhead: number = 7) => 
     http.get<Project[]>(`/projects/deadlines?daysAhead=${daysAhead}`),
 
-  // 获取项目统计
+  // Get project statistics
   getProjectStatistics: () => 
     http.get<{
       totalProjects: number;
@@ -68,72 +68,72 @@ export const projectApi = {
 
 // Analysis Task API
 export const analysisTaskApi = {
-  // 创建分析任务
+  // Create analysis task
   createAnalysisTask: (data: CreateAnalysisTaskRequest) => 
     http.post<AnalysisTask>('/analysis-tasks', data),
 
-  // 获取分析任务
+  // Get analysis task
   getAnalysisTask: (taskId: number) => 
     http.get<AnalysisTask>(`/analysis-tasks/${taskId}`),
 
-  // 更新分析任务
+  // Update analysis task
   updateAnalysisTask: (taskId: number, data: Partial<AnalysisTask>) => 
     http.put<AnalysisTask>(`/analysis-tasks/${taskId}`, data),
 
-  // 删除分析任务
+  // Delete analysis task
   deleteAnalysisTask: (taskId: number) => 
     http.delete(`/analysis-tasks/${taskId}`),
 
-  // 开始分析任务
+  // Start analysis task
   startAnalysisTask: (taskId: number) => 
     http.put<AnalysisTask>(`/analysis-tasks/${taskId}/start`),
 
-  // 完成分析任务
+  // Complete analysis task
   completeAnalysisTask: (taskId: number, resultData: string, confidenceScore?: number) => 
     http.put<AnalysisTask>(`/analysis-tasks/${taskId}/complete`, {
       resultData,
       confidenceScore
     }),
 
-  // 失败分析任务
+  // Fail analysis task
   failAnalysisTask: (taskId: number, errorMessage: string) => 
     http.put<AnalysisTask>(`/analysis-tasks/${taskId}/fail`, {
       errorMessage
     }),
 
-  // 取消分析任务
+  // Cancel analysis task
   cancelAnalysisTask: (taskId: number) => 
     http.put<AnalysisTask>(`/analysis-tasks/${taskId}/cancel`),
 
-  // 获取项目的分析任务
+  // Get project analysis tasks
   getProjectAnalysisTasks: (projectId: number) => 
     http.get<AnalysisTask[]>(`/analysis-tasks/project/${projectId}`),
 
-  // 获取用户所有分析任务
+  // Get all user analysis tasks
   getUserAnalysisTasks: () => 
     http.get<AnalysisTask[]>('/analysis-tasks'),
 
-  // 根据状态获取分析任务
+  // Get analysis tasks by status
   getAnalysisTasksByStatus: (status: string) => 
     http.get<AnalysisTask[]>(`/analysis-tasks/status/${status}`),
 
-  // 根据类型获取分析任务
+  // Get analysis tasks by type
   getAnalysisTasksByType: (projectId: number, type: string) => 
     http.get<AnalysisTask[]>(`/analysis-tasks/project/${projectId}/type/${type}`),
 
-  // 获取运行中的任务
+  // Get running tasks
   getRunningTasks: () => 
     http.get<AnalysisTask[]>('/analysis-tasks/running'),
 
-  // 获取待处理的任务
+  // Get pending tasks
   getPendingTasks: () => 
     http.get<AnalysisTask[]>('/analysis-tasks/pending'),
 
-  // 搜索分析任务
+  // Search analysis tasks
   searchAnalysisTasks: (keyword: string) => 
     http.get<AnalysisTask[]>(`/analysis-tasks/search?keyword=${encodeURIComponent(keyword)}`),
 
-  // 获取分析任务统计
+  // Get analysis task statistics
   getAnalysisTaskStatistics: (projectId: number) => 
     http.get<{
       totalTasks: number;

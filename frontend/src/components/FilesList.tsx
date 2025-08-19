@@ -63,14 +63,14 @@ const FilesList: React.FC<FilesListProps> = ({
   const handleAnalyze = useCallback(async (file: UploadFile) => {
     try {
       if (!file.md5Hash) {
-        message.error('文件MD5哈希缺失，无法进行分析');
+        message.error('File MD5 hash is missing, cannot perform analysis');
         return;
       }
       await analyzeFile(file.md5Hash);
-      message.success('元数据分析已开始');
+      message.success('Metadata analysis started');
     } catch (error) {
       console.error('Analysis failed:', error);
-      message.error('分析启动失败');
+      message.error('Failed to start analysis');
     }
   }, [analyzeFile]);
 

@@ -74,7 +74,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       setProjects(response.data);
     } catch (error) {
       console.error('Failed to load projects:', error);
-      message.error('加载项目列表失败');
+      message.error('Failed to load project list');
     }
   };
 
@@ -102,13 +102,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
     }
 
     if (showProjectSelector && !selectedProjectId) {
-      onUploadError?.('请先选择一个项目');
+      onUploadError?.('Please select a project first');
       return;
     }
 
     const projectId = selectedProjectId || defaultProjectId;
     if (!projectId) {
-      onUploadError?.('项目ID无效');
+      onUploadError?.('Invalid project ID');
       return;
     }
 
@@ -197,9 +197,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
         {showProjectSelector && (
           <div style={{ marginBottom: 16 }}>
             <Form layout="vertical">
-              <Form.Item label="选择项目" required>
+              <Form.Item label="Select Project" required>
                 <Select
-                  placeholder="请选择或创建项目"
+                  placeholder="Please select or create a project"
                   value={selectedProjectId}
                   onChange={setSelectedProjectId}
                   style={{ width: '100%' }}
@@ -213,7 +213,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
                           onClick={() => setShowNewProjectModal(true)}
                           style={{ width: '100%' }}
                         >
-                          创建新项目
+                          Create New Project
                         </Button>
                       </div>
                     </div>
@@ -333,7 +333,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
       {/* New Project Modal */}
       <Modal
-        title="创建新项目"
+        title="Create New Project"
         open={showNewProjectModal}
         onCancel={() => {
           setShowNewProjectModal(false);
@@ -348,42 +348,42 @@ const FileUpload: React.FC<FileUploadProps> = ({
             setSelectedProjectId(newProject.id);
             setShowNewProjectModal(false);
             newProjectForm.resetFields();
-            message.success('项目创建成功');
+            message.success('Project created successfully');
           } catch (error) {
             console.error('Failed to create project:', error);
-            message.error('创建项目失败');
+            message.error('Failed to create project');
           }
         }}
       >
         <Form form={newProjectForm} layout="vertical">
           <Form.Item
             name="name"
-            label="项目名称"
-            rules={[{ required: true, message: '请输入项目名称' }]}
+            label="Project Name"
+            rules={[{ required: true, message: 'Please enter project name' }]}
           >
-            <Input placeholder="请输入项目名称" />
+            <Input placeholder="Please enter project name" />
           </Form.Item>
           <Form.Item
             name="caseNumber"
-            label="案件编号"
-            rules={[{ required: true, message: '请输入案件编号' }]}
+            label="Case Number"
+            rules={[{ required: true, message: 'Please enter case number' }]}
           >
-            <Input placeholder="请输入案件编号" />
+            <Input placeholder="Please enter case number" />
           </Form.Item>
-          <Form.Item name="description" label="项目描述">
-            <Input.TextArea placeholder="请输入项目描述" rows={3} />
+          <Form.Item name="description" label="Project Description">
+            <Input.TextArea placeholder="Please enter project description" rows={3} />
           </Form.Item>
           <Form.Item
             name="projectType"
-            label="项目类型"
-            rules={[{ required: true, message: '请选择项目类型' }]}
+            label="Project Type"
+            rules={[{ required: true, message: 'Please select project type' }]}
           >
-            <Select placeholder="请选择项目类型">
-              <Select.Option value="GENERAL">一般案件</Select.Option>
-              <Select.Option value="CRIMINAL">刑事案件</Select.Option>
-              <Select.Option value="CIVIL">民事案件</Select.Option>
-              <Select.Option value="CORPORATE">企业案件</Select.Option>
-              <Select.Option value="ACADEMIC_RESEARCH">学术研究</Select.Option>
+            <Select placeholder="Please select project type">
+              <Select.Option value="GENERAL">General Case</Select.Option>
+              <Select.Option value="CRIMINAL">Criminal Case</Select.Option>
+              <Select.Option value="CIVIL">Civil Case</Select.Option>
+              <Select.Option value="CORPORATE">Corporate Case</Select.Option>
+              <Select.Option value="ACADEMIC_RESEARCH">Academic Research</Select.Option>
             </Select>
           </Form.Item>
         </Form>

@@ -49,7 +49,7 @@ const ProjectsPage: React.FC = () => {
     archivedProjects: 0
   });
 
-  // 加载项目列表
+  // Load project list
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -65,19 +65,19 @@ const ProjectsPage: React.FC = () => {
       
       setProjects(response.data);
     } catch (error) {
-      message.error('加载项目列表失败');
+      message.error('Failed to load project list');
     } finally {
       setLoading(false);
     }
   };
 
-  // 加载统计数据
+  // Load statistics
   const loadStatistics = async () => {
     try {
       const response = await projectApi.getProjectStatistics();
       setStatistics(response.data);
     } catch (error) {
-      console.error('加载统计数据失败:', error);
+      console.error('Failed to load statistics:', error);
     }
   };
 
@@ -86,15 +86,15 @@ const ProjectsPage: React.FC = () => {
     loadStatistics();
   }, [searchKeyword, filterStatus]);
 
-  // 创建或更新项目
+  // Create or update project
   const handleSubmit = async (values: CreateProjectRequest) => {
     try {
       if (editingProject) {
         await projectApi.updateProject(editingProject.id, values);
-        message.success('项目更新成功');
+        message.success('Project updated successfully');
       } else {
         await projectApi.createProject(values);
-        message.success('项目创建成功');
+        message.success('Project created successfully');
       }
       setModalVisible(false);
       setEditingProject(null);
@@ -102,35 +102,35 @@ const ProjectsPage: React.FC = () => {
       loadProjects();
       loadStatistics();
     } catch (error) {
-      message.error(editingProject ? '项目更新失败' : '项目创建失败');
+      message.error(editingProject ? 'Failed to update project' : 'Failed to create project');
     }
   };
 
-  // 删除项目
+  // Delete project
   const handleDelete = async (projectId: number) => {
     try {
       await projectApi.deleteProject(projectId);
-      message.success('项目删除成功');
+      message.success('Project deleted successfully');
       loadProjects();
       loadStatistics();
     } catch (error) {
-      message.error('项目删除失败');
+      message.error('Failed to delete project');
     }
   };
 
-  // 归档项目
+  // Archive project
   const handleArchive = async (projectId: number) => {
     try {
       await projectApi.archiveProject(projectId);
-      message.success('项目归档成功');
+      message.success('Project archived successfully');
       loadProjects();
       loadStatistics();
     } catch (error) {
-      message.error('项目归档失败');
+      message.error('Failed to archive project');
     }
   };
 
-  // 打开编辑模态框
+  // Open edit modal
   const handleEdit = (project: Project) => {
     setEditingProject(project);
     form.setFieldsValue({
@@ -141,7 +141,7 @@ const ProjectsPage: React.FC = () => {
     setModalVisible(true);
   };
 
-  // 项目类型标签颜色
+  // Project type tag colors
   const getProjectTypeColor = (type: ProjectType): string => {
     const colorMap: Record<ProjectType, string> = {
       GENERAL: 'default',
@@ -153,7 +153,7 @@ const ProjectsPage: React.FC = () => {
     return colorMap[type] || 'default';
   };
 
-  // 项目状态标签颜色
+  // Project status label colors
   const getProjectStatusColor = (status: ProjectStatus): string => {
     const colorMap: Record<ProjectStatus, string> = {
       ACTIVE: 'processing',
@@ -164,32 +164,32 @@ const ProjectsPage: React.FC = () => {
     return colorMap[status] || 'default';
   };
 
-  // 项目类型中文名
+  // Project type display names
   const getProjectTypeLabel = (type: ProjectType): string => {
     const labelMap: Record<ProjectType, string> = {
-      GENERAL: '一般调查',
-      CRIMINAL: '刑事案件',
-      CIVIL: '民事案件',
-      CORPORATE: '企业调查',
-      ACADEMIC_RESEARCH: '学术研究'
+      GENERAL: 'General Investigation',
+      CRIMINAL: 'Criminal Case',
+      CIVIL: 'Civil Case',
+      CORPORATE: 'Corporate Investigation',
+      ACADEMIC_RESEARCH: 'Academic Research'
     };
     return labelMap[type] || type;
   };
 
-  // 项目状态中文名
+  // Project status display names
   const getProjectStatusLabel = (status: ProjectStatus): string => {
     const labelMap: Record<ProjectStatus, string> = {
-      ACTIVE: '进行中',
-      COMPLETED: '已完成',
-      SUSPENDED: '暂停',
-      ARCHIVED: '已归档'
+      ACTIVE: 'Active',
+      COMPLETED: 'Completed',
+      SUSPENDED: 'Suspended',
+      ARCHIVED: 'Archived'
     };
     return labelMap[status] || status;
   };
 
   const columns: ColumnsType<Project> = [
     {
-      title: '项目名称',
+      title: 'Project Name',
       dataIndex: 'name',
       key: 'name',
       width: 200,
@@ -203,13 +203,13 @@ const ProjectsPage: React.FC = () => {
       ),
     },
     {
-      title: '案件编号',
+      title: 'Case Number',
       dataIndex: 'caseNumber',
       key: 'caseNumber',
       width: 120,
     },
     {
-      title: '项目类型',
+      title: 'Project Type',
       dataIndex: 'projectType',
       key: 'projectType',
       width: 100,
@@ -220,7 +220,7 @@ const ProjectsPage: React.FC = () => {
       ),
     },
     {
-      title: '状态',
+      title: 'Status',
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -231,14 +231,14 @@ const ProjectsPage: React.FC = () => {
       ),
     },
     {
-      title: '委托方',
+      title: 'Client',
       dataIndex: 'clientName',
       key: 'clientName',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '截止日期',
+      title: 'Deadline',
       dataIndex: 'deadline',
       key: 'deadline',
       width: 120,
@@ -246,19 +246,19 @@ const ProjectsPage: React.FC = () => {
         deadline ? dayjs(deadline).format('YYYY-MM-DD') : '-',
     },
     {
-      title: '创建时间',
+      title: 'Created Time',
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 120,
       render: (createdAt) => dayjs(createdAt).format('YYYY-MM-DD'),
     },
     {
-      title: '操作',
+      title: 'Actions',
       key: 'action',
       width: 180,
       render: (_, record) => (
         <Space size="small">
-          <Tooltip title="编辑">
+          <Tooltip title="Edit">
             <Button
               type="link"
               icon={<EditOutlined />}
@@ -267,12 +267,12 @@ const ProjectsPage: React.FC = () => {
           </Tooltip>
           
           {record.status !== 'ARCHIVED' && (
-            <Tooltip title="归档">
+            <Tooltip title="Archive">
               <Popconfirm
-                title="确认归档此项目？"
+                title="Confirm archiving this project?"
                 onConfirm={() => handleArchive(record.id)}
-                okText="确认"
-                cancelText="取消"
+                okText="Confirm"
+                cancelText="Cancel"
               >
                 <Button
                   type="link"
@@ -282,12 +282,12 @@ const ProjectsPage: React.FC = () => {
             </Tooltip>
           )}
           
-          <Tooltip title="删除">
+          <Tooltip title="Delete">
             <Popconfirm
-              title="确认删除此项目？此操作不可逆转。"
+              title="Confirm deleting this project? This action cannot be undone."
               onConfirm={() => handleDelete(record.id)}
-              okText="确认"
-              cancelText="取消"
+              okText="Confirm"
+              cancelText="Cancel"
             >
               <Button
                 type="link"
@@ -303,12 +303,12 @@ const ProjectsPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      {/* 统计卡片 */}
+      {/* Statistics cards */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
           <Card>
             <Statistic
-              title="总项目数"
+              title="Total Projects"
               value={statistics.totalProjects}
               prefix={<UserOutlined />}
             />
@@ -317,7 +317,7 @@ const ProjectsPage: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="进行中"
+              title="In Progress"
               value={statistics.activeProjects}
               prefix={<CalendarOutlined />}
               valueStyle={{ color: '#1890ff' }}
@@ -327,7 +327,7 @@ const ProjectsPage: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="已完成"
+              title="Completed"
               value={statistics.completedProjects}
               valueStyle={{ color: '#52c41a' }}
             />
@@ -336,7 +336,7 @@ const ProjectsPage: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="已归档"
+              title="Archived"
               value={statistics.archivedProjects}
               valueStyle={{ color: '#8c8c8c' }}
             />
@@ -345,12 +345,12 @@ const ProjectsPage: React.FC = () => {
       </Row>
 
       <Card
-        title="项目管理"
+        title="Project Management"
         extra={
           <Space>
-            {/* 搜索框 */}
+            {/* Search box */}
             <Input
-              placeholder="搜索项目..."
+              placeholder="Search projects..."
               prefix={<SearchOutlined />}
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
@@ -358,20 +358,20 @@ const ProjectsPage: React.FC = () => {
               allowClear
             />
             
-            {/* 状态筛选 */}
+            {/* Status filter */}
             <Select
               value={filterStatus}
               onChange={setFilterStatus}
               style={{ width: 120 }}
             >
-              <Option value="ALL">全部状态</Option>
-              <Option value="ACTIVE">进行中</Option>
-              <Option value="COMPLETED">已完成</Option>
-              <Option value="SUSPENDED">暂停</Option>
-              <Option value="ARCHIVED">已归档</Option>
+              <Option value="ALL">All Status</Option>
+              <Option value="ACTIVE">In Progress</Option>
+              <Option value="COMPLETED">Completed</Option>
+              <Option value="SUSPENDED">Suspended</Option>
+              <Option value="ARCHIVED">Archived</Option>
             </Select>
             
-            {/* 新建按钮 */}
+            {/* Create button */}
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -381,7 +381,7 @@ const ProjectsPage: React.FC = () => {
                 setModalVisible(true);
               }}
             >
-              新建项目
+              Create Project
             </Button>
           </Space>
         }
@@ -395,14 +395,14 @@ const ProjectsPage: React.FC = () => {
             pageSize: 10,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 个项目`,
+            showTotal: (total) => `Total ${total} projects`,
           }}
         />
       </Card>
 
-      {/* 创建/编辑项目模态框 */}
+      {/* Create/Edit project modal */}
       <Modal
-        title={editingProject ? '编辑项目' : '新建项目'}
+        title={editingProject ? 'Edit Project' : 'Create Project'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
@@ -421,18 +421,18 @@ const ProjectsPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="name"
-                label="项目名称"
-                rules={[{ required: true, message: '请输入项目名称' }]}
+                label="Project Name"
+                rules={[{ required: true, message: 'Please enter project name' }]}
               >
-                <Input placeholder="请输入项目名称" />
+                <Input placeholder="Enter project name" />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item
                 name="caseNumber"
-                label="案件编号"
+                label="Case Number"
               >
-                <Input placeholder="请输入案件编号（可选）" />
+                <Input placeholder="Enter case number (optional)" />
               </Form.Item>
             </Col>
           </Row>
@@ -441,24 +441,24 @@ const ProjectsPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="projectType"
-                label="项目类型"
+                label="Project Type"
                 initialValue="GENERAL"
               >
                 <Select>
-                  <Option value="GENERAL">一般调查</Option>
-                  <Option value="CRIMINAL">刑事案件</Option>
-                  <Option value="CIVIL">民事案件</Option>
-                  <Option value="CORPORATE">企业调查</Option>
-                  <Option value="ACADEMIC_RESEARCH">学术研究</Option>
+                  <Option value="GENERAL">General Investigation</Option>
+                  <Option value="CRIMINAL">Criminal Case</Option>
+                  <Option value="CIVIL">Civil Case</Option>
+                  <Option value="CORPORATE">Corporate Investigation</Option>
+                  <Option value="ACADEMIC_RESEARCH">Academic Research</Option>
                 </Select>
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item
                 name="clientName"
-                label="委托方"
+                label="Client"
               >
-                <Input placeholder="请输入委托方名称" />
+                <Input placeholder="Enter client name" />
               </Form.Item>
             </Col>
           </Row>
@@ -467,15 +467,15 @@ const ProjectsPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="clientContact"
-                label="委托方联系方式"
+                label="Client Contact"
               >
-                <Input placeholder="请输入联系方式" />
+                <Input placeholder="Enter contact information" />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item
                 name="deadline"
-                label="截止日期"
+                label="Deadline"
               >
                 <DatePicker style={{ width: '100%' }} />
               </Form.Item>
@@ -484,23 +484,23 @@ const ProjectsPage: React.FC = () => {
 
           <Form.Item
             name="description"
-            label="项目描述"
+            label="Project Description"
           >
-            <TextArea rows={3} placeholder="请输入项目描述" />
+            <TextArea rows={3} placeholder="Enter project description" />
           </Form.Item>
 
           <Form.Item
             name="evidenceDescription"
-            label="证据描述"
+            label="Evidence Description"
           >
-            <TextArea rows={2} placeholder="请描述相关证据" />
+            <TextArea rows={2} placeholder="Describe related evidence" />
           </Form.Item>
 
-          <Form.Item
+                    <Form.Item
             name="notes"
-            label="备注"
+            label="Notes"
           >
-            <TextArea rows={2} placeholder="请输入备注信息" />
+            <TextArea rows={2} placeholder="Enter notes" />
           </Form.Item>
 
           <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
@@ -510,10 +510,10 @@ const ProjectsPage: React.FC = () => {
                 setEditingProject(null);
                 form.resetFields();
               }}>
-                取消
+                Cancel
               </Button>
               <Button type="primary" htmlType="submit">
-                {editingProject ? '更新' : '创建'}
+                {editingProject ? 'Update' : 'Create'}
               </Button>
             </Space>
           </Form.Item>

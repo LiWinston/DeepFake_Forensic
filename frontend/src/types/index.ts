@@ -119,7 +119,7 @@ export interface UploadFile {
   chunkTotal?: number;
   chunkUploaded?: number;
   md5Hash?: string;
-  projectId?: number; // 关联的项目ID
+  projectId?: number; // Associated project ID
 }
 
 export interface ChunkUploadRequest {

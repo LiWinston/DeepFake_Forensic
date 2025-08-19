@@ -72,7 +72,7 @@ class MetadataService {
     return (res.data?.data as any) || (res.data as any);
   }
 
-  // POST /metadata/analysis/{fileMd5}/start - 启动分析
+  // POST /metadata/analysis/{fileMd5}/start - Start analysis
   async startAnalysis(fileMd5: string): Promise<{
     success: boolean;
     message: string;
@@ -84,12 +84,12 @@ class MetadataService {
     const data = (res.data?.data as any) || (res.data as any);
     return {
       success: data.success || false,
-      message: data.message || '启动分析失败',
+      message: data.message || 'Failed to start analysis',
       status: data.status
     };
   }
 
-  // GET /metadata/analysis/{fileMd5}/status - 获取分析状态
+  // GET /metadata/analysis/{fileMd5}/status - Get analysis status
   async getAnalysisStatus(fileMd5: string): Promise<{
     hasAnalysis: boolean;
     status: string;
@@ -103,7 +103,7 @@ class MetadataService {
     return {
       hasAnalysis: data.hasAnalysis || false,
       status: data.status || 'UNKNOWN',
-      message: data.message || '未知状态',
+      message: data.message || 'Unknown status',
       analysisTime: data.analysisTime
     };
   }
