@@ -1,6 +1,6 @@
 package com.itproject.project.repository;
 
-import com.itproject.project.entity.AnalysisTask;
+import com.itproject.analysis.entity.AnalysisTask;
 import com.itproject.project.entity.Project;
 import com.itproject.auth.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,7 +22,7 @@ public interface AnalysisTaskRepository extends JpaRepository<AnalysisTask, Long
     /**
      * Find analysis tasks by project and status
      */
-    List<AnalysisTask> findByProjectAndStatus(Project project, AnalysisTask.TaskStatus status);
+    List<AnalysisTask> findByProjectAndStatus(Project project, AnalysisTask.AnalysisStatus status);
     
     /**
      * Find analysis tasks by project and analysis type
@@ -37,7 +37,7 @@ public interface AnalysisTaskRepository extends JpaRepository<AnalysisTask, Long
     /**
      * Find analysis tasks by user and status
      */
-    List<AnalysisTask> findByUserAndStatus(User user, AnalysisTask.TaskStatus status);
+    List<AnalysisTask> findByUserAndStatus(User user, AnalysisTask.AnalysisStatus status);
     
     /**
      * Find running tasks for a user
@@ -63,7 +63,7 @@ public interface AnalysisTaskRepository extends JpaRepository<AnalysisTask, Long
     /**
      * Count tasks by status for a project
      */
-    long countByProjectAndStatus(Project project, AnalysisTask.TaskStatus status);
+    long countByProjectAndStatus(Project project, AnalysisTask.AnalysisStatus status);
     
     /**
      * Count tasks by analysis type for a user
@@ -71,19 +71,10 @@ public interface AnalysisTaskRepository extends JpaRepository<AnalysisTask, Long
     long countByUserAndAnalysisType(User user, AnalysisTask.AnalysisType analysisType);
     
     /**
-     * Find tasks with confidence score above threshold
-     */
-    @Query("SELECT at FROM AnalysisTask at WHERE at.project = :project AND " +
-           "at.confidenceScore >= :threshold AND at.status = 'COMPLETED'")
-    List<AnalysisTask> findTasksWithHighConfidence(@Param("project") Project project, 
-                                                   @Param("threshold") Double threshold);
-    
-    /**
-     * Search tasks by keyword in task name or description
+     * Search tasks by keyword in description or parameters
      */
     @Query("SELECT at FROM AnalysisTask at WHERE at.user = :user AND " +
-           "(LOWER(at.taskName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(at.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
-           "LOWER(at.notes) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+           "(LOWER(at.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(at.parameters) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     List<AnalysisTask> searchByKeyword(@Param("user") User user, @Param("keyword") String keyword);
 }

@@ -1,7 +1,6 @@
 package com.itproject.project.dto;
 
-import com.itproject.project.entity.AnalysisTask;
-import jakarta.validation.constraints.NotBlank;
+import com.itproject.analysis.entity.AnalysisTask;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;

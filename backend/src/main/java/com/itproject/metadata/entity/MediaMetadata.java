@@ -1,8 +1,8 @@
 package com.itproject.metadata.entity;
 
+import com.itproject.analysis.entity.AnalysisTask;
 import com.itproject.auth.entity.User;
 import com.itproject.project.entity.Project;
-import com.itproject.project.entity.AnalysisTask;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;

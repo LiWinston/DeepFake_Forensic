@@ -1,6 +1,6 @@
 package com.itproject.project.service;
 
-import com.itproject.project.entity.AnalysisTask;
+import com.itproject.analysis.entity.AnalysisTask;
 import com.itproject.project.entity.Project;
 import com.itproject.project.repository.AnalysisTaskRepository;
 import com.itproject.auth.entity.User;
@@ -29,7 +29,7 @@ public class AnalysisTaskService {
         
         task.setProject(project);
         task.setUser(user);
-        task.setStatus(AnalysisTask.TaskStatus.PENDING);
+        task.setStatus(AnalysisTask.AnalysisStatus.PENDING);
         
         if (task.getTaskName() == null || task.getTaskName().isEmpty()) {
             task.setTaskName(generateTaskName(task.getAnalysisType()));
@@ -52,7 +52,7 @@ public class AnalysisTaskService {
         existingTask.setNotes(updatedTask.getNotes());
         
         // Only allow status updates if not completed
-        if (existingTask.getStatus() != AnalysisTask.TaskStatus.COMPLETED) {
+        if (existingTask.getStatus() != AnalysisTask.AnalysisStatus.COMPLETED) {
             existingTask.setStatus(updatedTask.getStatus());
         }
         
@@ -66,11 +66,11 @@ public class AnalysisTaskService {
     public AnalysisTask startAnalysisTask(Long taskId, User user) {
         AnalysisTask task = getAnalysisTaskById(taskId, user);
         
-        if (task.getStatus() != AnalysisTask.TaskStatus.PENDING) {
+        if (task.getStatus() != AnalysisTask.AnalysisStatus.PENDING) {
             throw new RuntimeException("Task can only be started from PENDING status");
         }
         
-        task.setStatus(AnalysisTask.TaskStatus.RUNNING);
+        task.setStatus(AnalysisTask.AnalysisStatus.RUNNING);
         task.setStartedAt(LocalDateTime.now());
         
         log.info("Starting analysis task: {} for user: {}", taskId, user.getUsername());
@@ -83,13 +83,13 @@ public class AnalysisTaskService {
     public AnalysisTask completeAnalysisTask(Long taskId, String resultData, Double confidenceScore, User user) {
         AnalysisTask task = getAnalysisTaskById(taskId, user);
         
-        if (task.getStatus() != AnalysisTask.TaskStatus.RUNNING) {
+        if (task.getStatus() != AnalysisTask.AnalysisStatus.RUNNING) {
             throw new RuntimeException("Task must be in RUNNING status to complete");
         }
         
-        task.setStatus(AnalysisTask.TaskStatus.COMPLETED);
+        task.setStatus(AnalysisTask.AnalysisStatus.COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
-        task.setResultData(resultData);
+        task.setResults(resultData);
         task.setConfidenceScore(confidenceScore);
         
         log.info("Completing analysis task: {} for user: {}", taskId, user.getUsername());
@@ -102,10 +102,9 @@ public class AnalysisTaskService {
     public AnalysisTask failAnalysisTask(Long taskId, String errorMessage, User user) {
         AnalysisTask task = getAnalysisTaskById(taskId, user);
         
-        task.setStatus(AnalysisTask.TaskStatus.FAILED);
+        task.setStatus(AnalysisTask.AnalysisStatus.FAILED);
         task.setCompletedAt(LocalDateTime.now());
-        task.setNotes((task.getNotes() != null ? task.getNotes() + "\n" : "") + 
-                     "Error: " + errorMessage);
+        task.setErrorMessage(errorMessage);
         
         log.warn("Failing analysis task: {} for user: {} - Error: {}", taskId, user.getUsername(), errorMessage);
         return analysisTaskRepository.save(task);
@@ -117,11 +116,11 @@ public class AnalysisTaskService {
     public AnalysisTask cancelAnalysisTask(Long taskId, User user) {
         AnalysisTask task = getAnalysisTaskById(taskId, user);
         
-        if (task.getStatus() == AnalysisTask.TaskStatus.COMPLETED) {
+        if (task.getStatus() == AnalysisTask.AnalysisStatus.COMPLETED) {
             throw new RuntimeException("Cannot cancel completed task");
         }
         
-        task.setStatus(AnalysisTask.TaskStatus.CANCELLED);
+        task.setStatus(AnalysisTask.AnalysisStatus.CANCELLED);
         
         log.info("Cancelling analysis task: {} for user: {}", taskId, user.getUsername());
         return analysisTaskRepository.save(task);
@@ -158,7 +157,7 @@ public class AnalysisTaskService {
      * Get analysis tasks by status
      */
     @Transactional(readOnly = true)
-    public List<AnalysisTask> getAnalysisTasksByStatus(User user, AnalysisTask.TaskStatus status) {
+    public List<AnalysisTask> getAnalysisTasksByStatus(User user, AnalysisTask.AnalysisStatus status) {
         return analysisTaskRepository.findByUserAndStatus(user, status);
     }
     
@@ -203,10 +202,10 @@ public class AnalysisTaskService {
         Project project = projectService.getProjectById(projectId, user);
         
         long totalTasks = analysisTaskRepository.findByProjectOrderByCreatedAtDesc(project).size();
-        long pendingTasks = analysisTaskRepository.countByProjectAndStatus(project, AnalysisTask.TaskStatus.PENDING);
-        long runningTasks = analysisTaskRepository.countByProjectAndStatus(project, AnalysisTask.TaskStatus.RUNNING);
-        long completedTasks = analysisTaskRepository.countByProjectAndStatus(project, AnalysisTask.TaskStatus.COMPLETED);
-        long failedTasks = analysisTaskRepository.countByProjectAndStatus(project, AnalysisTask.TaskStatus.FAILED);
+        long pendingTasks = analysisTaskRepository.countByProjectAndStatus(project, AnalysisTask.AnalysisStatus.PENDING);
+        long runningTasks = analysisTaskRepository.countByProjectAndStatus(project, AnalysisTask.AnalysisStatus.RUNNING);
+        long completedTasks = analysisTaskRepository.countByProjectAndStatus(project, AnalysisTask.AnalysisStatus.COMPLETED);
+        long failedTasks = analysisTaskRepository.countByProjectAndStatus(project, AnalysisTask.AnalysisStatus.FAILED);
         
         return new AnalysisTaskStatistics(totalTasks, pendingTasks, runningTasks, completedTasks, failedTasks);
     }
@@ -217,7 +216,7 @@ public class AnalysisTaskService {
     public void deleteAnalysisTask(Long taskId, User user) {
         AnalysisTask task = getAnalysisTaskById(taskId, user);
         
-        if (task.getStatus() == AnalysisTask.TaskStatus.RUNNING) {
+        if (task.getStatus() == AnalysisTask.AnalysisStatus.RUNNING) {
             throw new RuntimeException("Cannot delete running analysis task");
         }
         

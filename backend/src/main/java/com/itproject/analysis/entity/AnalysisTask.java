@@ -26,6 +26,9 @@ public class AnalysisTask {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    @Column(nullable = false, length = 255)
+    private String taskName; // 任务名称
+    
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AnalysisType analysisType;
@@ -42,6 +45,12 @@ public class AnalysisTask {
     
     @Column(columnDefinition = "TEXT")
     private String results; // JSON format for analysis results
+    
+    @Column(columnDefinition = "TEXT")
+    private String notes; // 备注信息
+    
+    @Column
+    private Double confidenceScore; // 置信度分数
     
     @Column(columnDefinition = "TEXT")
     private String errorMessage;

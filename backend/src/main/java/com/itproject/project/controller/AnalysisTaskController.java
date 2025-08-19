@@ -1,6 +1,6 @@
 package com.itproject.project.controller;
 
-import com.itproject.project.entity.AnalysisTask;
+import com.itproject.analysis.entity.AnalysisTask;
 import com.itproject.project.service.AnalysisTaskService;
 import com.itproject.project.dto.CreateAnalysisTaskRequest;
 import com.itproject.auth.entity.User;
@@ -155,7 +155,7 @@ public class AnalysisTaskController {
      */
     @GetMapping("/status/{status}")
     public ResponseEntity<List<AnalysisTask>> getAnalysisTasksByStatus(
-            @PathVariable AnalysisTask.TaskStatus status,
+            @PathVariable AnalysisTask.AnalysisStatus status,
             @AuthenticationPrincipal User user) {
         
         List<AnalysisTask> tasks = analysisTaskService.getAnalysisTasksByStatus(user, status);
