@@ -103,10 +103,10 @@ export const useFilesList = (pageSize: number = 20) => {
       });
       
       if (result.files.length === 0) {
-        message.info('暂无文件数据，请先上传文件');
+        message.info('No files found. Please upload files first.');
       }
     } catch (error) {
-      message.error('加载文件列表失败');
+      message.error('Failed to load files list');
       console.error('Failed to load files:', error);
       setFiles([]);
       setPagination({ current: page, pageSize: size, total: 0 });
@@ -120,14 +120,14 @@ export const useFilesList = (pageSize: number = 20) => {
       setLoading(true);
       const success = await uploadService.deleteFile(fileId);
       if (success) {
-        message.success('文件删除成功');
+        message.success('File deleted successfully');
         // Refresh the current page
         await loadFiles(pagination.current, pagination.pageSize);
       } else {
-        message.warning('删除功能暂未实现');
+        message.warning('Delete functionality not yet implemented');
       }
     } catch (error) {
-      message.error('删除文件失败');
+      message.error('Failed to delete file');
       console.error('Failed to delete file:', error);
     } finally {
       setLoading(false);
@@ -135,7 +135,7 @@ export const useFilesList = (pageSize: number = 20) => {
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
   const refreshFiles = useCallback(() => {
-    console.log('刷新文件列表...');
+    console.log('Refreshing files list...');
     loadFiles(pagination.current, pagination.pageSize);
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
@@ -154,29 +154,29 @@ export const useMetadataAnalysis = () => {
   const [loading, setLoading] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState<Record<string, string>>({});
 
-  // 启动分析
+  // Start analysis
   const startAnalysis = useCallback(async (fileMd5: string) => {
     setLoading(true);
     try {
       const result = await metadataService.startAnalysis(fileMd5);
       if (result.success) {
-        message.success(result.message || '分析已启动');
+        message.success(result.message || 'Analysis started successfully');
         setAnalysisStatus(prev => ({ ...prev, [fileMd5]: 'PROCESSING' }));
         return true;
       } else {
-        message.error(result.message || '启动分析失败');
+        message.error(result.message || 'Failed to start analysis');
         return false;
       }
     } catch (error) {
       console.error('Failed to start analysis:', error);
-      message.error('启动分析失败');
+      message.error('Failed to start analysis');
       return false;
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // 获取分析结果（已有的逻辑，用于查看结果）
+  // Get analysis results (existing logic for viewing results)
   const getAnalysis = useCallback(async (fileMd5: string) => {
     setLoading(true);
     try {
@@ -191,7 +191,7 @@ export const useMetadataAnalysis = () => {
     }
   }, []);
 
-  // 获取分析状态
+  // Get analysis status
   const getAnalysisStatus = useCallback(async (fileMd5: string) => {
     try {
       const status = await metadataService.getAnalysisStatus(fileMd5);
@@ -199,19 +199,19 @@ export const useMetadataAnalysis = () => {
       return status;
     } catch (error) {
       console.error('Failed to get analysis status:', error);
-      return { hasAnalysis: false, status: 'ERROR', message: '获取状态失败' };
+      return { hasAnalysis: false, status: 'ERROR', message: 'Failed to get status' };
     }
   }, []);
 
-  // 加载分析结果
+  // Load analysis results
   const loadAnalyses = useCallback(async (fileMd5?: string) => {
     setLoading(true);
     try {
       if (fileMd5) {
-        // 先获取状态
+        // First get status
         const status = await getAnalysisStatus(fileMd5);
         
-        // 如果有完成的分析结果，获取详细内容
+        // If there are completed analysis results, get detailed content
         if (status.hasAnalysis && status.status === 'SUCCESS') {
           const result = await metadataService.getAnalysis(fileMd5);
           setAnalyses([result]);
@@ -230,7 +230,7 @@ export const useMetadataAnalysis = () => {
     message.info('Delete analysis API not implemented yet');
   }, []);
 
-  // 兼容性：保持原有的analyzeFile方法（实际调用启动分析）
+  // Compatibility: maintain original analyzeFile method (actually calls start analysis)
   const analyzeFile = useCallback(async (fileMd5: string) => {
     return await startAnalysis(fileMd5);
   }, [startAnalysis]);
@@ -239,10 +239,10 @@ export const useMetadataAnalysis = () => {
     analyses, 
     loading, 
     analysisStatus,
-    analyzeFile,           // 启动分析（兼容性）
-    startAnalysis,         // 明确的启动分析
-    getAnalysis,          // 获取分析结果
-    getAnalysisStatus,    // 获取分析状态
+    analyzeFile,           // Start analysis (compatibility)
+    startAnalysis,         // Explicit start analysis
+    getAnalysis,          // Get analysis results
+    getAnalysisStatus,    // Get analysis status
     loadAnalyses, 
     deleteAnalysis 
   };
