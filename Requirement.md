@@ -96,12 +96,46 @@ To develop a forensic tool for detecting and analysing deepfake, digitally alter
 
 # Requirement Change Log
 
-## [Placeholder for Change Records]
+## Week 4 Discussion Summary
 
-- **Date:**  
-- **Changed By:**  
-- **Change Description:**  
-- **Impact Assessment:**  
-- **Approval:**  
+### User & Stakeholder Profiles (Who/Do/Be/Feel)
 
----
+| Who | Do | Be | Feel |
+|---|---|---|---|
+| **Students** | Model to separate AI images from real images | Software Application (Java/Python application) | Easy to use |
+| **Lecturers** | Model to separate AI videos from real videos | Consistent (identify similar/same) reasons for same videos | - |
+| **University of Melbourne** | Providing forensic insight (reason) for the separation | Reliable and accurately identifying the real and deepfake videos | - |
+| **Tutors** | Take feedback from client based on varying success | Provide support for the student and the client | - |
+| **Forensic Analyst (client)** | - | - | - |
+| **Government** | - | - | - |
+
+### Key Client Requirements & Insights
+
+- **Core Task:** The client wants to know if a video/image is real, edited, or AI-generated
+- **Interpretability:** Interpretability is crucial for forensic analysts
+    - For images, use heatmaps to show exactly which parts are AI-generated
+    - For videos, identify which specific frames are AI-generated
+- **Reporting:** A potential solution is to use a large language model (like ChatGPT API) to generate a formal forensic report based on algorithmic and metadata analysis results. This would make the client's life easier and produce a report suitable for court
+- **Edited Media:** Training data exists for real vs. AI-generated media, but how to tell if something is merely edited?
+    - **Proposed Solution:** Use algorithmic approaches to detect edited content
+
+### System Architecture & Implementation Notes
+
+- **Models:** Potentially implement an image detection CNN and apply it to video frame-by-frame analysis
+- **Model Training:** It's preferable to use pre-trained models and fine-tune them for performance rather than building new models from scratch
+- **Backend Infrastructure:**
+    - An ideal scenario includes a user login system
+    - Users can create projects and submit multiple images/videos
+    - Projects will be stored in the backend until the user deletes them
+    - Different users should only have access to their own projects and not be able to cross-access others' data
+    - Users should be able to view all their project history, reports, and documents
+- **Project Limitations:** No limits to the number or type of projects, only limited by technological constraints, such as not being able to process a 10-hour video
+
+### Ethical Considerations
+
+- **Data Usage:** Do not use inappropriate data for training, such as pornographic material, anything involving children, or violence
+
+### Future Research & Exploration
+
+- **Multimodal Analysis:** Explore building a multimodal transformer that can take inputs like audio, images, and metadata to analyze if content is edited, AI-generated, or real
+- **Video Transformer:** Research the use of a video transformer for analysis
