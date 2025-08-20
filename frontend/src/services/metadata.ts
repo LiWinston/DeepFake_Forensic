@@ -12,7 +12,8 @@ export interface MetadataAnalysisResponseDTO {
   exifData?: Record<string, any>;
   videoMetadata?: Record<string, any>;
   hashValues?: { md5?: string; sha256?: string } & Record<string, any>;
-  suspiciousIndicators?: { hasAnomalies?: boolean; anomalies?: string[]; riskScore?: number } & Record<string, any>;
+  suspiciousIndicators?: { hasIndicators?: boolean; indicators?: string | string[]; analysisNotes?: string; riskScore?: number } & Record<string, any>;
+  parsedMetadata?: Record<string, any>;
   analysisTime?: string;
 }
 
@@ -22,12 +23,17 @@ const mapToMetadataAnalysis = (dto: MetadataAnalysisResponseDTO): MetadataAnalys
     fileHeaders: dto.basicMetadata || undefined,
     hashData: dto.hashValues ? { md5: (dto.hashValues as any).md5, sha256: (dto.hashValues as any).sha256 } : undefined,
     technicalData: dto.videoMetadata || undefined,
+    // Map suspicious to UI model
     suspicious: dto.suspiciousIndicators ? {
-      hasAnomalies: !!dto.suspiciousIndicators.hasAnomalies,
-      anomalies: dto.suspiciousIndicators.anomalies || [],
+      hasAnomalies: !!dto.suspiciousIndicators.hasIndicators,
+      anomalies: Array.isArray(dto.suspiciousIndicators.indicators)
+        ? (dto.suspiciousIndicators.indicators as string[])
+        : (dto.suspiciousIndicators.indicators ? String(dto.suspiciousIndicators.indicators).split(';').map(s => s.trim()).filter(Boolean) : []),
       riskScore: dto.suspiciousIndicators.riskScore ?? 0,
     } : undefined,
-  };
+  } as any;
+  // Attach parsed metadata tree for UI consumption
+  (result as any).parsedMetadata = dto.parsedMetadata;
   return {
     id: `${dto.fileMd5}-${dto.analysisTime || 'now'}`,
     fileId: dto.fileMd5,

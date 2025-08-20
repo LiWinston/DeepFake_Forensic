@@ -25,6 +25,8 @@ import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.http.Method;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -738,35 +740,12 @@ public class MetadataAnalysisService {
             metadata.setImageWidth(grabber.getImageWidth());
             metadata.setImageHeight(grabber.getImageHeight());
             
-            // Extract file format and MIME type for video
-            String format = grabber.getFormat();
-            if (format != null) {
-                metadata.setFileFormat(format.toUpperCase());
-                
-                // Set MIME type based on format
-                switch (format.toLowerCase()) {
-                    case "mp4":
-                    case "mov":
-                        metadata.setMimeType("video/mp4");
-                        break;
-                    case "avi":
-                        metadata.setMimeType("video/avi");
-                        break;
-                    case "mkv":
-                        metadata.setMimeType("video/x-matroska");
-                        break;
-                    case "webm":
-                        metadata.setMimeType("video/webm");
-                        break;
-                    case "flv":
-                        metadata.setMimeType("video/x-flv");
-                        break;
-                    case "wmv":
-                        metadata.setMimeType("video/x-ms-wmv");
-                        break;
-                    default:
-                        metadata.setMimeType("video/" + format.toLowerCase());
-                }
+            // Normalize format/MIME (handles ffmpeg multi-format strings, MinIO contentType, file extension, codec)
+            normalizeVideoFormatAndMime(metadata, filePath, grabber.getFormat());
+
+            // Persist a human-readable raw metadata snapshot for videos as well
+            if (metadata.getRawMetadata() == null || metadata.getRawMetadata().isEmpty()) {
+                metadata.setRawMetadata(buildVideoRawMetadata(grabber, metadata));
             }
             
             // For video compression level, we can estimate based on bitrate and resolution
@@ -1138,16 +1117,143 @@ public class MetadataAnalysisService {
     
     private boolean isFormatMimeConsistent(String format, String mimeType) {
         if (format == null || mimeType == null) return true;
-        
-        String formatLower = format.toLowerCase();
-        String mimeTypeLower = mimeType.toLowerCase();
-        
-        return (formatLower.contains("jpeg") && mimeTypeLower.contains("jpeg")) ||
-               (formatLower.contains("png") && mimeTypeLower.contains("png")) ||
-               (formatLower.contains("gif") && mimeTypeLower.contains("gif")) ||
-               (formatLower.contains("bmp") && mimeTypeLower.contains("bmp")) ||
-               (formatLower.contains("tiff") && mimeTypeLower.contains("tiff")) ||
-               (formatLower.contains("webp") && mimeTypeLower.contains("webp"));
+
+        String f = format.toLowerCase();
+        String m = mimeType.toLowerCase();
+
+        // If mime is video/*, accept common container synonyms
+        if (m.startsWith("video/")) {
+            // Normalize list-like formats (e.g., "mov,mp4,m4a,3gp,3g2,mj2")
+            Set<String> tokens = new HashSet<>();
+            for (String t : f.split(",")) { tokens.add(t.trim()); }
+            if (tokens.isEmpty()) tokens.add(f.trim());
+
+            if (m.contains("mp4") || m.contains("quicktime") || m.equals("video/mp4")) {
+                return tokens.contains("mp4") || tokens.contains("mov") || f.contains("mp4") || f.contains("mov");
+            }
+            if (m.contains("webm")) {
+                return tokens.contains("webm") || f.contains("webm");
+            }
+            if (m.contains("matroska") || m.contains("mkv")) {
+                return tokens.contains("mkv") || f.contains("matroska") || f.contains("mkv");
+            }
+            if (m.contains("avi")) {
+                return tokens.contains("avi") || f.contains("avi");
+            }
+            if (m.contains("wmv")) {
+                return tokens.contains("wmv") || f.contains("wmv");
+            }
+            if (m.contains("flv")) {
+                return tokens.contains("flv") || f.contains("flv");
+            }
+            // If unknown, be lenient
+            return true;
+        }
+
+        // Images
+        return (f.contains("jpeg") && m.contains("jpeg")) ||
+               (f.contains("png") && m.contains("png")) ||
+               (f.contains("gif") && m.contains("gif")) ||
+               (f.contains("bmp") && m.contains("bmp")) ||
+               (f.contains("tiff") && m.contains("tiff")) ||
+               (f.contains("webp") && m.contains("webp"));
+    }
+
+    private void normalizeVideoFormatAndMime(MediaMetadata metadata, String filePath, String ffFormat) {
+        String ext = null;
+        if (filePath != null) {
+            String lower = filePath.toLowerCase();
+            int dot = lower.lastIndexOf('.');
+            if (dot >= 0 && dot < lower.length() - 1) {
+                ext = lower.substring(dot + 1);
+            }
+        }
+
+        // 1) Prefer MinIO contentType when valid
+        String contentType = null;
+        try {
+            StatObjectResponse stat = minioClient.statObject(
+                StatObjectArgs.builder().bucket(minioBucketName).object(filePath).build()
+            );
+            if (stat != null) contentType = stat.contentType();
+        } catch (Exception ignored) {}
+
+        String canonicalFormat = null;
+        if (ext != null) {
+            switch (ext) {
+                case "mp4":
+                case "m4v":
+                case "mov":
+                    canonicalFormat = "MP4"; break;
+                case "webm":
+                    canonicalFormat = "WEBM"; break;
+                case "mkv":
+                    canonicalFormat = "MKV"; break;
+                case "avi":
+                    canonicalFormat = "AVI"; break;
+                case "wmv":
+                    canonicalFormat = "WMV"; break;
+                case "flv":
+                    canonicalFormat = "FLV"; break;
+                default:
+                    break;
+            }
+        }
+
+        // 2) If still unknown, normalize ffmpeg's multi-format string
+        if (canonicalFormat == null && ffFormat != null && !ffFormat.isBlank()) {
+            String low = ffFormat.toLowerCase();
+            if (low.contains("mp4") || low.contains("mov")) canonicalFormat = "MP4";
+            else if (low.contains("webm")) canonicalFormat = "WEBM";
+            else if (low.contains("matroska") || low.contains("mkv")) canonicalFormat = "MKV";
+            else if (low.contains("avi")) canonicalFormat = "AVI";
+            else if (low.contains("wmv")) canonicalFormat = "WMV";
+            else if (low.contains("flv")) canonicalFormat = "FLV";
+        }
+
+        if (canonicalFormat == null) canonicalFormat = metadata.getFileFormat();
+        if (canonicalFormat == null) canonicalFormat = "VIDEO";
+        metadata.setFileFormat(canonicalFormat);
+
+        // Derive canonical MIME
+        String mime = null;
+        if (contentType != null && !contentType.isBlank() && !contentType.contains(",")) {
+            // Use valid single content-type
+            mime = contentType;
+        }
+        if (mime == null) {
+            switch (canonicalFormat) {
+                case "MP4": mime = "video/mp4"; break;
+                case "WEBM": mime = "video/webm"; break;
+                case "MKV": mime = "video/x-matroska"; break;
+                case "AVI": mime = "video/avi"; break;
+                case "WMV": mime = "video/x-ms-wmv"; break;
+                case "FLV": mime = "video/x-flv"; break;
+                default: mime = "video/unknown";
+            }
+        }
+        metadata.setMimeType(mime);
+    }
+
+    private String buildVideoRawMetadata(FFmpegFrameGrabber grabber, MediaMetadata metadata) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Container:\n");
+        sb.append("  Format: ").append(grabber.getFormat()).append("\n");
+        sb.append("  CanonicalFormat: ").append(metadata.getFileFormat()).append("\n\n");
+
+        sb.append("Streams:\n");
+        sb.append("  VideoCodec: ").append(grabber.getVideoCodecName()).append("\n");
+        sb.append("  AudioCodec: ").append(grabber.getAudioCodecName()).append("\n");
+        sb.append("  FrameRate: ").append(grabber.getVideoFrameRate()).append("\n");
+        sb.append("  BitRate: ").append(grabber.getVideoBitrate()).append("\n");
+        sb.append("  Width: ").append(grabber.getImageWidth()).append("\n");
+        sb.append("  Height: ").append(grabber.getImageHeight()).append("\n");
+        sb.append("  DurationSec: ").append(grabber.getLengthInTime() / 1_000_000).append("\n\n");
+
+        sb.append("File Type:\n");
+        sb.append("  Detected File Type Name: ").append(metadata.getFileFormat()).append("\n");
+        sb.append("  Detected MIME Type: ").append(metadata.getMimeType()).append("\n");
+        return sb.toString();
     }
     
     private boolean isValidCameraModelForMake(String make, String model) {
@@ -1214,24 +1320,24 @@ public class MetadataAnalysisService {
         }
         
         try {
-            String[] lines = rawMetadata.split("\\n");
+            // Add debug information first
+            parsedMetadata.put("_debug_raw_preview", rawMetadata.length() > 200 ? rawMetadata.substring(0, 200) + "..." : rawMetadata);
+            
+            String[] lines = rawMetadata.split("\\r?\\n");
             String currentDirectory = null;
             Map<String, Object> currentDirData = new HashMap<>();
             
             for (String line : lines) {
+                String originalLine = line;
                 line = line.trim();
                 
                 if (line.isEmpty()) {
-                    // End of a directory, save it if we have data
-                    if (currentDirectory != null && !currentDirData.isEmpty()) {
-                        parsedMetadata.put(currentDirectory, new HashMap<>(currentDirData));
-                        currentDirData.clear();
-                    }
+                    // Empty line, continue but don't save directory yet
                     continue;
                 }
                 
-                // Check if this is a directory header (ends with colon)
-                if (line.endsWith(":") && !line.startsWith("  ")) {
+                // Check if this is a directory header (ends with colon and doesn't start with space)
+                if (line.endsWith(":") && !originalLine.startsWith(" ") && !originalLine.startsWith("\t")) {
                     // Save previous directory if exists
                     if (currentDirectory != null && !currentDirData.isEmpty()) {
                         parsedMetadata.put(currentDirectory, new HashMap<>(currentDirData));
@@ -1240,18 +1346,22 @@ public class MetadataAnalysisService {
                     // Start new directory
                     currentDirectory = line.substring(0, line.length() - 1).trim();
                     currentDirData = new HashMap<>();
-                } else if (line.startsWith("  ") && currentDirectory != null) {
+                    
+                } else if ((originalLine.startsWith("  ") || originalLine.startsWith("\t")) && currentDirectory != null) {
                     // This is a tag within a directory
-                    String tagLine = line.substring(2); // Remove leading spaces
+                    String tagLine = line; // line is already trimmed
                     int colonIndex = tagLine.indexOf(':');
                     
-                    if (colonIndex > 0 && colonIndex < tagLine.length() - 1) {
+                    if (colonIndex > 0 && colonIndex < tagLine.length()) {
                         String key = tagLine.substring(0, colonIndex).trim();
-                        String value = tagLine.substring(colonIndex + 1).trim();
+                        String value = colonIndex < tagLine.length() - 1 ? tagLine.substring(colonIndex + 1).trim() : "";
                         
                         // Try to parse numeric values
                         Object parsedValue = parseMetadataValue(value);
                         currentDirData.put(key, parsedValue);
+                    } else if (!tagLine.contains(":")) {
+                        // Handle lines without colon (just values or continuation)
+                        currentDirData.put("_unparsed_line_" + currentDirData.size(), tagLine);
                     }
                 }
             }
@@ -1259,6 +1369,11 @@ public class MetadataAnalysisService {
             // Don't forget the last directory
             if (currentDirectory != null && !currentDirData.isEmpty()) {
                 parsedMetadata.put(currentDirectory, currentDirData);
+            }
+            
+            // Remove debug info if we have actual data
+            if (parsedMetadata.size() > 1) {
+                parsedMetadata.remove("_debug_raw_preview");
             }
             
         } catch (Exception e) {

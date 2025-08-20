@@ -161,6 +161,8 @@ export interface MetadataResult {
     resolution?: string;
     bitDepth?: string;
   };
+  // nested raw metadata tree from backend
+  parsedMetadata?: Record<string, any>;
   suspicious?: {
     hasAnomalies: boolean;
     anomalies: string[];

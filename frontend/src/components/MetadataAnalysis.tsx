@@ -359,6 +359,15 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
       );
     }
 
+    // New: parsed raw metadata tree
+    if ((result as any).parsedMetadata && Object.keys((result as any).parsedMetadata).length > 0) {
+      panels.push(
+        <Panel header="Full Analysis" key="parsed">
+          <Tree defaultExpandAll treeData={renderMetadataTree((result as any).parsedMetadata)} />
+        </Panel>
+      );
+    }
+
     if (result.suspicious) {
       panels.push(
         <Panel 
