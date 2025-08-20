@@ -36,6 +36,7 @@ import AuthPage from './pages/AuthPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import EmailVerificationPage from './pages/EmailVerificationPage';
+import UserAccountPage from './pages/UserAccountPage';
 
 // Import components and contexts
 import ProtectedRoute from './components/ProtectedRoute';
@@ -152,7 +153,6 @@ const AppNavigation: React.FC = () => {
     await logout();
     navigate('/auth');
   };
-
   const userMenuItems = [
     {
       key: 'user-info',
@@ -161,6 +161,12 @@ const AppNavigation: React.FC = () => {
     },
     {
       type: 'divider' as const,
+    },
+    {
+      key: 'account',
+      label: 'Account Settings',
+      icon: <UserOutlined />,
+      onClick: () => navigate('/account'),
     },
     {
       key: 'logout',
@@ -274,14 +280,14 @@ const AppNavigation: React.FC = () => {
             </div>
           </Dropdown>        </Header>
         <Content style={{...appStyles.content, marginTop: 64}}>
-          <div style={appStyles.contentInner}>
-            <Routes>
+          <div style={appStyles.contentInner}>            <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
               <Route path="/files" element={<FilesPage />} />
               <Route path="/files/:projectId" element={<FilesPage />} />
               <Route path="/analysis" element={<AnalysisPage />} />
+              <Route path="/account" element={<UserAccountPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
