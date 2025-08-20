@@ -62,6 +62,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                // Allow public access to file preview and thumbnail endpoints
+                .requestMatchers("/api/v1/upload/files/*/preview", "/api/v1/upload/files/*/thumbnail").permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

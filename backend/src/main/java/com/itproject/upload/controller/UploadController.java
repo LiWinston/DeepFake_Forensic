@@ -32,7 +32,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/upload")
 @CrossOrigin(origins = "*", maxAge = 3600)
-@PreAuthorize("hasRole('USER')")
 public class UploadController {
     
     @Autowired
