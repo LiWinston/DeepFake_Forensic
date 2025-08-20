@@ -321,6 +321,8 @@ public class UploadService {
             analysisMessage.put("fileType", mediaFile.getFileType());
             analysisMessage.put("filePath", finalPath);
             analysisMessage.put("userId", mediaFile.getUser().getId()); // Add user ID
+            analysisMessage.put("projectId", mediaFile.getProject().getId()); // Add project ID
+            analysisMessage.put("forceReAnalysis", false); // Default: not force re-analysis on first completion
             
             kafkaTemplate.send(metadataAnalysisTopic, analysisMessage);
             

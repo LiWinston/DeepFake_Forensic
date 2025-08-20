@@ -12,6 +12,8 @@ import com.itproject.auth.repository.UserRepository;
 import com.itproject.auth.security.SecurityUtils;
 import com.itproject.project.entity.Project;
 import com.itproject.project.repository.ProjectRepository;
+import com.itproject.upload.entity.MediaFile;
+import com.itproject.upload.repository.MediaFileRepository;
 import com.itproject.metadata.dto.MetadataAnalysisResponse;
 import com.itproject.metadata.entity.MediaMetadata;
 import com.itproject.metadata.repository.MediaMetadataRepository;
@@ -55,6 +57,9 @@ public class MetadataAnalysisService {
     @Autowired
     private String minioBucketName;
     
+    @Autowired
+    private MediaFileRepository mediaFileRepository;
+    
     /**
      * Kafka listener for processing metadata analysis requests
      */
@@ -67,19 +72,45 @@ public class MetadataAnalysisService {
             String fileType = (String) message.get("fileType");
             String filePath = (String) message.get("filePath");
             Boolean forceReAnalysis = (Boolean) message.get("forceReAnalysis");
-            Long userId = ((Number) message.get("userId")).longValue();
-            Long projectId = ((Number) message.get("projectId")).longValue();
+            Long userId = extractLong(message.get("userId"));
+            Long projectId = extractLong(message.get("projectId"));
+            
+            // Fallback from DB when message misses fields (backward compatibility)
+            if (userId == null || projectId == null || fileType == null || filePath == null || fileName == null) {
+                if (fileMd5 != null) {
+                    Optional<MediaFile> mfOpt = mediaFileRepository.findByFileMd5(fileMd5);
+                    if (mfOpt.isPresent()) {
+                        MediaFile mf = mfOpt.get();
+                        if (userId == null && mf.getUser() != null) userId = mf.getUser().getId();
+                        if (projectId == null && mf.getProject() != null) projectId = mf.getProject().getId();
+                        if (fileType == null) {
+                            fileType = mf.getMediaType() != null ? mf.getMediaType().name() : mf.getFileType();
+                        }
+                        if (filePath == null) filePath = mf.getFilePath();
+                        if (fileName == null) fileName = mf.getOriginalFileName() != null ? mf.getOriginalFileName() : mf.getFileName();
+                    }
+                }
+            }
+            if (forceReAnalysis == null) {
+                forceReAnalysis = Boolean.FALSE;
+            }
+            
+            if (userId == null || projectId == null) {
+                throw new IllegalArgumentException("Missing userId/projectId in message and fallback.");
+            }
             
             log.info("Processing metadata analysis for file: {} (MD5: {}), user: {}, forceReAnalysis: {}", 
                     fileName, fileMd5, userId, forceReAnalysis);
             
             // Get user
+            Long finalUserId = userId;
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+                    .orElseThrow(() -> new RuntimeException("User not found: " + finalUserId));
             
             // Get project
+            Long finalProjectId = projectId;
             Project project = projectRepository.findById(projectId)
-                    .orElseThrow(() -> new RuntimeException("Project not found: " + projectId));
+                    .orElseThrow(() -> new RuntimeException("Project not found: " + finalProjectId));
             
             // Check if metadata already exists for this user
             Optional<MediaMetadata> existingMetadata = metadataRepository.findByFileMd5AndUser(fileMd5, user);
@@ -133,8 +164,16 @@ public class MetadataAnalysisService {
             // Save failed status if possible
             try {
                 String fileMd5 = (String) message.get("fileMd5");
-                Long userId = ((Number) message.get("userId")).longValue();
-                Long projectId = ((Number) message.get("projectId")).longValue();
+                Long userId = extractLong(message.get("userId"));
+                Long projectId = extractLong(message.get("projectId"));
+                if ((userId == null || projectId == null) && fileMd5 != null) {
+                    Optional<MediaFile> mfOpt = mediaFileRepository.findByFileMd5(fileMd5);
+                    if (mfOpt.isPresent()) {
+                        MediaFile mf = mfOpt.get();
+                        if (userId == null && mf.getUser() != null) userId = mf.getUser().getId();
+                        if (projectId == null && mf.getProject() != null) projectId = mf.getProject().getId();
+                    }
+                }
                 if (fileMd5 != null && userId != null && projectId != null) {
                     User user = userRepository.findById(userId).orElse(null);
                     Project project = projectRepository.findById(projectId).orElse(null);
@@ -151,6 +190,23 @@ public class MetadataAnalysisService {
             } catch (Exception saveError) {
                 log.error("Failed to save error status", saveError);
             }
+        }
+    }
+
+    private Long extractLong(Object value) {
+        try {
+            if (value == null) return null;
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            }
+            if (value instanceof String) {
+                String s = (String) value;
+                if (s.trim().isEmpty()) return null;
+                return Long.parseLong(s.trim());
+            }
+            return null;
+        } catch (Exception ex) {
+            return null;
         }
     }
     
