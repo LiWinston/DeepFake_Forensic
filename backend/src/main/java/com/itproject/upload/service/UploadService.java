@@ -54,6 +54,9 @@ public class UploadService {
     
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private RedisTemplate<String, byte[]> thumbnailRedisTemplate;
     
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -791,15 +794,34 @@ public class UploadService {
             // Check Redis cache first
             String thumbnailKey = "thumbnail:" + fileId;
             String errorKey = "thumbnail_error:" + fileId;
-            Object cachedThumbnail = redisTemplate.opsForValue().get(thumbnailKey);
+            byte[] cachedThumbnail = thumbnailRedisTemplate.opsForValue().get(thumbnailKey);
             
-            if (cachedThumbnail instanceof byte[]) {
+            if (cachedThumbnail != null && cachedThumbnail.length > 0) {
                 log.info("Returning cached thumbnail for file: {}", fileId);
-                return (byte[]) cachedThumbnail;
+                return cachedThumbnail;
+            }
+
+            // Backward compatibility: migrate from old JSON-serialized cache if present
+            Object legacyCached = redisTemplate.opsForValue().get(thumbnailKey);
+            if (legacyCached instanceof byte[] legacyBytes && legacyBytes.length > 0) {
+                thumbnailRedisTemplate.opsForValue().set(thumbnailKey, legacyBytes, 96, TimeUnit.HOURS);
+                log.info("Migrated legacy cached thumbnail for file: {}", fileId);
+                return legacyBytes;
+            } else if (legacyCached instanceof String legacyBase64 && !legacyBase64.isEmpty()) {
+                try {
+                    byte[] decoded = java.util.Base64.getDecoder().decode(legacyBase64);
+                    if (decoded.length > 0) {
+                        thumbnailRedisTemplate.opsForValue().set(thumbnailKey, decoded, 24, TimeUnit.HOURS);
+                        log.info("Migrated legacy base64 cached thumbnail for file: {}", fileId);
+                        return decoded;
+                    }
+                } catch (IllegalArgumentException ignore) {
+                    // Not valid base64, proceed to generate
+                }
             }
             
             // Check if we've already failed to generate thumbnail for this file
-            if (redisTemplate.hasKey(errorKey)) {
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(errorKey))) {
                 log.info("Returning fallback thumbnail for previously failed file: {}", fileId);
                 return generateFallbackThumbnail();
             }
@@ -820,7 +842,7 @@ public class UploadService {
                 log.warn("Thumbnail not supported for file type: {}, returning fallback", fileName);
                 byte[] fallbackThumbnail = generateFallbackThumbnail();
                 // Cache the fallback for non-image files
-                redisTemplate.opsForValue().set(thumbnailKey, fallbackThumbnail, 24, TimeUnit.HOURS);
+                thumbnailRedisTemplate.opsForValue().set(thumbnailKey, fallbackThumbnail, 24, TimeUnit.HOURS);
                 return fallbackThumbnail;
             }
             
@@ -867,7 +889,7 @@ public class UploadService {
                     }
                     
                     // Cache in Redis for 24 hours
-                    redisTemplate.opsForValue().set(thumbnailKey, thumbnailData, 24, TimeUnit.HOURS);
+                    thumbnailRedisTemplate.opsForValue().set(thumbnailKey, thumbnailData, 24, TimeUnit.HOURS);
                     
                     log.info("Generated and cached thumbnail for file: {} (size: {} bytes)", fileId, thumbnailData.length);
                     return thumbnailData;
@@ -881,7 +903,7 @@ public class UploadService {
                     
                     // Return fallback thumbnail
                     byte[] fallbackThumbnail = generateFallbackThumbnail();
-                    redisTemplate.opsForValue().set(thumbnailKey, fallbackThumbnail, 1, TimeUnit.HOURS); // Cache fallback for 1 hour
+                    thumbnailRedisTemplate.opsForValue().set(thumbnailKey, fallbackThumbnail, 1, TimeUnit.HOURS); // Cache fallback for 1 hour
                     
                     return fallbackThumbnail;
                 }

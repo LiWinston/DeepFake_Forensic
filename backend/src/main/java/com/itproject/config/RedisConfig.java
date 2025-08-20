@@ -7,6 +7,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -49,6 +50,19 @@ public class RedisConfig {
         template.setHashKeySerializer(new StringRedisSerializer());
         template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
         
+        template.afterPropertiesSet();
+        return template;
+    }
+
+    /**
+     * Dedicated RedisTemplate for raw byte[] values (thumbnails), avoiding JSON conversion.
+     */
+    @Bean("thumbnailRedisTemplate")
+    public RedisTemplate<String, byte[]> thumbnailRedisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, byte[]> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(RedisSerializer.byteArray());
         template.afterPropertiesSet();
         return template;
     }
