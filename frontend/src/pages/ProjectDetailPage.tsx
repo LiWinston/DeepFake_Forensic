@@ -511,16 +511,16 @@ const ProjectDetailPage: React.FC = () => {
 
           <Form.Item
             name="description"
-            label="任务描述"
+            label="Task Description"
           >
-            <TextArea rows={3} placeholder="请输入任务描述" />
+            <TextArea rows={3} placeholder="Enter task description" />
           </Form.Item>
 
           <Form.Item
             name="notes"
-            label="备注"
+            label="Notes"
           >
-            <TextArea rows={2} placeholder="请输入备注信息" />
+            <TextArea rows={2} placeholder="Enter notes" />
           </Form.Item>
 
           <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
@@ -530,10 +530,10 @@ const ProjectDetailPage: React.FC = () => {
                 setEditingTask(null);
                 form.resetFields();
               }}>
-                取消
+                Cancel
               </Button>
               <Button type="primary" htmlType="submit">
-                创建任务
+                Create Task
               </Button>
             </Space>
           </Form.Item>
