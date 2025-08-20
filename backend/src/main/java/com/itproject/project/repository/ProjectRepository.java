@@ -60,10 +60,55 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      * Count projects by status for a user
      */
     long countByUserAndStatus(User user, Project.ProjectStatus status);
-    
-    /**
+      /**
      * Find active projects (not archived or completed)
      */
     @Query("SELECT p FROM Project p WHERE p.user = :user AND p.status NOT IN ('ARCHIVED', 'COMPLETED')")
     List<Project> findActiveProjectsByUser(@Param("user") User user);
+    
+    /**
+     * Find projects by creation date range
+     */
+    @Query("SELECT p FROM Project p WHERE p.user = :user AND p.createdAt BETWEEN :startDate AND :endDate ORDER BY p.createdAt DESC")
+    List<Project> findByUserAndCreatedAtBetween(@Param("user") User user, 
+                                               @Param("startDate") LocalDateTime startDate, 
+                                               @Param("endDate") LocalDateTime endDate);
+    
+    /**
+     * Find projects by deadline date range
+     */
+    @Query("SELECT p FROM Project p WHERE p.user = :user AND p.deadline BETWEEN :startDate AND :endDate ORDER BY p.deadline ASC")
+    List<Project> findByUserAndDeadlineBetween(@Param("user") User user, 
+                                              @Param("startDate") LocalDateTime startDate, 
+                                              @Param("endDate") LocalDateTime endDate);
+    
+    /**
+     * Find projects created before a specific date
+     */
+    @Query("SELECT p FROM Project p WHERE p.user = :user AND p.createdAt <= :beforeDate ORDER BY p.createdAt DESC")
+    List<Project> findByUserAndCreatedAtBefore(@Param("user") User user, @Param("beforeDate") LocalDateTime beforeDate);
+    
+    /**
+     * Find projects created after a specific date
+     */
+    @Query("SELECT p FROM Project p WHERE p.user = :user AND p.createdAt >= :afterDate ORDER BY p.createdAt DESC")
+    List<Project> findByUserAndCreatedAtAfter(@Param("user") User user, @Param("afterDate") LocalDateTime afterDate);
+    
+    /**
+     * Find projects with deadline before a specific date
+     */
+    @Query("SELECT p FROM Project p WHERE p.user = :user AND p.deadline <= :beforeDate ORDER BY p.deadline ASC")
+    List<Project> findByUserAndDeadlineBefore(@Param("user") User user, @Param("beforeDate") LocalDateTime beforeDate);
+    
+    /**
+     * Find projects with deadline after a specific date
+     */
+    @Query("SELECT p FROM Project p WHERE p.user = :user AND p.deadline >= :afterDate ORDER BY p.deadline ASC")
+    List<Project> findByUserAndDeadlineAfter(@Param("user") User user, @Param("afterDate") LocalDateTime afterDate);
+    
+    /**
+     * Find archived projects
+     */
+    @Query("SELECT p FROM Project p WHERE p.user = :user AND p.status = 'ARCHIVED' ORDER BY p.updatedAt DESC")
+    List<Project> findArchivedProjectsByUser(@Param("user") User user);
 }

@@ -4,6 +4,7 @@ import com.itproject.auth.entity.User;
 import com.itproject.auth.security.SecurityUtils;
 import com.itproject.project.entity.Project;
 import com.itproject.project.repository.ProjectRepository;
+import com.itproject.project.service.ProjectPermissionService;
 import com.itproject.upload.dto.ChunkUploadRequest;
 import com.itproject.upload.dto.UploadResponse;
 import com.itproject.upload.entity.ChunkInfo;
@@ -43,9 +44,11 @@ public class UploadService {
     
     @Autowired
     private ChunkInfoRepository chunkInfoRepository;
+      @Autowired
+    private ProjectRepository projectRepository;
     
     @Autowired
-    private ProjectRepository projectRepository;
+    private ProjectPermissionService projectPermissionService;
     
     @Autowired
     private MinioClient minioClient;
@@ -207,15 +210,17 @@ public class UploadService {
         if (currentUser == null) {
             throw new RuntimeException("用户未登录");
         }
-        
-        // Get project
+          // Get project
         Project project = projectRepository.findById(request.getProjectId())
             .orElseThrow(() -> new RuntimeException("项目不存在: " + request.getProjectId()));
-        
-        // Check if user has access to the project
+          // Check if user has access to the project
         if (!project.getUser().getId().equals(currentUser.getId())) {
             throw new RuntimeException("没有权限访问该项目");
         }
+        
+        // Check if project allows file upload
+        projectPermissionService.validatePermission(project, "upload files", 
+            projectPermissionService.canUploadFiles(project));
         
         Optional<MediaFile> existingFile = mediaFileRepository.findByFileMd5AndUser(request.getFileMd5(), currentUser);
         
@@ -585,9 +590,9 @@ public class UploadService {
                     return mediaFileRepository.findByProjectAndMediaType(project, mediaType, pageable);
                 } else {
                     return mediaFileRepository.findByProject(project, pageable);
-                }
-            } else {
-                // Query all files for user (original behavior)
+                }            } else {
+                // Query all files for current user only - ensure security
+                // Always filter by current user to prevent seeing other users' files
                 if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
                     MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
                     MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());

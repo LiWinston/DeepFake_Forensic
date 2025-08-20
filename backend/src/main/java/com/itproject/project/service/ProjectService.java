@@ -19,6 +19,7 @@ import java.util.Optional;
 public class ProjectService {
     
     private final ProjectRepository projectRepository;
+    private final ProjectPermissionService projectPermissionService;
     
     /**
      * Create a new project
@@ -110,8 +111,7 @@ public class ProjectService {
     public Optional<Project> getProjectByCaseNumber(String caseNumber, User user) {
         return projectRepository.findByCaseNumberAndUser(caseNumber, user);
     }
-    
-    /**
+      /**
      * Archive a project
      */
     public Project archiveProject(Long projectId, User user) {
@@ -120,6 +120,115 @@ public class ProjectService {
         
         log.info("Archiving project: {} for user: {}", projectId, user.getUsername());
         return projectRepository.save(project);
+    }
+      /**
+     * Reactivate an archived project
+     */
+    public Project reactivateProject(Long projectId, User user) {
+        Project project = getProjectById(projectId, user);
+        
+        // Use permission service to validate
+        projectPermissionService.validatePermission(project, "reactivate", 
+            projectPermissionService.canReactivate(project));
+        
+        project.setStatus(Project.ProjectStatus.ACTIVE);
+        
+        log.info("Reactivating project: {} for user: {}", projectId, user.getUsername());
+        return projectRepository.save(project);
+    }
+    
+    /**
+     * Suspend a project
+     */
+    public Project suspendProject(Long projectId, User user) {
+        Project project = getProjectById(projectId, user);
+        
+        // Use permission service to validate
+        projectPermissionService.validatePermission(project, "suspend", 
+            projectPermissionService.canSuspend(project));
+        
+        project.setStatus(Project.ProjectStatus.SUSPENDED);
+        
+        log.info("Suspending project: {} for user: {}", projectId, user.getUsername());
+        return projectRepository.save(project);
+    }
+    
+    /**
+     * Resume a suspended project
+     */
+    public Project resumeProject(Long projectId, User user) {
+        Project project = getProjectById(projectId, user);
+        
+        // Use permission service to validate
+        projectPermissionService.validatePermission(project, "resume", 
+            projectPermissionService.canResume(project));
+        
+        project.setStatus(Project.ProjectStatus.ACTIVE);
+        
+        log.info("Resuming project: {} for user: {}", projectId, user.getUsername());
+        return projectRepository.save(project);
+    }
+    
+    /**
+     * Complete a project
+     */
+    public Project completeProject(Long projectId, User user) {
+        Project project = getProjectById(projectId, user);
+        
+        // Use permission service to validate
+        projectPermissionService.validatePermission(project, "complete", 
+            projectPermissionService.canComplete(project));
+        
+        project.setStatus(Project.ProjectStatus.COMPLETED);
+        
+        log.info("Completing project: {} for user: {}", projectId, user.getUsername());
+        return projectRepository.save(project);
+    }
+      /**
+     * Get projects by creation date filter
+     */
+    @Transactional(readOnly = true)
+    public List<Project> getProjectsByCreatedDate(User user, LocalDateTime before, LocalDateTime after) {
+        if (before != null && after != null) {
+            return projectRepository.findByUserAndCreatedAtBetween(user, after, before);
+        } else if (before != null) {
+            return projectRepository.findByUserAndCreatedAtBefore(user, before);
+        } else if (after != null) {
+            return projectRepository.findByUserAndCreatedAtAfter(user, after);
+        } else {
+            return projectRepository.findByUserOrderByCreatedAtDesc(user);
+        }
+    }
+      /**
+     * Get projects by user (alias for getUserProjects)
+     */
+    @Transactional(readOnly = true)
+    public List<Project> getProjectsByUser(User user) {
+        return projectRepository.findByUserOrderByCreatedAtDesc(user);
+    }
+    
+    /**
+     * Get projects by deadline filter
+     */
+    @Transactional(readOnly = true)
+    public List<Project> getProjectsByDeadline(User user, LocalDateTime before, LocalDateTime after) {
+        if (before != null && after != null) {
+            return projectRepository.findByUserAndDeadlineBetween(user, after, before);
+        } else if (before != null) {
+            return projectRepository.findByUserAndDeadlineBefore(user, before);
+        } else if (after != null) {
+            return projectRepository.findByUserAndDeadlineAfter(user, after);
+        } else {
+            return getProjectsByUser(user);
+        }
+    }
+    
+    /**
+     * Get archived projects
+     */
+    @Transactional(readOnly = true)
+    public List<Project> getArchivedProjects(User user) {
+        return projectRepository.findArchivedProjectsByUser(user);
     }
     
     /**

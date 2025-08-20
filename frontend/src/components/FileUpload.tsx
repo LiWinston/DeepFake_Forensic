@@ -86,7 +86,6 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
     return true;
   }, [maxSize, onUploadError]);
-
   const handleFileUpload = useCallback(async (file: File) => {
     if (!validateFile(file)) {
       return;
@@ -102,6 +101,28 @@ const FileUpload: React.FC<FileUploadProps> = ({
       onUploadError?.('Invalid project ID');
       return;
     }
+    
+    // Find the selected project to check its status
+    const selectedProject = projects.find(p => p.id === projectId);
+    if (!selectedProject) {
+      message.error('Selected project not found');
+      onUploadError?.('Invalid project ID');
+      return;
+    }
+    
+    // Check if project allows file upload
+    if (selectedProject.status !== 'ACTIVE') {
+      const statusMessages = {
+        'SUSPENDED': 'Cannot upload files to a suspended project. Please resume the project first.',
+        'COMPLETED': 'Cannot upload files to a completed project.',
+        'ARCHIVED': 'Cannot upload files to an archived project. Please reactivate the project first.'
+      };
+      const errorMsg = statusMessages[selectedProject.status as keyof typeof statusMessages] || 
+                      'Cannot upload files to this project due to its current status.';
+      message.error(errorMsg);
+      onUploadError?.(errorMsg);
+      return;
+    }
 
     try {
       const result = await uploadFile(file, projectId);
@@ -112,7 +133,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       const errorMsg = error instanceof Error ? error.message : 'Upload failed';
       onUploadError?.(errorMsg);
     }
-  }, [uploadFile, validateFile, onUploadSuccess, onUploadError, selectedProjectId, defaultProjectId, showProjectSelector]);
+  }, [uploadFile, validateFile, onUploadSuccess, onUploadError, selectedProjectId, defaultProjectId, showProjectSelector, projects]);
 
   const uploadProps: UploadProps = {
     name: 'file',
@@ -208,9 +229,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
                         </Button>
                       </div>
                     </div>
-                  )}
-                >
-                  {projects.map(project => (
+                  )}                >
+                  {projects.filter(project => project.status === 'ACTIVE').map(project => (
                     <Select.Option key={project.id} value={project.id}>
                       {project.name} ({project.caseNumber})
                     </Select.Option>

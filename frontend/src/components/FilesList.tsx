@@ -92,10 +92,24 @@ const FilesList: React.FC<FilesListProps> = ({
       loadFiles(pagination.current, pagination.pageSize, undefined, filterType || undefined, selectedProjectId);
     }
   }, [loadFiles, selectedProjectId, showAllFiles, filterType]);
-
   const handleDelete = useCallback(async (fileId: string) => {
+    // Find the project for this file to check permissions
+    const file = files.find(f => f.id === fileId);
+    if (file && file.projectId) {
+      const project = projects.find(p => p.id === file.projectId);
+      if (project && project.status !== 'ACTIVE' && project.status !== 'COMPLETED') {
+        const statusMessages = {
+          'SUSPENDED': 'Cannot delete files from a suspended project.',
+          'ARCHIVED': 'Cannot delete files from an archived project.'
+        };
+        const errorMsg = statusMessages[project.status as keyof typeof statusMessages] || 
+                        'Cannot delete files from this project due to its current status.';
+        message.error(errorMsg);
+        return;
+      }
+    }
     await deleteFile(fileId);
-  }, [deleteFile]);
+  }, [deleteFile, files, projects]);
 
   const handleAnalyze = useCallback(async (file: UploadFile) => {
     try {
@@ -103,13 +117,30 @@ const FilesList: React.FC<FilesListProps> = ({
         message.error('File MD5 hash is missing, cannot perform analysis');
         return;
       }
+      
+      // Check project permissions for analysis
+      if (file.projectId) {
+        const project = projects.find(p => p.id === file.projectId);
+        if (project && project.status !== 'ACTIVE') {
+          const statusMessages = {
+            'SUSPENDED': 'Cannot analyze files from a suspended project. Please resume the project first.',
+            'COMPLETED': 'Cannot analyze files from a completed project.',
+            'ARCHIVED': 'Cannot analyze files from an archived project. Please reactivate the project first.'
+          };
+          const errorMsg = statusMessages[project.status as keyof typeof statusMessages] || 
+                          'Cannot analyze files from this project due to its current status.';
+          message.error(errorMsg);
+          return;
+        }
+      }
+      
       await analyzeFile(file.md5Hash);
       message.success('Metadata analysis started');
     } catch (error) {
       console.error('Analysis failed:', error);
       message.error('Failed to start analysis');
     }
-  }, [analyzeFile]);
+  }, [analyzeFile, projects]);
 
   const handlePreview = useCallback((file: UploadFile) => {
     setPreviewFile(file);
@@ -236,43 +267,51 @@ const FilesList: React.FC<FilesListProps> = ({
     columns.push({
       title: 'Actions',
       key: 'actions',
-      width: 150,
-      render: (_, record: UploadFile) => (
-        <Space size="small">
-          <Tooltip title="Preview">
-            <Button
-              type="text"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => handlePreview(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Analyze">
-            <Button
-              type="text"
-              size="small"
-              icon={<BarChartOutlined />}
-              onClick={() => handleAnalyze(record)}
-              disabled={record.status !== 'COMPLETED' || !record.md5Hash}
-            />
-          </Tooltip>
-          <Tooltip title="Delete">
-            <Popconfirm
-              title="Are you sure you want to delete this file?"
-              onConfirm={() => handleDelete(record.id)}
-              okText="Yes"
-              cancelText="No"
-            >
+      width: 150,      render: (_, record: UploadFile) => {
+        // Find project for this file to check permissions
+        const project = record.projectId ? projects.find(p => p.id === record.projectId) : null;
+        const canAnalyze = project ? project.status === 'ACTIVE' : true;
+        const canDelete = project ? (project.status === 'ACTIVE' || project.status === 'COMPLETED') : true;
+        
+        return (
+          <Space size="small">
+            <Tooltip title="Preview">
               <Button
                 type="text"
                 size="small"
-                icon={<DeleteOutlined />}
-                danger
+                icon={<EyeOutlined />}
+                onClick={() => handlePreview(record)}
               />
-            </Popconfirm>
-          </Tooltip>
-        </Space>
-      ),
+            </Tooltip>
+            <Tooltip title={canAnalyze ? "Analyze" : "Analysis not allowed for this project status"}>
+              <Button
+                type="text"
+                size="small"
+                icon={<BarChartOutlined />}
+                onClick={() => handleAnalyze(record)}
+                disabled={record.status !== 'COMPLETED' || !record.md5Hash || !canAnalyze}
+              />
+            </Tooltip>
+            <Tooltip title={canDelete ? "Delete" : "Delete not allowed for this project status"}>
+              <Popconfirm
+                title="Are you sure you want to delete this file?"
+                onConfirm={() => handleDelete(record.id)}
+                okText="Yes"
+                cancelText="No"
+                disabled={!canDelete}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  danger
+                  disabled={!canDelete}
+                />
+              </Popconfirm>
+            </Tooltip>
+          </Space>
+        );
+      },
     });
   }
 

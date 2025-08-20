@@ -11,6 +11,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -79,8 +81,7 @@ public class ProjectController {
         projectService.deleteProject(projectId, user);
         return ResponseEntity.noContent().build();
     }
-    
-    /**
+      /**
      * Archive a project
      */
     @PutMapping("/{projectId}/archive")
@@ -90,6 +91,113 @@ public class ProjectController {
         
         Project archivedProject = projectService.archiveProject(projectId, user);
         return ResponseEntity.ok(archivedProject);
+    }
+    
+    /**
+     * Reactivate an archived project
+     */
+    @PutMapping("/{projectId}/reactivate")
+    public ResponseEntity<Project> reactivateProject(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal User user) {
+        
+        try {
+            Project reactivatedProject = projectService.reactivateProject(projectId, user);
+            return ResponseEntity.ok(reactivatedProject);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * Suspend a project
+     */
+    @PutMapping("/{projectId}/suspend")
+    public ResponseEntity<Project> suspendProject(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal User user) {
+        
+        try {
+            Project suspendedProject = projectService.suspendProject(projectId, user);
+            return ResponseEntity.ok(suspendedProject);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * Resume a suspended project
+     */
+    @PutMapping("/{projectId}/resume")
+    public ResponseEntity<Project> resumeProject(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal User user) {
+        
+        try {
+            Project resumedProject = projectService.resumeProject(projectId, user);
+            return ResponseEntity.ok(resumedProject);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * Complete a project
+     */
+    @PutMapping("/{projectId}/complete")
+    public ResponseEntity<Project> completeProject(
+            @PathVariable Long projectId,
+            @AuthenticationPrincipal User user) {
+        
+        try {
+            Project completedProject = projectService.completeProject(projectId, user);
+            return ResponseEntity.ok(completedProject);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * Get archived projects
+     */
+    @GetMapping("/archived")
+    public ResponseEntity<List<Project>> getArchivedProjects(
+            @AuthenticationPrincipal User user) {
+        
+        List<Project> projects = projectService.getArchivedProjects(user);
+        return ResponseEntity.ok(projects);
+    }
+    
+    /**
+     * Get projects filtered by creation date
+     */
+    @GetMapping("/filter/created")
+    public ResponseEntity<List<Project>> getProjectsByCreatedDate(
+            @RequestParam(required = false) String before,
+            @RequestParam(required = false) String after,
+            @AuthenticationPrincipal User user) {
+        
+        LocalDateTime beforeDate = before != null ? LocalDateTime.parse(before + "T23:59:59") : null;
+        LocalDateTime afterDate = after != null ? LocalDateTime.parse(after + "T00:00:00") : null;
+        
+        List<Project> projects = projectService.getProjectsByCreatedDate(user, beforeDate, afterDate);
+        return ResponseEntity.ok(projects);
+    }
+    
+    /**
+     * Get projects filtered by deadline
+     */
+    @GetMapping("/filter/deadline")
+    public ResponseEntity<List<Project>> getProjectsByDeadline(
+            @RequestParam(required = false) String before,
+            @RequestParam(required = false) String after,
+            @AuthenticationPrincipal User user) {
+        
+        LocalDateTime beforeDate = before != null ? LocalDateTime.parse(before + "T23:59:59") : null;
+        LocalDateTime afterDate = after != null ? LocalDateTime.parse(after + "T00:00:00") : null;
+        
+        List<Project> projects = projectService.getProjectsByDeadline(user, beforeDate, afterDate);
+        return ResponseEntity.ok(projects);
     }
     
     /**

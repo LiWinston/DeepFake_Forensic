@@ -24,37 +24,40 @@ import {
   InboxOutlined,
   SearchOutlined,
   CalendarOutlined,
-  UserOutlined
+  UserOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  CheckCircleOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { projectApi } from '../services/project';
 import { useProjectContext } from '../contexts/ProjectContext';
 import type { Project, CreateProjectRequest, ProjectType, ProjectStatus } from '../types';
-import './ProjectsPage.css';
 
 const { Option } = Select;
 const { TextArea } = Input;
+const { RangePicker } = DatePicker;
 
 const ProjectsPage: React.FC = () => {
   // Use shared project context for active projects, but maintain local state for all projects
-  const { projects: activeProjects, refreshProjects: refreshActiveProjects, addProject: addToActiveProjects, updateProject: updateActiveProject, removeProject: removeFromActiveProjects } = useProjectContext();
+  const { addProject: addToActiveProjects, updateProject: updateActiveProject, removeProject: removeFromActiveProjects } = useProjectContext();
   
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [form] = Form.useForm();
-  const [searchKeyword, setSearchKeyword] = useState('');
+  const [form] = Form.useForm();  const [searchKeyword, setSearchKeyword] = useState('');
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | 'ALL'>('ALL');
+  const [createdDateFilter, setCreatedDateFilter] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
+  const [deadlineDateFilter, setDeadlineDateFilter] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
   const [statistics, setStatistics] = useState({
     totalProjects: 0,
     activeProjects: 0,
     completedProjects: 0,
     archivedProjects: 0
-  });
-
-  // Load project list
+  });  // Load project list
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -64,6 +67,18 @@ const ProjectsPage: React.FC = () => {
         response = await projectApi.searchProjects(searchKeyword);
       } else if (filterStatus !== 'ALL') {
         response = await projectApi.getProjectsByStatus(filterStatus);
+      } else if (createdDateFilter && createdDateFilter[0] && createdDateFilter[1]) {
+        const [start, end] = createdDateFilter;
+        response = await projectApi.getProjectsByCreatedDate(
+          end.format('YYYY-MM-DD'), 
+          start.format('YYYY-MM-DD')
+        );
+      } else if (deadlineDateFilter && deadlineDateFilter[0] && deadlineDateFilter[1]) {
+        const [start, end] = deadlineDateFilter;
+        response = await projectApi.getProjectsByDeadline(
+          end.format('YYYY-MM-DD'), 
+          start.format('YYYY-MM-DD')
+        );
       } else {
         response = await projectApi.getProjects();
       }
@@ -85,11 +100,10 @@ const ProjectsPage: React.FC = () => {
       console.error('Failed to load statistics:', error);
     }
   };
-
   useEffect(() => {
     loadProjects();
     loadStatistics();
-  }, [searchKeyword, filterStatus]);
+  }, [searchKeyword, filterStatus, createdDateFilter, deadlineDateFilter]);
   // Create or update project
   const handleSubmit = async (values: CreateProjectRequest) => {
     try {
@@ -127,8 +141,7 @@ const ProjectsPage: React.FC = () => {
     } catch (error) {
       message.error('Failed to delete project');
     }
-  };
-  // Archive project
+  };  // Archive project
   const handleArchive = async (projectId: number) => {
     try {
       const response = await projectApi.archiveProject(projectId);
@@ -143,6 +156,59 @@ const ProjectsPage: React.FC = () => {
       loadStatistics();
     } catch (error) {
       message.error('Failed to archive project');
+    }
+  };
+
+  // Reactivate project
+  const handleReactivate = async (projectId: number) => {
+    try {
+      const response = await projectApi.reactivateProject(projectId);
+      message.success('Project reactivated successfully');
+      // Add to shared state since it's now active
+      addToActiveProjects(response.data);
+      loadProjects();
+      loadStatistics();
+    } catch (error) {
+      message.error('Failed to reactivate project');
+    }
+  };
+
+  // Suspend project
+  const handleSuspend = async (projectId: number) => {
+    try {
+      const response = await projectApi.suspendProject(projectId);
+      message.success('Project suspended successfully');
+      updateActiveProject(response.data);
+      loadProjects();
+      loadStatistics();
+    } catch (error) {
+      message.error('Failed to suspend project');
+    }
+  };
+
+  // Resume project
+  const handleResume = async (projectId: number) => {
+    try {
+      const response = await projectApi.resumeProject(projectId);
+      message.success('Project resumed successfully');
+      updateActiveProject(response.data);
+      loadProjects();
+      loadStatistics();
+    } catch (error) {
+      message.error('Failed to resume project');
+    }
+  };
+
+  // Complete project
+  const handleComplete = async (projectId: number) => {
+    try {
+      const response = await projectApi.completeProject(projectId);
+      message.success('Project completed successfully');
+      updateActiveProject(response.data);
+      loadProjects();
+      loadStatistics();
+    } catch (error) {
+      message.error('Failed to complete project');
     }
   };
 
@@ -278,8 +344,7 @@ const ProjectsPage: React.FC = () => {
       title: 'Actions',
       key: 'action',
       width: 120,
-      fixed: 'right',
-      render: (_, record) => (
+      fixed: 'right',      render: (_, record) => (
         <Space size="small" className="table-actions">
           <Tooltip title="Edit">
             <Button
@@ -289,6 +354,75 @@ const ProjectsPage: React.FC = () => {
               onClick={() => handleEdit(record)}
             />
           </Tooltip>
+          
+          {/* Status-based action buttons */}
+          {record.status === 'ACTIVE' && (
+            <>
+              <Tooltip title="Suspend">
+                <Popconfirm
+                  title="Confirm suspending this project?"
+                  onConfirm={() => handleSuspend(record.id)}
+                  okText="Confirm"
+                  cancelText="Cancel"
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<PauseCircleOutlined />}
+                  />
+                </Popconfirm>
+              </Tooltip>
+              
+              <Tooltip title="Complete">
+                <Popconfirm
+                  title="Confirm completing this project?"
+                  onConfirm={() => handleComplete(record.id)}
+                  okText="Confirm"
+                  cancelText="Cancel"
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<CheckCircleOutlined />}
+                  />
+                </Popconfirm>
+              </Tooltip>
+            </>
+          )}
+          
+          {record.status === 'SUSPENDED' && (
+            <Tooltip title="Resume">
+              <Popconfirm
+                title="Confirm resuming this project?"
+                onConfirm={() => handleResume(record.id)}
+                okText="Confirm"
+                cancelText="Cancel"
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<PlayCircleOutlined />}
+                />
+              </Popconfirm>
+            </Tooltip>
+          )}
+          
+          {record.status === 'ARCHIVED' && (
+            <Tooltip title="Reactivate">
+              <Popconfirm
+                title="Confirm reactivating this project?"
+                onConfirm={() => handleReactivate(record.id)}
+                okText="Confirm"
+                cancelText="Cancel"
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                />
+              </Popconfirm>
+            </Tooltip>
+          )}
           
           {record.status !== 'ARCHIVED' && (
             <Tooltip title="Archive">
@@ -373,8 +507,7 @@ const ProjectsPage: React.FC = () => {
       <Card
         title="Project Management"
         extra={
-          <Space wrap className="projects-controls">
-            {/* Search box */}
+          <Space wrap className="projects-controls">            {/* Search box */}
             <Input
               placeholder="Search projects..."
               prefix={<SearchOutlined />}
@@ -396,6 +529,23 @@ const ProjectsPage: React.FC = () => {
               <Option value="SUSPENDED">Suspended</Option>
               <Option value="ARCHIVED">Archived</Option>
             </Select>
+              {/* Created date filter */}
+            <RangePicker
+              placeholder={['Created After', 'Created Before']}
+              value={createdDateFilter}
+              onChange={(dates) => setCreatedDateFilter(dates)}
+              style={{ width: '240px' }}
+              allowClear
+            />
+            
+            {/* Deadline filter */}
+            <RangePicker
+              placeholder={['Deadline After', 'Deadline Before']}
+              value={deadlineDateFilter}
+              onChange={(dates) => setDeadlineDateFilter(dates)}
+              style={{ width: '240px' }}
+              allowClear
+            />
             
             {/* Create button */}
             <Button

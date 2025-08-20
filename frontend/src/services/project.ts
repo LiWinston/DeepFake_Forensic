@@ -27,10 +27,47 @@ export const projectApi = {
   // Delete project (archive)
   deleteProject: (projectId: number) => 
     http.delete(`/projects/${projectId}`),
-
   // Archive project
   archiveProject: (projectId: number) => 
     http.put<Project>(`/projects/${projectId}/archive`),
+
+  // Reactivate archived project
+  reactivateProject: (projectId: number) => 
+    http.put<Project>(`/projects/${projectId}/reactivate`),
+
+  // Suspend project
+  suspendProject: (projectId: number) => 
+    http.put<Project>(`/projects/${projectId}/suspend`),
+
+  // Resume suspended project
+  resumeProject: (projectId: number) => 
+    http.put<Project>(`/projects/${projectId}/resume`),
+
+  // Complete project
+  completeProject: (projectId: number) => 
+    http.put<Project>(`/projects/${projectId}/complete`),
+
+  // Get archived projects
+  getArchivedProjects: () => 
+    http.get<Project[]>('/projects/archived'),
+
+  // Get projects by created date filter
+  getProjectsByCreatedDate: (before?: string, after?: string) => 
+    http.get<Project[]>('/projects/filter/created', { 
+      params: { 
+        ...(before && { before }),
+        ...(after && { after })
+      }
+    }),
+
+  // Get projects by deadline filter
+  getProjectsByDeadline: (before?: string, after?: string) => 
+    http.get<Project[]>('/projects/filter/deadline', { 
+      params: { 
+        ...(before && { before }),
+        ...(after && { after })
+      }
+    }),
 
   // Get projects by status
   getProjectsByStatus: (status: string) => 
