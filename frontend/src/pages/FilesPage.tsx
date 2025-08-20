@@ -10,6 +10,7 @@ import {
   Modal,
   Tabs,
   Alert,
+  Divider,
 } from 'antd';
 import {
   FileTextOutlined,
@@ -17,6 +18,7 @@ import {
   EyeOutlined,
 } from '@ant-design/icons';
 import FilesList from '../components/FilesList';
+import FileUpload from '../components/FileUpload';
 import MetadataAnalysis from '../components/MetadataAnalysis';
 import type { UploadFile } from '../types';
 import uploadService from '../services/upload';
@@ -29,6 +31,7 @@ const FilesPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<UploadFile | null>(null);
   const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleFileSelect = (file: UploadFile) => {
     setSelectedFile(file);
@@ -54,24 +57,41 @@ const FilesPage: React.FC = () => {
     setPreviewModalVisible(false);
   };
 
+  const handleUploadSuccess = (file: UploadFile) => {
+    console.log('Upload successful:', file);
+    // Trigger refresh of files list
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleUploadError = (error: string) => {
+    console.error('Upload error:', error);
+  };
+
   return (
-    <Content style={{ padding: '24px' }}>
-      {/* Page Header */}
+    <Content style={{ padding: '24px' }}>      {/* Page Header */}
       <div style={{ marginBottom: 24 }}>
         <Title level={2}>File Management</Title>
         <Paragraph>
-          Manage uploaded files, view file details, and perform metadata analysis. 
+          Upload files and manage your media collection for forensic analysis. 
           Select a file to view its properties and analysis results.
-        </Paragraph>
-      </div>
+        </Paragraph>      </div>
 
-      <Row gutter={[24, 24]}>
-        {/* Files List Section */}
+      {/* Upload Section */}
+      <FileUpload
+        onUploadSuccess={handleUploadSuccess}
+        onUploadError={handleUploadError}
+        showProgress={true}
+      />
+
+      <Divider />
+
+      <Row gutter={[24, 24]}>        {/* Files List Section */}
         <Col xs={24} lg={16}>
           <FilesList
             onFileSelect={handleFileSelect}
             selectable={true}
             showActions={true}
+            key={refreshTrigger} // Force refresh when upload succeeds
           />
         </Col>
 

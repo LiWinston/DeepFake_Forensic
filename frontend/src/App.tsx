@@ -17,7 +17,6 @@ import {
 } from 'antd';
 import {
   HomeOutlined,
-  UploadOutlined,
   FileTextOutlined,
   BarChartOutlined,
   MenuFoldOutlined,
@@ -29,7 +28,6 @@ import {
 
 // Import pages
 import HomePage from './pages/HomePage';
-import UploadPage from './pages/UploadPage';
 import FilesPage from './pages/FilesPage';
 import AnalysisPage from './pages/AnalysisPage';
 import ProjectsPage from './pages/ProjectsPage';
@@ -71,7 +69,6 @@ const AppNavigation: React.FC = () => {
       onClick: handleLogout,
     },
   ];
-
   const menuItems = [
     {
       key: '/',
@@ -82,11 +79,6 @@ const AppNavigation: React.FC = () => {
       key: '/projects',
       icon: <ProjectOutlined />,
       label: 'Projects',
-    },
-    {
-      key: '/upload',
-      icon: <UploadOutlined />,
-      label: 'Upload Files',
     },
     {
       key: '/files',
@@ -167,12 +159,10 @@ const AppNavigation: React.FC = () => {
           </Dropdown>
         </Header>
         <Content style={{ margin: '24px 16px 0', overflow: 'initial' }}>
-          <div style={{ padding: 24, background: '#fff', minHeight: 360 }}>
-            <Routes>
+          <div style={{ padding: 24, background: '#fff', minHeight: 360 }}>            <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-              <Route path="/upload" element={<UploadPage />} />
               <Route path="/files" element={<FilesPage />} />
               <Route path="/analysis" element={<AnalysisPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
