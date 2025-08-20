@@ -287,22 +287,39 @@ const AppNavigation: React.FC = () => {
   );
 };
 
+// Main App component with conditional ProjectProvider
+const AppWithProjectProvider: React.FC = () => {
+  const { isLoggedIn, loading } = useAuth();
+  
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+  
+  return (
+    <Router>
+      <Routes>
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="/*" element={
+          <ProtectedRoute>
+            {isLoggedIn ? (
+              <ProjectProvider>
+                <AppNavigation />
+              </ProjectProvider>
+            ) : (
+              <AppNavigation />
+            )}
+          </ProtectedRoute>
+        } />
+      </Routes>
+    </Router>
+  );
+};
+
 // Main App component
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <ProjectProvider>
-        <Router>
-          <Routes>
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="/*" element={
-              <ProtectedRoute>
-                <AppNavigation />
-              </ProtectedRoute>
-            } />
-          </Routes>
-        </Router>
-      </ProjectProvider>
+      <AppWithProjectProvider />
     </AuthProvider>
   );
 };

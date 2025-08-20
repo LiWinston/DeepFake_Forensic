@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { message } from 'antd';
 import { projectApi } from '../services/project';
 import type { Project } from '../types';
+import { useAuth } from './AuthContext';
 
 // Project context interface
 interface ProjectContextType {
@@ -34,6 +35,7 @@ interface ProjectProviderProps {
 
 // Provider component
 export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) => {
+  const { isLoggedIn } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,19 +46,25 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   const isCacheValid = useCallback(() => {
     if (!lastUpdated) return false;
     return Date.now() - lastUpdated < CACHE_DURATION;
-  }, [lastUpdated]);
-
-  // Load projects from API
+  }, [lastUpdated]);  // Load projects from API
   const loadProjects = useCallback(async () => {
-    // If cache is valid and we have data, don't make a request
-    if (isCacheValid() && projects.length > 0) {
-      console.log('ProjectContext: Using cached projects data');
+    // Don't load projects if user is not logged in
+    if (!isLoggedIn) {
+      console.log('ProjectContext: User not logged in, skipping projects load');
       return;
     }
 
     // If already loading, don't make another request
     if (loading) {
       console.log('ProjectContext: Already loading, skipping request');
+      return;
+    }
+
+    // Check if cache is still valid and we have data
+    const currentTime = Date.now();
+    const hasValidCache = lastUpdated && (currentTime - lastUpdated < CACHE_DURATION);
+    if (hasValidCache && projects.length > 0) {
+      console.log('ProjectContext: Using cached projects data');
       return;
     }
 
@@ -78,10 +86,15 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     } finally {
       setLoading(false);
     }
-  }, [isCacheValid, projects.length, loading]);
-
+  }, [isLoggedIn, loading, lastUpdated, projects.length]);
   // Force refresh projects (ignores cache)
   const refreshProjects = useCallback(async () => {
+    // Don't refresh projects if user is not logged in
+    if (!isLoggedIn) {
+      console.log('ProjectContext: User not logged in, skipping projects refresh');
+      return;
+    }
+
     const now = Date.now();
     
     // Prevent too frequent force refreshes
@@ -109,7 +122,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     } finally {
       setLoading(false);
     }
-  }, [lastForceRefresh]);
+  }, [isLoggedIn, lastForceRefresh]);
 
   // Add new project to local state
   const addProject = useCallback((project: Project) => {
@@ -135,7 +148,6 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     setLastUpdated(Date.now());
     console.log('ProjectContext: Removed project:', projectId);
   }, []);
-
   // Clear cache and force reload
   const clearCache = useCallback(() => {
     setProjects([]);
@@ -143,11 +155,20 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     setError(null);
     console.log('ProjectContext: Cache cleared');
   }, []);
-
-  // Auto-load projects on mount
+  // Auto-load projects when user logs in or component mounts
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    if (isLoggedIn) {
+      // Only load if we don't have cache or cache is expired
+      if (!isCacheValid()) {
+        loadProjects();
+      }
+    } else {
+      // Clear projects when user logs out
+      setProjects([]);
+      setLastUpdated(null);
+      setError(null);
+    }
+  }, [isLoggedIn]); // 只依赖 isLoggedIn
 
   const contextValue: ProjectContextType = {
     projects,
