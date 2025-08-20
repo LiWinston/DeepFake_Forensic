@@ -27,9 +27,10 @@ import {
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { useFileUpload } from '../hooks';
+import { useProjectContext } from '../contexts/ProjectContext';
 import { formatFileSize, isSupportedFileType, getFileCategory } from '../utils';
 import { SUPPORTED_FILE_EXTENSIONS, MAX_FILE_SIZE } from '../constants';
-import type { UploadFile as ApiUploadFile, Project } from '../types';
+import type { UploadFile as ApiUploadFile } from '../types';
 import { projectApi } from '../services/project';
 
 const { Dragger } = Upload;
@@ -53,30 +54,20 @@ const FileUpload: React.FC<FileUploadProps> = ({
   showProgress = true,
   showProjectSelector = true,
   defaultProjectId,
-}) => {
-  const { uploadProgress, isUploading, uploadFile, clearProgress, clearAllProgress } = useFileUpload();
+}) => {  const { uploadProgress, isUploading, uploadFile, clearProgress, clearAllProgress } = useFileUpload();
+  const { projects, addProject } = useProjectContext();
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(defaultProjectId);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectForm] = Form.useForm();
-
   // Load projects on component mount
   useEffect(() => {
-    if (showProjectSelector) {
-      loadProjects();
+    // Projects are automatically loaded by ProjectContext
+    // Set default project if available
+    if (!selectedProjectId && projects.length > 0) {
+      setSelectedProjectId(projects[0].id);
     }
-  }, [showProjectSelector]);
-
-  const loadProjects = async () => {
-    try {
-      const response = await projectApi.getProjects();
-      setProjects(response.data);
-    } catch (error) {
-      console.error('Failed to load projects:', error);
-      message.error('Failed to load project list');
-    }
-  };
+  }, [projects, selectedProjectId]);
 
   const validateFile = useCallback((file: File): boolean => {
     // Check file size
@@ -338,13 +329,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
         onCancel={() => {
           setShowNewProjectModal(false);
           newProjectForm.resetFields();
-        }}
-        onOk={async () => {
+        }}        onOk={async () => {
           try {
             const values = await newProjectForm.validateFields();
             const response = await projectApi.createProject(values);
             const newProject = response.data;
-            setProjects(prev => [...prev, newProject]);
+            // Add to shared project context
+            addProject(newProject);
             setSelectedProjectId(newProject.id);
             setShowNewProjectModal(false);
             newProjectForm.resetFields();

@@ -37,6 +37,7 @@ import AuthPage from './pages/AuthPage';
 // Import components and contexts
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ProjectProvider } from './contexts/ProjectContext';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -178,16 +179,18 @@ const AppNavigation: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/*" element={
-            <ProtectedRoute>
-              <AppNavigation />
-            </ProtectedRoute>
-          } />
-        </Routes>
-      </Router>
+      <ProjectProvider>
+        <Router>
+          <Routes>
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/*" element={
+              <ProtectedRoute>
+                <AppNavigation />
+              </ProtectedRoute>
+            } />
+          </Routes>
+        </Router>
+      </ProjectProvider>
     </AuthProvider>
   );
 };

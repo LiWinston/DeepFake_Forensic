@@ -26,9 +26,9 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import { useFilesList, useMetadataAnalysis } from '../hooks';
+import { useProjects } from '../contexts/ProjectContext';
 import { formatFileSize, formatDateTime, getFileCategory } from '../utils';
-import type { UploadFile, Project } from '../types';
-import { projectApi } from '../services/project';
+import type { UploadFile } from '../types';
 import uploadService from '../services/upload';
 
 const { Text, Title } = Typography;
@@ -50,37 +50,19 @@ const FilesList: React.FC<FilesListProps> = ({
 }) => {
   const { files, loading, pagination, loadFiles, deleteFile, refreshFiles } = useFilesList();
   const { analyzeFile } = useMetadataAnalysis();
+  const { projects, loading: projectsLoading } = useProjects();
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [previewFile, setPreviewFile] = useState<UploadFile | null>(null);
   const [filterType, setFilterType] = useState<string>('');
   const [searchText, setSearchText] = useState<string>('');
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(defaultProjectId);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(false);
-  const [showAllFiles, setShowAllFiles] = useState(false);
-  // Load projects list on component mount
+  const [showAllFiles, setShowAllFiles] = useState(false);  // Auto-select first project if no default is set
   useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        setProjectsLoading(true);
-        const response = await projectApi.getActiveProjects();
-        setProjects(response.data);
-        
-        // If no default project is set, auto-select the first active project
-        if (!defaultProjectId && response.data.length > 0 && !showAllFiles) {
-          setSelectedProjectId(response.data[0].id);
-        }
-      } catch (error) {
-        console.error('Failed to load projects:', error);
-        message.warning('Failed to load projects');
-      } finally {
-        setProjectsLoading(false);
-      }
-    };
-
-    loadProjects();
-  }, [defaultProjectId, showAllFiles]);
+    if (!defaultProjectId && projects.length > 0 && !showAllFiles && !selectedProjectId) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [defaultProjectId, projects, showAllFiles, selectedProjectId]);
 
   // Load files when project selection changes with debouncing to prevent duplicate requests
   useEffect(() => {

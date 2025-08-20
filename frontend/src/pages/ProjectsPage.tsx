@@ -29,6 +29,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { projectApi } from '../services/project';
+import { useProjectContext } from '../contexts/ProjectContext';
 import type { Project, CreateProjectRequest, ProjectType, ProjectStatus } from '../types';
 import './ProjectsPage.css';
 
@@ -36,6 +37,9 @@ const { Option } = Select;
 const { TextArea } = Input;
 
 const ProjectsPage: React.FC = () => {
+  // Use shared project context for active projects, but maintain local state for all projects
+  const { projects: activeProjects, refreshProjects: refreshActiveProjects, addProject: addToActiveProjects, updateProject: updateActiveProject, removeProject: removeFromActiveProjects } = useProjectContext();
+  
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -86,16 +90,21 @@ const ProjectsPage: React.FC = () => {
     loadProjects();
     loadStatistics();
   }, [searchKeyword, filterStatus]);
-
   // Create or update project
   const handleSubmit = async (values: CreateProjectRequest) => {
     try {
       if (editingProject) {
-        await projectApi.updateProject(editingProject.id, values);
+        const response = await projectApi.updateProject(editingProject.id, values);
         message.success('Project updated successfully');
+        // Update both local and shared state
+        updateActiveProject(response.data);
       } else {
-        await projectApi.createProject(values);
+        const response = await projectApi.createProject(values);
         message.success('Project created successfully');
+        // Add to shared state if project is active
+        if (response.data.status === 'ACTIVE') {
+          addToActiveProjects(response.data);
+        }
       }
       setModalVisible(false);
       setEditingProject(null);
@@ -106,24 +115,30 @@ const ProjectsPage: React.FC = () => {
       message.error(editingProject ? 'Failed to update project' : 'Failed to create project');
     }
   };
-
   // Delete project
   const handleDelete = async (projectId: number) => {
     try {
       await projectApi.deleteProject(projectId);
       message.success('Project deleted successfully');
+      // Remove from shared state
+      removeFromActiveProjects(projectId);
       loadProjects();
       loadStatistics();
     } catch (error) {
       message.error('Failed to delete project');
     }
   };
-
   // Archive project
   const handleArchive = async (projectId: number) => {
     try {
-      await projectApi.archiveProject(projectId);
+      const response = await projectApi.archiveProject(projectId);
       message.success('Project archived successfully');
+      // Update shared state
+      if (response.data.status !== 'ACTIVE') {
+        removeFromActiveProjects(projectId);
+      } else {
+        updateActiveProject(response.data);
+      }
       loadProjects();
       loadStatistics();
     } catch (error) {
