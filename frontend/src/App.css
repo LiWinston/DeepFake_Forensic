@@ -1,0 +1,267 @@
+/* App.css - 主应用样式 */
+
+/* 全局背景和主题 */
+.app-layout {
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
+  min-height: 100vh;
+}
+
+/* 侧边栏样式 */
+.app-sider {
+  background: linear-gradient(180deg, #0f1419 0%, #1a1a2e 100%) !important;
+  border-right: 1px solid rgba(0, 212, 255, 0.1);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.app-sider::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(180deg, transparent 0%, #00d4ff 50%, transparent 100%);
+  opacity: 0.3;
+}
+
+/* Logo区域 */
+.app-logo {
+  height: 64px;
+  margin: 16px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(255, 0, 132, 0.1));
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.app-logo::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+  transform: rotate(45deg);
+  transition: all 0.6s ease;
+}
+
+.app-logo:hover::before {
+  animation: logoShine 1.5s ease-in-out;
+}
+
+@keyframes logoShine {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+.app-logo-text {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(45deg, #00d4ff, #ffffff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+
+.app-logo-text.collapsed {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+/* 菜单样式 */
+.app-menu {
+  background: transparent !important;
+  border: none !important;
+}
+
+.app-menu .ant-menu-item {
+  margin: 8px 12px !important;
+  border-radius: 8px !important;
+  transition: all 0.3s ease !important;
+  position: relative;
+  overflow: hidden;
+  color: #8892b0 !important;
+}
+
+.app-menu .ant-menu-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+  transition: all 0.5s ease;
+}
+
+.app-menu .ant-menu-item:hover::before {
+  left: 100%;
+}
+
+.app-menu .ant-menu-item:hover {
+  background: rgba(0, 212, 255, 0.1) !important;
+  border: 1px solid rgba(0, 212, 255, 0.2) !important;
+  color: #00d4ff !important;
+  transform: translateX(5px);
+}
+
+.app-menu .ant-menu-item-selected {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(255, 0, 132, 0.1)) !important;
+  border: 1px solid rgba(0, 212, 255, 0.3) !important;
+  color: #00d4ff !important;
+  box-shadow: 0 4px 15px rgba(0, 212, 255, 0.2);
+}
+
+.app-menu .ant-menu-item-selected::after {
+  border-right: 3px solid #00d4ff !important;
+}
+
+.app-menu .anticon {
+  font-size: 16px;
+  color: inherit;
+}
+
+/* 头部样式 */
+.app-header {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(10px) !important;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.1) !important;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1) !important;
+  padding: 0 24px !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.app-header::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #00d4ff 50%, transparent 100%);
+  opacity: 0.3;
+}
+
+.app-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.app-toggle-btn {
+  border: none !important;
+  background: transparent !important;
+  color: #1890ff !important;
+  transition: all 0.3s ease !important;
+  border-radius: 8px !important;
+}
+
+.app-toggle-btn:hover {
+  background: rgba(0, 212, 255, 0.1) !important;
+  color: #00d4ff !important;
+  transform: scale(1.1);
+}
+
+.app-title {
+  margin: 0 !important;
+  margin-left: 20px !important;
+  background: linear-gradient(45deg, #1890ff, #722ed1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
+  font-size: 1.3rem;
+}
+
+/* 用户菜单 */
+.app-user-menu {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+}
+
+.app-user-menu:hover {
+  background: rgba(0, 212, 255, 0.05);
+  border-color: rgba(0, 212, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.app-user-avatar {
+  background: linear-gradient(45deg, #00d4ff, #1890ff) !important;
+  margin-right: 8px;
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.3);
+}
+
+.app-username {
+  font-weight: 500;
+  color: #434343;
+}
+
+/* 内容区域 */
+.app-content {
+  margin: 0 !important;
+  background: transparent !important;
+  min-height: calc(100vh - 64px);
+  position: relative;
+}
+
+.app-content-inner {
+  background: transparent !important;
+  min-height: calc(100vh - 64px) !important;
+  padding: 0 !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .app-title {
+    display: none;
+  }
+  
+  .app-header {
+    padding: 0 16px !important;
+  }
+  
+  .app-logo {
+    margin: 8px;
+    height: 48px;
+  }
+  
+  .app-menu .ant-menu-item {
+    margin: 6px 8px !important;
+  }
+}
+
+/* 暗色主题适配 */
+@media (prefers-color-scheme: dark) {
+  .app-header {
+    background: rgba(20, 20, 30, 0.95) !important;
+    border-bottom-color: rgba(0, 212, 255, 0.2) !important;
+  }
+  
+  .app-title {
+    color: #ffffff;
+  }
+  
+  .app-username {
+    color: #ffffff;
+  }
+}
