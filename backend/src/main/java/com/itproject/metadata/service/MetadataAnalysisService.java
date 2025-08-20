@@ -254,6 +254,7 @@ public class MetadataAnalysisService {
         if (rawMetadata == null) return;
         
         String[] lines = rawMetadata.split("\\n");
+        boolean isVideo = metadata.getVideoDuration() != null || metadata.getVideoCodec() != null;
         
         for (String line : lines) {
             line = line.trim();
@@ -296,6 +297,75 @@ public class MetadataAnalysisService {
             if (metadata.getColorSpace() == null && line.startsWith("Color Space:")) {
                 String colorSpace = extractValue(line);
                 metadata.setColorSpace(colorSpace);
+            }
+        }
+        
+        // Handle video-specific metadata extraction if this is a video file
+        if (isVideo && (metadata.getFileFormat() == null || metadata.getMimeType() == null || metadata.getCompressionLevel() == null)) {
+            // For videos, we need to infer from existing data if raw metadata didn't provide it
+            
+            // Infer file format from video codec if available
+            if (metadata.getFileFormat() == null && metadata.getVideoCodec() != null) {
+                String codec = metadata.getVideoCodec().toLowerCase();
+                if (codec.contains("h264") || codec.contains("avc")) {
+                    metadata.setFileFormat("MP4");
+                } else if (codec.contains("hevc") || codec.contains("h265")) {
+                    metadata.setFileFormat("MP4");
+                } else if (codec.contains("vp8") || codec.contains("vp9")) {
+                    metadata.setFileFormat("WEBM");
+                } else {
+                    metadata.setFileFormat("VIDEO"); // Generic
+                }
+            }
+            
+            // Set MIME type based on inferred format
+            if (metadata.getMimeType() == null) {
+                String format = metadata.getFileFormat();
+                if (format != null) {
+                    switch (format.toLowerCase()) {
+                        case "mp4":
+                        case "mov":
+                            metadata.setMimeType("video/mp4");
+                            break;
+                        case "webm":
+                            metadata.setMimeType("video/webm");
+                            break;
+                        case "avi":
+                            metadata.setMimeType("video/avi");
+                            break;
+                        default:
+                            metadata.setMimeType("video/unknown");
+                    }
+                }
+            }
+            
+            // Estimate compression level for videos based on bitrate and resolution
+            if (metadata.getCompressionLevel() == null && metadata.getBitRate() != null && 
+                metadata.getImageWidth() != null && metadata.getImageHeight() != null && metadata.getFrameRate() != null) {
+                
+                int bitRate = metadata.getBitRate();
+                int pixels = metadata.getImageWidth() * metadata.getImageHeight();
+                double fps = metadata.getFrameRate();
+                
+                if (bitRate > 0 && pixels > 0 && fps > 0) {
+                    double bitsPerPixelPerFrame = (double) bitRate / (pixels * fps);
+                    
+                    // Convert to a 1-100 scale for video quality
+                    int compressionLevel;
+                    if (bitsPerPixelPerFrame > 0.8) {
+                        compressionLevel = 95; // Very high quality
+                    } else if (bitsPerPixelPerFrame > 0.4) {
+                        compressionLevel = 85; // High quality
+                    } else if (bitsPerPixelPerFrame > 0.2) {
+                        compressionLevel = 70; // Medium quality
+                    } else if (bitsPerPixelPerFrame > 0.1) {
+                        compressionLevel = 50; // Low quality
+                    } else {
+                        compressionLevel = 30; // Very low quality
+                    }
+                    
+                    metadata.setCompressionLevel(compressionLevel);
+                }
             }
         }
         
@@ -380,6 +450,7 @@ public class MetadataAnalysisService {
             response.setVideoMetadata(buildVideoMetadata(metadata));
             response.setHashValues(buildHashValues(metadata));
             response.setSuspiciousIndicators(buildSuspiciousIndicators(metadata));
+            response.setParsedMetadata(buildParsedMetadata(metadata));
             
             return response;
             
@@ -667,8 +738,68 @@ public class MetadataAnalysisService {
             metadata.setImageWidth(grabber.getImageWidth());
             metadata.setImageHeight(grabber.getImageHeight());
             
-            log.debug("Extracted video metadata: duration={}s, fps={}, codec={}", 
-                     metadata.getVideoDuration(), metadata.getFrameRate(), metadata.getVideoCodec());
+            // Extract file format and MIME type for video
+            String format = grabber.getFormat();
+            if (format != null) {
+                metadata.setFileFormat(format.toUpperCase());
+                
+                // Set MIME type based on format
+                switch (format.toLowerCase()) {
+                    case "mp4":
+                    case "mov":
+                        metadata.setMimeType("video/mp4");
+                        break;
+                    case "avi":
+                        metadata.setMimeType("video/avi");
+                        break;
+                    case "mkv":
+                        metadata.setMimeType("video/x-matroska");
+                        break;
+                    case "webm":
+                        metadata.setMimeType("video/webm");
+                        break;
+                    case "flv":
+                        metadata.setMimeType("video/x-flv");
+                        break;
+                    case "wmv":
+                        metadata.setMimeType("video/x-ms-wmv");
+                        break;
+                    default:
+                        metadata.setMimeType("video/" + format.toLowerCase());
+                }
+            }
+            
+            // For video compression level, we can estimate based on bitrate and resolution
+            if (metadata.getBitRate() != null && metadata.getImageWidth() != null && metadata.getImageHeight() != null) {
+                int bitRate = metadata.getBitRate();
+                int pixels = metadata.getImageWidth() * metadata.getImageHeight();
+                
+                // Calculate bits per pixel per frame as a compression indicator
+                if (metadata.getFrameRate() != null && metadata.getFrameRate() > 0) {
+                    double bitsPerPixelPerFrame = (double) bitRate / (pixels * metadata.getFrameRate());
+                    
+                    // Convert to a 1-100 scale (higher means less compression/better quality)
+                    int compressionLevel;
+                    if (bitsPerPixelPerFrame > 1.0) {
+                        compressionLevel = 95; // Very high quality
+                    } else if (bitsPerPixelPerFrame > 0.5) {
+                        compressionLevel = 85; // High quality
+                    } else if (bitsPerPixelPerFrame > 0.2) {
+                        compressionLevel = 70; // Medium quality
+                    } else if (bitsPerPixelPerFrame > 0.1) {
+                        compressionLevel = 50; // Low quality
+                    } else {
+                        compressionLevel = 30; // Very low quality
+                    }
+                    
+                    metadata.setCompressionLevel(compressionLevel);
+                }
+            }
+            
+            log.info("Extracted video metadata for {}: format={}, mimeType={}, duration={}s, fps={}, codec={}, dimensions={}x{}, compression={}", 
+                     metadata.getFileMd5(), metadata.getFileFormat(), metadata.getMimeType(),
+                     metadata.getVideoDuration(), metadata.getFrameRate(), metadata.getVideoCodec(),
+                     metadata.getImageWidth(), metadata.getImageHeight(), metadata.getCompressionLevel());
             
         } catch (Exception e) {
             log.error("Error extracting video metadata", e);
@@ -732,14 +863,17 @@ public class MetadataAnalysisService {
         // Distinguish between image and video analysis
         boolean isVideo = metadata.getVideoDuration() != null || metadata.getVideoCodec() != null;
         
-        // For videos, missing camera info is more normal than for photos
+        // For videos, missing camera info is completely normal
         if (metadata.getCameraMake() == null && metadata.getCameraModel() == null) {
             if (isVideo) {
-                // Videos often don't have camera info, especially from mobile devices or editing software
-                // Only flag if other suspicious patterns exist
-                if (metadata.getDateTaken() == null && metadata.getFileFormat() == null) {
-                    indicators.add("视频缺少基本设备信息：可能经过处理或转换");
-                    notes.append("视频文件缺少拍摄设备和时间信息; ");
+                // For videos, this is extremely common and normal
+                // Most video editing software, mobile apps, and even professional cameras
+                // don't embed camera make/model in video metadata
+                // Only flag if ALL technical metadata is missing (which would be very unusual)
+                if (metadata.getDateTaken() == null && metadata.getFileFormat() == null && 
+                    metadata.getVideoCodec() == null && metadata.getAudioCodec() == null) {
+                    indicators.add("视频完全缺少技术信息：可能存在异常");
+                    notes.append("视频文件缺少所有技术标识信息; ");
                 }
             } else {
                 // For images, missing camera info is more suspicious
@@ -748,18 +882,16 @@ public class MetadataAnalysisService {
             }
         }
         
-        // Check for incomplete EXIF data
-        int exifFields = 0;
-        if (metadata.getCameraMake() != null) exifFields++;
-        if (metadata.getCameraModel() != null) exifFields++;
-        if (metadata.getDateTaken() != null) exifFields++;
-        if (metadata.getOrientation() != null) exifFields++;
-        if (metadata.getColorSpace() != null) exifFields++;
-        
-        // Be more lenient with video files
-        int threshold = isVideo ? 0 : 1;  // Videos can have 0 EXIF fields normally
-        if (exifFields <= threshold && exifFields > 0) {
-            if (!isVideo) {  // Only flag for images
+        // Check for incomplete EXIF data - only for images
+        if (!isVideo) {
+            int exifFields = 0;
+            if (metadata.getCameraMake() != null) exifFields++;
+            if (metadata.getCameraModel() != null) exifFields++;
+            if (metadata.getDateTaken() != null) exifFields++;
+            if (metadata.getOrientation() != null) exifFields++;
+            if (metadata.getColorSpace() != null) exifFields++;
+            
+            if (exifFields <= 1 && exifFields > 0) {
                 indicators.add("EXIF数据不完整：可能经过处理或来源可疑");
             }
         }
@@ -930,24 +1062,30 @@ public class MetadataAnalysisService {
         
         // Different field expectations for images vs videos
         if (isVideo) {
-            // For videos, focus on technical metadata that should be present
-            String[] videoFields = {
-                metadata.getVideoCodec(), metadata.getFileFormat(), 
-                metadata.getMimeType()
-            };
+            // For videos, focus ONLY on essential technical metadata
+            // Most video files normally lack camera info, date info, etc.
             
-            for (String field : videoFields) {
+            // Essential video technical fields
+            if (metadata.getVideoCodec() != null && !metadata.getVideoCodec().isEmpty()) populatedFields++;
+            totalFields++;
+            
+            if (metadata.getVideoDuration() != null && metadata.getVideoDuration() > 0) populatedFields++;
+            totalFields++;
+            
+            if (metadata.getImageWidth() != null && metadata.getImageHeight() != null && 
+                metadata.getImageWidth() > 0 && metadata.getImageHeight() > 0) populatedFields++;
+            totalFields++;
+            
+            // Optional but common fields (don't count as missing if absent)
+            if (metadata.getFrameRate() != null && metadata.getFrameRate() > 0) {
+                populatedFields++;
                 totalFields++;
-                if (field != null && !field.isEmpty()) {
-                    populatedFields++;
-                }
             }
             
-            // Add video-specific technical fields
-            if (metadata.getVideoDuration() != null && metadata.getVideoDuration() > 0) populatedFields++;
-            if (metadata.getFrameRate() != null && metadata.getFrameRate() > 0) populatedFields++;
-            if (metadata.getImageWidth() != null && metadata.getImageHeight() != null) populatedFields++;
-            totalFields += 3;
+            if (metadata.getBitRate() != null && metadata.getBitRate() > 0) {
+                populatedFields++;
+                totalFields++;
+            }
             
         } else {
             // For images, include camera and EXIF fields
@@ -967,13 +1105,14 @@ public class MetadataAnalysisService {
         
         double completeness = totalFields > 0 ? (double) populatedFields / totalFields : 0;
         
-        // Different thresholds for images vs videos
-        double threshold = isVideo ? 0.2 : 0.3;  // Videos can have lower metadata completeness
+        // Much more lenient thresholds - only flag severely broken files
+        double threshold = isVideo ? 0.1 : 0.3;  // Only flag videos missing 90% of basic technical data
         
         if (completeness < threshold) {
             if (isVideo) {
-                indicators.add("视频技术元数据不完整：可能经过转换或处理");
-                notes.append(String.format("视频元数据完整性: %.1f%%; ", completeness * 100));
+                // Only flag if video is missing critical technical information
+                indicators.add("视频缺少核心技术参数：文件可能损坏或异常");
+                notes.append(String.format("核心技术参数完整性: %.1f%%; ", completeness * 100));
             } else {
                 indicators.add("图像元数据完整性极低：可能经过清理或来源可疑");
                 notes.append(String.format("图像元数据完整性: %.1f%%; ", completeness * 100));
@@ -1062,6 +1201,134 @@ public class MetadataAnalysisService {
             sb.append("\n");
         }
         return sb.toString();
+    }
+    
+    /**
+     * Parse raw metadata string into structured JSON format
+     */
+    private Map<String, Object> parseRawMetadataToJson(String rawMetadata) {
+        Map<String, Object> parsedMetadata = new HashMap<>();
+        
+        if (rawMetadata == null || rawMetadata.isEmpty()) {
+            return parsedMetadata;
+        }
+        
+        try {
+            String[] lines = rawMetadata.split("\\n");
+            String currentDirectory = null;
+            Map<String, Object> currentDirData = new HashMap<>();
+            
+            for (String line : lines) {
+                line = line.trim();
+                
+                if (line.isEmpty()) {
+                    // End of a directory, save it if we have data
+                    if (currentDirectory != null && !currentDirData.isEmpty()) {
+                        parsedMetadata.put(currentDirectory, new HashMap<>(currentDirData));
+                        currentDirData.clear();
+                    }
+                    continue;
+                }
+                
+                // Check if this is a directory header (ends with colon)
+                if (line.endsWith(":") && !line.startsWith("  ")) {
+                    // Save previous directory if exists
+                    if (currentDirectory != null && !currentDirData.isEmpty()) {
+                        parsedMetadata.put(currentDirectory, new HashMap<>(currentDirData));
+                    }
+                    
+                    // Start new directory
+                    currentDirectory = line.substring(0, line.length() - 1).trim();
+                    currentDirData = new HashMap<>();
+                } else if (line.startsWith("  ") && currentDirectory != null) {
+                    // This is a tag within a directory
+                    String tagLine = line.substring(2); // Remove leading spaces
+                    int colonIndex = tagLine.indexOf(':');
+                    
+                    if (colonIndex > 0 && colonIndex < tagLine.length() - 1) {
+                        String key = tagLine.substring(0, colonIndex).trim();
+                        String value = tagLine.substring(colonIndex + 1).trim();
+                        
+                        // Try to parse numeric values
+                        Object parsedValue = parseMetadataValue(value);
+                        currentDirData.put(key, parsedValue);
+                    }
+                }
+            }
+            
+            // Don't forget the last directory
+            if (currentDirectory != null && !currentDirData.isEmpty()) {
+                parsedMetadata.put(currentDirectory, currentDirData);
+            }
+            
+        } catch (Exception e) {
+            log.warn("Error parsing raw metadata to JSON", e);
+            parsedMetadata.put("_parsing_error", "Failed to parse raw metadata: " + e.getMessage());
+        }
+        
+        return parsedMetadata;
+    }
+    
+    /**
+     * Parse metadata value to appropriate type (String, Integer, Double, etc.)
+     */
+    private Object parseMetadataValue(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        
+        // Try to parse as integer
+        try {
+            // Look for pure numbers
+            if (value.matches("^-?\\d+$")) {
+                return Integer.parseInt(value);
+            }
+            
+            // Look for numbers with units (extract the number part)
+            if (value.matches("^-?\\d+\\s*(pixels|bits|dots per inch|mm|sec|EV|%).*")) {
+                String numberPart = value.replaceAll("^(-?\\d+).*", "$1");
+                return Integer.parseInt(numberPart);
+            }
+            
+            // Look for fractions like "1/250"
+            if (value.matches("^\\d+/\\d+.*")) {
+                String[] parts = value.split("/");
+                if (parts.length >= 2) {
+                    double numerator = Double.parseDouble(parts[0]);
+                    double denominator = Double.parseDouble(parts[1].replaceAll("[^0-9]", ""));
+                    if (denominator != 0) {
+                        return numerator / denominator;
+                    }
+                }
+            }
+            
+            // Look for f-numbers like "f/8.0"
+            if (value.matches("^f/[0-9.]+")) {
+                String numberPart = value.substring(2);
+                return Double.parseDouble(numberPart);
+            }
+            
+        } catch (NumberFormatException e) {
+            // Not a number, continue with other parsing
+        }
+        
+        // Try to parse as double
+        try {
+            if (value.matches("^-?\\d*\\.\\d+.*")) {
+                String numberPart = value.replaceAll("^(-?\\d*\\.\\d+).*", "$1");
+                return Double.parseDouble(numberPart);
+            }
+        } catch (NumberFormatException e) {
+            // Not a double, keep as string
+        }
+        
+        // Parse boolean values
+        if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
+            return Boolean.parseBoolean(value);
+        }
+        
+        // Return as string if no specific type detected
+        return value;
     }
     
     private String bytesToHex(byte[] bytes) {
@@ -1170,6 +1437,25 @@ public class MetadataAnalysisService {
         indicators.put("indicators", metadata.getSuspiciousIndicators());
         indicators.put("analysisNotes", metadata.getAnalysisNotes());
         return indicators;
+    }
+    
+    private Map<String, Object> buildParsedMetadata(MediaMetadata metadata) {
+        Map<String, Object> parsedData = new HashMap<>();
+        
+        // Parse raw metadata to structured JSON
+        if (metadata.getRawMetadata() != null && !metadata.getRawMetadata().isEmpty()) {
+            parsedData = parseRawMetadataToJson(metadata.getRawMetadata());
+        }
+        
+        // Add some summary statistics
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("totalDirectories", parsedData.size());
+        summary.put("hasRawMetadata", metadata.getRawMetadata() != null);
+        summary.put("rawMetadataLength", metadata.getRawMetadata() != null ? metadata.getRawMetadata().length() : 0);
+        
+        parsedData.put("_summary", summary);
+        
+        return parsedData;
     }
 }
 

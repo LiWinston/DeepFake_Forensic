@@ -24,6 +24,7 @@ public class MetadataAnalysisResponse {
     private Map<String, Object> videoMetadata;
     private Map<String, Object> hashValues;
     private Map<String, Object> suspiciousIndicators;
+    private Map<String, Object> parsedMetadata;
     private LocalDateTime analysisTime;
     
     public static MetadataAnalysisResponse success(String message) {
