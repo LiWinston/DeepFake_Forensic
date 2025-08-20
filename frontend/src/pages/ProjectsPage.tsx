@@ -30,6 +30,7 @@ import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { projectApi } from '../services/project';
 import type { Project, CreateProjectRequest, ProjectType, ProjectStatus } from '../types';
+import './ProjectsPage.css';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -192,7 +193,8 @@ const ProjectsPage: React.FC = () => {
       title: 'Project Name',
       dataIndex: 'name',
       key: 'name',
-      width: 200,
+      width: 150,
+      fixed: 'left',
       ellipsis: {
         showTitle: false,
       },
@@ -207,12 +209,14 @@ const ProjectsPage: React.FC = () => {
       dataIndex: 'caseNumber',
       key: 'caseNumber',
       width: 120,
+      ellipsis: true,
+      responsive: ['md'],
     },
     {
       title: 'Project Type',
       dataIndex: 'projectType',
       key: 'projectType',
-      width: 100,
+      width: 120,
       render: (type: ProjectType) => (
         <Tag color={getProjectTypeColor(type)}>
           {getProjectTypeLabel(type)}
@@ -236,12 +240,14 @@ const ProjectsPage: React.FC = () => {
       key: 'clientName',
       width: 120,
       ellipsis: true,
+      responsive: ['lg'],
     },
     {
       title: 'Deadline',
       dataIndex: 'deadline',
       key: 'deadline',
-      width: 120,
+      width: 110,
+      responsive: ['sm'],
       render: (deadline) => 
         deadline ? dayjs(deadline).format('YYYY-MM-DD') : '-',
     },
@@ -249,18 +255,21 @@ const ProjectsPage: React.FC = () => {
       title: 'Created Time',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      width: 120,
+      width: 110,
+      responsive: ['md'],
       render: (createdAt) => dayjs(createdAt).format('YYYY-MM-DD'),
     },
     {
       title: 'Actions',
       key: 'action',
-      width: 180,
+      width: 120,
+      fixed: 'right',
       render: (_, record) => (
-        <Space size="small">
+        <Space size="small" className="table-actions">
           <Tooltip title="Edit">
             <Button
               type="link"
+              size="small"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             />
@@ -276,6 +285,7 @@ const ProjectsPage: React.FC = () => {
               >
                 <Button
                   type="link"
+                  size="small"
                   icon={<InboxOutlined />}
                 />
               </Popconfirm>
@@ -291,6 +301,7 @@ const ProjectsPage: React.FC = () => {
             >
               <Button
                 type="link"
+                size="small"
                 danger
                 icon={<DeleteOutlined />}
               />
@@ -302,10 +313,10 @@ const ProjectsPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div className="projects-page">
       {/* Statistics cards */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
+      <Row gutter={[16, 16]} className="projects-stats" style={{ marginBottom: 24 }}>
+        <Col xs={12} sm={12} md={6} lg={6} xl={6}>
           <Card>
             <Statistic
               title="Total Projects"
@@ -314,7 +325,7 @@ const ProjectsPage: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6} xl={6}>
           <Card>
             <Statistic
               title="In Progress"
@@ -324,7 +335,7 @@ const ProjectsPage: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6} xl={6}>
           <Card>
             <Statistic
               title="Completed"
@@ -333,7 +344,7 @@ const ProjectsPage: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
+        <Col xs={12} sm={12} md={6} lg={6} xl={6}>
           <Card>
             <Statistic
               title="Archived"
@@ -347,14 +358,14 @@ const ProjectsPage: React.FC = () => {
       <Card
         title="Project Management"
         extra={
-          <Space>
+          <Space wrap className="projects-controls">
             {/* Search box */}
             <Input
               placeholder="Search projects..."
               prefix={<SearchOutlined />}
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              style={{ width: 200 }}
+              style={{ width: '200px', minWidth: '150px' }}
               allowClear
             />
             
@@ -362,7 +373,7 @@ const ProjectsPage: React.FC = () => {
             <Select
               value={filterStatus}
               onChange={setFilterStatus}
-              style={{ width: 120 }}
+              style={{ width: '120px', minWidth: '100px' }}
             >
               <Option value="ALL">All Status</Option>
               <Option value="ACTIVE">In Progress</Option>
@@ -387,15 +398,18 @@ const ProjectsPage: React.FC = () => {
         }
       >
         <Table
+          className="projects-table"
           columns={columns}
           dataSource={projects}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 800 }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total) => `Total ${total} projects`,
+            responsive: true,
           }}
         />
       </Card>
@@ -410,15 +424,17 @@ const ProjectsPage: React.FC = () => {
           form.resetFields();
         }}
         footer={null}
-        width={800}
+        width="90%"
+        style={{ maxWidth: 800 }}
       >
         <Form
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
+          className="project-form"
         >
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 name="name"
                 label="Project Name"
@@ -427,7 +443,7 @@ const ProjectsPage: React.FC = () => {
                 <Input placeholder="Enter project name" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 name="caseNumber"
                 label="Case Number"
@@ -438,7 +454,7 @@ const ProjectsPage: React.FC = () => {
           </Row>
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 name="projectType"
                 label="Project Type"
@@ -453,7 +469,7 @@ const ProjectsPage: React.FC = () => {
                 </Select>
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 name="clientName"
                 label="Client"
@@ -464,7 +480,7 @@ const ProjectsPage: React.FC = () => {
           </Row>
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 name="clientContact"
                 label="Client Contact"
@@ -472,7 +488,7 @@ const ProjectsPage: React.FC = () => {
                 <Input placeholder="Enter contact information" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item
                 name="deadline"
                 label="Deadline"
