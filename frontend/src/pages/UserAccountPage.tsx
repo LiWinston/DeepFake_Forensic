@@ -26,6 +26,7 @@ import { useAuth } from '../contexts/AuthContext';
 import authService from '../services/auth';
 import type { User, UserProfileUpdate, PasswordChange } from '../services/auth';
 import './AuthPage.css'; // 复用认证页面的样式
+import '../styles/pages/UserAccountPage.css'; // 用户账户页面专用样式
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
@@ -111,12 +112,20 @@ const UserAccountPage: React.FC = () => {
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
         <Title level={2} style={{ color: '#ffffff', textAlign: 'center', marginBottom: 32 }}>
           Account Management
-        </Title>
-
-        <Tabs defaultActiveKey="profile" centered>
+        </Title>        <Tabs 
+          defaultActiveKey="profile" 
+          centered
+          className="account-tabs"
+          tabBarStyle={{
+            background: 'rgba(255, 255, 255, 0.15)',
+            padding: '8px',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}
+        >
           <TabPane 
             tab={
-              <span>
+              <span style={{ color: '#ffffff', textShadow: '0 0 10px rgba(255, 255, 255, 0.5)' }}>
                 <UserOutlined />
                 Profile Information
               </span>
@@ -212,11 +221,9 @@ const UserAccountPage: React.FC = () => {
                 </Form.Item>
               </Form>
             </Card>
-          </TabPane>
-
-          <TabPane 
+          </TabPane>          <TabPane 
             tab={
-              <span>
+              <span style={{ color: '#ffffff', textShadow: '0 0 10px rgba(255, 255, 255, 0.5)' }}>
                 <LockOutlined />
                 Change Password
               </span>
@@ -295,11 +302,9 @@ const UserAccountPage: React.FC = () => {
                 </Form.Item>
               </Form>
             </Card>
-          </TabPane>
-
-          <TabPane 
+          </TabPane>          <TabPane 
             tab={
-              <span>
+              <span style={{ color: '#ffffff', textShadow: '0 0 10px rgba(255, 255, 255, 0.5)' }}>
                 <MailOutlined />
                 Email Settings
               </span>
@@ -350,11 +355,9 @@ const UserAccountPage: React.FC = () => {
                 </div>
               </Space>
             </Card>
-          </TabPane>
-
-          <TabPane 
+          </TabPane>          <TabPane 
             tab={
-              <span style={{ color: '#ff4d4f' }}>
+              <span style={{ color: '#ff4d4f', textShadow: '0 0 10px rgba(255, 255, 255, 0.5)' }}>
                 <ExclamationCircleOutlined />
                 Danger Zone
               </span>
