@@ -133,10 +133,9 @@ export const useFilesList = (pageSize: number = 20) => {
       setLoading(false);
     }
   }, [loadFiles, pagination.current, pagination.pageSize]);
-
-  const refreshFiles = useCallback((projectId?: number) => {
+  const refreshFiles = useCallback((projectId?: number, filterType?: string) => {
     console.log('Refreshing file list...');
-    loadFiles(pagination.current, pagination.pageSize, undefined, undefined, projectId);
+    loadFiles(pagination.current, pagination.pageSize, undefined, filterType, projectId);
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
   useEffect(() => { 

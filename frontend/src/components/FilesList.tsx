@@ -82,28 +82,26 @@ const FilesList: React.FC<FilesListProps> = ({
 
     loadProjects();
   }, [defaultProjectId, showAllFiles]);
-
   // Load files when project selection changes
   useEffect(() => {
     if (showAllFiles) {
-      loadFiles(1, pagination.pageSize);
+      loadFiles(1, pagination.pageSize, undefined, filterType || undefined);
     } else if (selectedProjectId) {
-      loadFiles(1, pagination.pageSize, undefined, undefined, selectedProjectId);
+      loadFiles(1, pagination.pageSize, undefined, filterType || undefined, selectedProjectId);
     } else if (projects.length > 0) {
       // If no project is selected but projects exist, select the first one
       const firstProject = projects[0];
       setSelectedProjectId(firstProject.id);
-      loadFiles(1, pagination.pageSize, undefined, undefined, firstProject.id);
+      loadFiles(1, pagination.pageSize, undefined, filterType || undefined, firstProject.id);
     }
-  }, [selectedProjectId, showAllFiles, projects, loadFiles, pagination.pageSize]);
-
+  }, [selectedProjectId, showAllFiles, projects, loadFiles, pagination.pageSize, filterType]);
   const handleTableChange = useCallback((pagination: TablePaginationConfig) => {
     if (showAllFiles) {
-      loadFiles(pagination.current, pagination.pageSize);
+      loadFiles(pagination.current, pagination.pageSize, undefined, filterType || undefined);
     } else {
-      loadFiles(pagination.current, pagination.pageSize, undefined, undefined, selectedProjectId);
+      loadFiles(pagination.current, pagination.pageSize, undefined, filterType || undefined, selectedProjectId);
     }
-  }, [loadFiles, selectedProjectId, showAllFiles]);
+  }, [loadFiles, selectedProjectId, showAllFiles, filterType]);
 
   const handleDelete = useCallback(async (fileId: string) => {
     await deleteFile(fileId);
@@ -126,26 +124,24 @@ const FilesList: React.FC<FilesListProps> = ({
   const handlePreview = useCallback((file: UploadFile) => {
     setPreviewFile(file);
   }, []);
-
   const handleFilterChange = useCallback((value: string) => {
     setFilterType(value);
     if (showAllFiles) {
-      loadFiles(1, pagination.pageSize);
+      loadFiles(1, pagination.pageSize, undefined, value || undefined);
     } else {
-      loadFiles(1, pagination.pageSize, undefined, undefined, selectedProjectId);
+      loadFiles(1, pagination.pageSize, undefined, value || undefined, selectedProjectId);
     }
   }, [loadFiles, pagination.pageSize, selectedProjectId, showAllFiles]);
-
   const handleSearch = useCallback((value: string) => {
     setSearchText(value);
     // Implement search logic here
     // For now, we'll just filter by filename
     if (showAllFiles) {
-      loadFiles(1, pagination.pageSize);
+      loadFiles(1, pagination.pageSize, undefined, filterType || undefined);
     } else {
-      loadFiles(1, pagination.pageSize, undefined, undefined, selectedProjectId);
+      loadFiles(1, pagination.pageSize, undefined, filterType || undefined, selectedProjectId);
     }
-  }, [loadFiles, pagination.pageSize, selectedProjectId, showAllFiles]);
+  }, [loadFiles, pagination.pageSize, selectedProjectId, showAllFiles, filterType]);
 
   const handleProjectChange = useCallback((value: number | 'all') => {
     if (value === 'all') {
@@ -155,15 +151,13 @@ const FilesList: React.FC<FilesListProps> = ({
       setShowAllFiles(false);
       setSelectedProjectId(value);
     }
-  }, []);
-
-  const handleRefresh = useCallback(() => {
+  }, []);  const handleRefresh = useCallback(() => {
     if (showAllFiles) {
-      refreshFiles();
+      refreshFiles(undefined, filterType || undefined);
     } else {
-      refreshFiles(selectedProjectId);
+      refreshFiles(selectedProjectId, filterType || undefined);
     }
-  }, [refreshFiles, selectedProjectId, showAllFiles]);
+  }, [refreshFiles, selectedProjectId, showAllFiles, filterType]);
 
   const getFileStatusTag = (status: string) => {
     const statusConfig = {
