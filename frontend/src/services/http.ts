@@ -17,7 +17,7 @@ const httpClient: AxiosInstance = axios.create({
 httpClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // Add auth token if available
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     if (token && config.headers) {
       (config.headers as any).Authorization = `Bearer ${token}`;
     }
@@ -61,18 +61,48 @@ httpClient.interceptors.response.use(
     
     return response;
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Handle 401 Unauthorized
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        // Try to refresh token
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+            refreshToken,
+          });
+          
+          const { token, refreshToken: newRefreshToken } = response.data;
+          localStorage.setItem('auth_token', token);
+          localStorage.setItem('refresh_token', newRefreshToken);
+          
+          // Retry original request with new token
+          originalRequest.headers['Authorization'] = `Bearer ${token}`;
+          return httpClient(originalRequest);
+        }
+      } catch (refreshError) {
+        // Refresh failed, redirect to login
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_info');
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
+    }
+    
+    // Handle other errors
     console.error('Response Error:', error);
     
-    // Handle different error status codes
     if (error.response) {
       const { status, data } = error.response;
       
       switch (status) {
-        case 401:
-          message.error('Authentication failed');
-          localStorage.removeItem('token');
-          window.location.href = '/login';
+        case 400:
+          message.error(data?.message || 'Bad request');
           break;
         case 403:
           message.error('Access denied');

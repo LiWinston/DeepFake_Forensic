@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   Upload,
   Button,
@@ -11,6 +11,11 @@ import {
   Alert,
   Row,
   Col,
+  Select,
+  Form,
+  Modal,
+  Input,
+  message,
 } from 'antd';
 import {
   InboxOutlined,
@@ -18,12 +23,14 @@ import {
   DeleteOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { useFileUpload } from '../hooks';
 import { formatFileSize, isSupportedFileType, getFileCategory } from '../utils';
 import { SUPPORTED_FILE_EXTENSIONS, MAX_FILE_SIZE } from '../constants';
-import type { UploadFile as ApiUploadFile } from '../types';
+import type { UploadFile as ApiUploadFile, Project } from '../types';
+import { projectApi } from '../services/project';
 
 const { Dragger } = Upload;
 const { Text, Title } = Typography;
@@ -34,6 +41,8 @@ interface FileUploadProps {
   accept?: string;
   maxSize?: number;
   showProgress?: boolean;
+  showProjectSelector?: boolean;
+  defaultProjectId?: number;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({
@@ -42,9 +51,32 @@ const FileUpload: React.FC<FileUploadProps> = ({
   accept,
   maxSize = MAX_FILE_SIZE,
   showProgress = true,
+  showProjectSelector = true,
+  defaultProjectId,
 }) => {
   const { uploadProgress, isUploading, uploadFile, clearProgress, clearAllProgress } = useFileUpload();
   const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(defaultProjectId);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [newProjectForm] = Form.useForm();
+
+  // Load projects on component mount
+  useEffect(() => {
+    if (showProjectSelector) {
+      loadProjects();
+    }
+  }, [showProjectSelector]);
+
+  const loadProjects = async () => {
+    try {
+      const response = await projectApi.getProjects();
+      setProjects(response.data);
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+      message.error('Failed to load project list');
+    }
+  };
 
   const validateFile = useCallback((file: File): boolean => {
     // Check file size
@@ -69,8 +101,19 @@ const FileUpload: React.FC<FileUploadProps> = ({
       return;
     }
 
+    if (showProjectSelector && !selectedProjectId) {
+      onUploadError?.('Please select a project first');
+      return;
+    }
+
+    const projectId = selectedProjectId || defaultProjectId;
+    if (!projectId) {
+      onUploadError?.('Invalid project ID');
+      return;
+    }
+
     try {
-      const result = await uploadFile(file);
+      const result = await uploadFile(file, projectId);
       if (result) {
         onUploadSuccess?.(result);
       }
@@ -78,7 +121,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       const errorMsg = error instanceof Error ? error.message : 'Upload failed';
       onUploadError?.(errorMsg);
     }
-  }, [uploadFile, validateFile, onUploadSuccess, onUploadError]);
+  }, [uploadFile, validateFile, onUploadSuccess, onUploadError, selectedProjectId, defaultProjectId, showProjectSelector]);
 
   const uploadProps: UploadProps = {
     name: 'file',
@@ -150,6 +193,43 @@ const FileUpload: React.FC<FileUploadProps> = ({
           )
         }
       >
+        {/* Project Selector */}
+        {showProjectSelector && (
+          <div style={{ marginBottom: 16 }}>
+            <Form layout="vertical">
+              <Form.Item label="Select Project" required>
+                <Select
+                  placeholder="Please select or create a project"
+                  value={selectedProjectId}
+                  onChange={setSelectedProjectId}
+                  style={{ width: '100%' }}
+                  dropdownRender={menu => (
+                    <div>
+                      {menu}
+                      <div style={{ padding: '8px', borderTop: '1px solid #f0f0f0' }}>
+                        <Button
+                          type="text"
+                          icon={<PlusOutlined />}
+                          onClick={() => setShowNewProjectModal(true)}
+                          style={{ width: '100%' }}
+                        >
+                          Create New Project
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                >
+                  {projects.map(project => (
+                    <Select.Option key={project.id} value={project.id}>
+                      {project.name} ({project.caseNumber})
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Form>
+          </div>
+        )}
+
         <div onDragOver={onWrapperDragOver} onDragLeave={onWrapperDragLeave} onDrop={onWrapperDrop}>
           <Dragger 
             {...uploadProps}
@@ -250,6 +330,64 @@ const FileUpload: React.FC<FileUploadProps> = ({
           </Col>
         </Row>
       </Card>
+
+      {/* New Project Modal */}
+      <Modal
+        title="Create New Project"
+        open={showNewProjectModal}
+        onCancel={() => {
+          setShowNewProjectModal(false);
+          newProjectForm.resetFields();
+        }}
+        onOk={async () => {
+          try {
+            const values = await newProjectForm.validateFields();
+            const response = await projectApi.createProject(values);
+            const newProject = response.data;
+            setProjects(prev => [...prev, newProject]);
+            setSelectedProjectId(newProject.id);
+            setShowNewProjectModal(false);
+            newProjectForm.resetFields();
+            message.success('Project created successfully');
+          } catch (error) {
+            console.error('Failed to create project:', error);
+            message.error('Failed to create project');
+          }
+        }}
+      >
+        <Form form={newProjectForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label="Project Name"
+            rules={[{ required: true, message: 'Please enter project name' }]}
+          >
+            <Input placeholder="Please enter project name" />
+          </Form.Item>
+          <Form.Item
+            name="caseNumber"
+            label="Case Number"
+            rules={[{ required: true, message: 'Please enter case number' }]}
+          >
+            <Input placeholder="Please enter case number" />
+          </Form.Item>
+          <Form.Item name="description" label="Project Description">
+            <Input.TextArea placeholder="Please enter project description" rows={3} />
+          </Form.Item>
+          <Form.Item
+            name="projectType"
+            label="Project Type"
+            rules={[{ required: true, message: 'Please select project type' }]}
+          >
+            <Select placeholder="Please select project type">
+              <Select.Option value="GENERAL">General Case</Select.Option>
+              <Select.Option value="CRIMINAL">Criminal Case</Select.Option>
+              <Select.Option value="CIVIL">Civil Case</Select.Option>
+              <Select.Option value="CORPORATE">Corporate Case</Select.Option>
+              <Select.Option value="ACADEMIC_RESEARCH">Academic Research</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

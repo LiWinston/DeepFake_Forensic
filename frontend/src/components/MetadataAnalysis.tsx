@@ -60,14 +60,14 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
   const [currentFileStatus, setCurrentFileStatus] = useState<string>('');
   const [pollingTimer, setPollingTimer] = useState<number | null>(null);
 
-  // 加载分析状态和结果
+  // Load analysis status and results
   useEffect(() => {
     if (file && file.md5Hash) {
       loadAnalyses(file.md5Hash);
-      // 获取当前分析状态
+      // Get current analysis status
       getAnalysisStatus(file.md5Hash).then(status => {
         setCurrentFileStatus(status.status);
-        // 如果正在处理中，开始轮询
+        // If processing, start polling
         if (status.status === 'PROCESSING' && file.md5Hash) {
           startPolling(file.md5Hash);
         }
@@ -78,7 +78,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
     }
   }, [file, loadAnalyses, getAnalysisStatus]);
 
-  // 清理定时器
+  // Clean up timer
   useEffect(() => {
     return () => {
       if (pollingTimer) {
@@ -87,7 +87,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
     };
   }, [pollingTimer]);
 
-  // 开始轮询检查分析状态
+  // Start polling to check analysis status
   const startPolling = useCallback((fileMd5: string) => {
     const timer = window.setInterval(async () => {
       const status = await getAnalysisStatus(fileMd5);
@@ -96,19 +96,19 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
       if (status.status !== 'PROCESSING') {
         clearInterval(timer);
         setPollingTimer(null);
-        // 重新加载分析结果
+        // Reload analysis results
         if (status.hasAnalysis) {
           loadAnalyses(fileMd5);
         }
       }
-    }, 3000); // 每3秒检查一次
+    }, 3000); // Check every 3 seconds
     
     setPollingTimer(timer);
   }, [getAnalysisStatus, loadAnalyses]);
 
   const handleStartAnalysis = useCallback(async () => {
     if (!file || !file.md5Hash) {
-      message.error('文件MD5哈希缺失，无法进行元数据分析');
+      message.error('File MD5 hash is missing, cannot perform metadata analysis');
       return;
     }
     
@@ -116,12 +116,12 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
       const success = await startAnalysis(file.md5Hash);
       if (success) {
         setCurrentFileStatus('PROCESSING');
-        // 开始轮询检查状态
+        // Start polling to check status
         startPolling(file.md5Hash);
       }
     } catch (error) {
       console.error('Failed to start analysis:', error);
-      message.error('启动分析失败');
+      message.error('Failed to start analysis');
     }
   }, [file, startAnalysis, startPolling]);
 
@@ -132,7 +132,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
       await getAnalysis(file.md5Hash);
     } catch (error) {
       console.error('Failed to get analysis results:', error);
-      message.error('获取分析结果失败');
+      message.error('Failed to get analysis results');
     }
   }, [file, getAnalysis]);
 
@@ -440,23 +440,23 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
         extra={
           file && (
             <Space>
-              {/* 分析状态指示器 */}
+              {/* Analysis status indicator */}
               {currentFileStatus && (
                 <span>
-                  状态: <Tag color={
+                  Status: <Tag color={
                     currentFileStatus === 'SUCCESS' ? 'green' : 
                     currentFileStatus === 'PROCESSING' ? 'blue' :
                     currentFileStatus === 'FAILED' ? 'red' : 'default'
                   }>
-                    {currentFileStatus === 'SUCCESS' ? '已完成' :
-                     currentFileStatus === 'PROCESSING' ? '分析中' :
-                     currentFileStatus === 'FAILED' ? '失败' :
-                     currentFileStatus === 'NOT_FOUND' ? '未分析' : currentFileStatus}
+                    {currentFileStatus === 'SUCCESS' ? 'Completed' :
+                     currentFileStatus === 'PROCESSING' ? 'Analyzing' :
+                     currentFileStatus === 'FAILED' ? 'Failed' :
+                     currentFileStatus === 'NOT_FOUND' ? 'Not Analyzed' : currentFileStatus}
                   </Tag>
                 </span>
               )}
               
-              {/* 根据状态显示不同的按钮 */}
+              {/* Show different buttons based on status */}
               {currentFileStatus === 'SUCCESS' ? (
                 <Button
                   type="primary"
@@ -464,7 +464,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
                   onClick={handleViewResults}
                   loading={loading}
                 >
-                  查看结果
+                  View Results
                 </Button>
               ) : currentFileStatus === 'FAILED' ? (
                 <Button
@@ -474,7 +474,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
                   loading={loading}
                   disabled={!file || file.status !== 'COMPLETED'}
                 >
-                  重新分析
+                  Re-analyze
                 </Button>
               ) : currentFileStatus === 'PROCESSING' ? (
                 <Button
@@ -483,7 +483,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
                   loading={true}
                   disabled={true}
                 >
-                  分析中...
+                  Analyzing...
                 </Button>
               ) : (
                 <Button
@@ -493,7 +493,7 @@ const MetadataAnalysisComponent: React.FC<MetadataAnalysisProps> = ({
                   loading={loading}
                   disabled={!file || file.status !== 'COMPLETED' || !file.md5Hash}
                 >
-                  开始分析
+                  Start Analysis
                 </Button>
               )}
             </Space>

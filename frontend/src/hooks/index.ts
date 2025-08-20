@@ -12,7 +12,7 @@ export const useFileUpload = () => {
   const [uploadProgress, setUploadProgress] = useState<Map<string, UploadProgress>>(new Map());
   const [isUploading, setIsUploading] = useState(false);
 
-  const uploadFile = useCallback(async (file: File) => {
+  const uploadFile = useCallback(async (file: File, projectId: number) => {
     const tempId = generateId();
     const progressInfo: UploadProgress = {
       fileId: tempId,
@@ -27,6 +27,7 @@ export const useFileUpload = () => {
     try {
       const result = await uploadService.uploadFileWithChunks(
         file,
+        projectId,
         (progress) => {
           setUploadProgress(prev => {
             const newMap = new Map(prev);
@@ -103,10 +104,10 @@ export const useFilesList = (pageSize: number = 20) => {
       });
       
       if (result.files.length === 0) {
-        message.info('No files found. Please upload files first.');
+        message.info('No file data available, please upload files first');
       }
     } catch (error) {
-      message.error('Failed to load files list');
+      message.error('Failed to load file list');
       console.error('Failed to load files:', error);
       setFiles([]);
       setPagination({ current: page, pageSize: size, total: 0 });
@@ -124,7 +125,7 @@ export const useFilesList = (pageSize: number = 20) => {
         // Refresh the current page
         await loadFiles(pagination.current, pagination.pageSize);
       } else {
-        message.warning('Delete functionality not yet implemented');
+        message.warning('Delete function not implemented yet');
       }
     } catch (error) {
       message.error('Failed to delete file');
@@ -135,7 +136,7 @@ export const useFilesList = (pageSize: number = 20) => {
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
   const refreshFiles = useCallback(() => {
-    console.log('Refreshing files list...');
+    console.log('Refreshing file list...');
     loadFiles(pagination.current, pagination.pageSize);
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
@@ -160,7 +161,7 @@ export const useMetadataAnalysis = () => {
     try {
       const result = await metadataService.startAnalysis(fileMd5);
       if (result.success) {
-        message.success(result.message || 'Analysis started successfully');
+        message.success(result.message || 'Analysis started');
         setAnalysisStatus(prev => ({ ...prev, [fileMd5]: 'PROCESSING' }));
         return true;
       } else {
@@ -208,10 +209,10 @@ export const useMetadataAnalysis = () => {
     setLoading(true);
     try {
       if (fileMd5) {
-        // First get status
+        // Get status first
         const status = await getAnalysisStatus(fileMd5);
         
-        // If there are completed analysis results, get detailed content
+        // If there's a completed analysis result, get detailed content
         if (status.hasAnalysis && status.status === 'SUCCESS') {
           const result = await metadataService.getAnalysis(fileMd5);
           setAnalyses([result]);

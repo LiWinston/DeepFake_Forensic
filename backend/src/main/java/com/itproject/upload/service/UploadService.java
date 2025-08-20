@@ -1,5 +1,9 @@
 package com.itproject.upload.service;
 
+import com.itproject.auth.entity.User;
+import com.itproject.auth.security.SecurityUtils;
+import com.itproject.project.entity.Project;
+import com.itproject.project.repository.ProjectRepository;
 import com.itproject.upload.dto.ChunkUploadRequest;
 import com.itproject.upload.dto.UploadResponse;
 import com.itproject.upload.entity.ChunkInfo;
@@ -38,6 +42,9 @@ public class UploadService {
     
     @Autowired
     private ChunkInfoRepository chunkInfoRepository;
+    
+    @Autowired
+    private ProjectRepository projectRepository;
     
     @Autowired
     private MinioClient minioClient;
@@ -192,10 +199,30 @@ public class UploadService {
     }
     
     private MediaFile getOrCreateMediaFile(ChunkUploadRequest request) {
-        Optional<MediaFile> existingFile = mediaFileRepository.findByFileMd5(request.getFileMd5());
+        User currentUser = SecurityUtils.getCurrentUser();
+        if (currentUser == null) {
+            throw new RuntimeException("用户未登录");
+        }
+        
+        // Get project
+        Project project = projectRepository.findById(request.getProjectId())
+            .orElseThrow(() -> new RuntimeException("项目不存在: " + request.getProjectId()));
+        
+        // Check if user has access to the project
+        if (!project.getUser().getId().equals(currentUser.getId())) {
+            throw new RuntimeException("没有权限访问该项目");
+        }
+        
+        Optional<MediaFile> existingFile = mediaFileRepository.findByFileMd5AndUser(request.getFileMd5(), currentUser);
         
         if (existingFile.isPresent()) {
-            return existingFile.get();
+            MediaFile existing = existingFile.get();
+            // Update project if different
+            if (!existing.getProject().getId().equals(project.getId())) {
+                existing.setProject(project);
+                return mediaFileRepository.save(existing);
+            }
+            return existing;
         }
         
         // Create new media file record
@@ -207,7 +234,9 @@ public class UploadService {
         mediaFile.setTotalChunks(request.getTotalChunks());
         mediaFile.setUploadedChunks(0);
         mediaFile.setUploadStatus(MediaFile.UploadStatus.UPLOADING);
-        mediaFile.setUploadedBy(request.getUploadedBy());
+        mediaFile.setUploadedBy(currentUser.getUsername());
+        mediaFile.setUser(currentUser); // Set user relationship
+        mediaFile.setProject(project); // Set project relationship
         
         // Determine media type and file type
         FileTypeValidationService.FileTypeValidationResult validation = 
@@ -291,6 +320,7 @@ public class UploadService {
             analysisMessage.put("fileName", mediaFile.getFileName());
             analysisMessage.put("fileType", mediaFile.getFileType());
             analysisMessage.put("filePath", finalPath);
+            analysisMessage.put("userId", mediaFile.getUser().getId()); // Add user ID
             
             kafkaTemplate.send(metadataAnalysisTopic, analysisMessage);
             
@@ -518,25 +548,31 @@ public class UploadService {
     }
     
     /**
-     * Get files list with pagination and filtering
+     * Get files list with pagination and filtering for current user
      */
     public Page<MediaFile> getFilesList(Pageable pageable, String status, String type) {
         try {
-            log.debug("Getting files list: pageable={}, status={}, type={}", pageable, status, type);
+            User currentUser = SecurityUtils.getCurrentUser();
+            if (currentUser == null) {
+                throw new RuntimeException("用户未登录");
+            }
+            
+            log.debug("Getting files list for user {}: pageable={}, status={}, type={}", 
+                    currentUser.getUsername(), pageable, status, type);
             
             // Apply filters if provided
             if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
                 MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
                 MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                return mediaFileRepository.findByUploadStatusAndMediaType(uploadStatus, mediaType, pageable);
+                return mediaFileRepository.findByUploadStatusAndMediaTypeAndUser(uploadStatus, mediaType, currentUser, pageable);
             } else if (StringUtils.hasText(status)) {
                 MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                return mediaFileRepository.findByUploadStatus(uploadStatus, pageable);
+                return mediaFileRepository.findByUploadStatusAndUser(uploadStatus, currentUser, pageable);
             } else if (StringUtils.hasText(type)) {
                 MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                return mediaFileRepository.findByMediaType(mediaType, pageable);
+                return mediaFileRepository.findByMediaTypeAndUser(mediaType, currentUser, pageable);
             } else {
-                return mediaFileRepository.findAll(pageable);
+                return mediaFileRepository.findByUser(currentUser, pageable);
             }
             
         } catch (Exception e) {

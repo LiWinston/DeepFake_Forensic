@@ -1,6 +1,7 @@
 package com.itproject.metadata.repository;
 
 import com.itproject.metadata.entity.MediaMetadata;
+import com.itproject.auth.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,14 +17,35 @@ import java.util.Optional;
 public interface MediaMetadataRepository extends JpaRepository<MediaMetadata, Long> {
     
     /**
+     * Find metadata by file MD5 and user
+     */
+    Optional<MediaMetadata> findByFileMd5AndUser(String fileMd5, User user);
+    
+    /**
      * Find metadata by file MD5
      */
     Optional<MediaMetadata> findByFileMd5(String fileMd5);
     
     /**
+     * Find metadata by user
+     */
+    List<MediaMetadata> findByUserOrderByCreatedAtDesc(User user);
+    
+    /**
+     * Find metadata by extraction status and user
+     */
+    List<MediaMetadata> findByExtractionStatusAndUser(MediaMetadata.ExtractionStatus status, User user);
+    
+    /**
      * Find metadata by extraction status
      */
     List<MediaMetadata> findByExtractionStatus(MediaMetadata.ExtractionStatus status);
+    
+    /**
+     * Find metadata with suspicious indicators for user
+     */
+    @Query("SELECT m FROM MediaMetadata m WHERE m.user = :user AND m.suspiciousIndicators IS NOT NULL AND m.suspiciousIndicators != ''")
+    List<MediaMetadata> findWithSuspiciousIndicatorsByUser(@Param("user") User user);
     
     /**
      * Find metadata with suspicious indicators

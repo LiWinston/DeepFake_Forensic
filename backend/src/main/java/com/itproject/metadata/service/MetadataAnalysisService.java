@@ -7,6 +7,9 @@ import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
 import com.drew.metadata.exif.ExifIFD0Directory;
 import com.drew.metadata.exif.GpsDirectory;
+import com.itproject.auth.entity.User;
+import com.itproject.auth.repository.UserRepository;
+import com.itproject.auth.security.SecurityUtils;
 import com.itproject.metadata.dto.MetadataAnalysisResponse;
 import com.itproject.metadata.entity.MediaMetadata;
 import com.itproject.metadata.repository.MediaMetadataRepository;
@@ -40,6 +43,9 @@ public class MetadataAnalysisService {
     private MediaMetadataRepository metadataRepository;
     
     @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
     private MinioClient minioClient;
     
     @Autowired
@@ -57,25 +63,32 @@ public class MetadataAnalysisService {
             String fileType = (String) message.get("fileType");
             String filePath = (String) message.get("filePath");
             Boolean forceReAnalysis = (Boolean) message.get("forceReAnalysis");
+            Long userId = ((Number) message.get("userId")).longValue();
             
-            log.info("Processing metadata analysis for file: {} (MD5: {}), forceReAnalysis: {}", fileName, fileMd5, forceReAnalysis);
+            log.info("Processing metadata analysis for file: {} (MD5: {}), user: {}, forceReAnalysis: {}", 
+                    fileName, fileMd5, userId, forceReAnalysis);
             
-            // Check if metadata already exists
-            Optional<MediaMetadata> existingMetadata = metadataRepository.findByFileMd5(fileMd5);
+            // Get user
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+            
+            // Check if metadata already exists for this user
+            Optional<MediaMetadata> existingMetadata = metadataRepository.findByFileMd5AndUser(fileMd5, user);
             if (existingMetadata.isPresent() && !Boolean.TRUE.equals(forceReAnalysis)) {
-                log.info("Metadata already exists for file: {}, skipping analysis", fileMd5);
+                log.info("Metadata already exists for file: {} and user: {}, skipping analysis", fileMd5, userId);
                 return;
             }
             
             // If forcing re-analysis, delete existing metadata
             if (existingMetadata.isPresent() && Boolean.TRUE.equals(forceReAnalysis)) {
-                log.info("Force re-analysis requested, deleting existing metadata for file: {}", fileMd5);
+                log.info("Force re-analysis requested, deleting existing metadata for file: {} and user: {}", fileMd5, userId);
                 metadataRepository.delete(existingMetadata.get());
             }
             
             // Analyze metadata based on file type
             MediaMetadata metadata = new MediaMetadata();
             metadata.setFileMd5(fileMd5);
+            metadata.setUser(user); // Set user relationship
             metadata.setExtractionStatus(MediaMetadata.ExtractionStatus.PENDING);
             
             try (InputStream fileStream = getFileStream(filePath)) {
@@ -110,12 +123,17 @@ public class MetadataAnalysisService {
             // Save failed status if possible
             try {
                 String fileMd5 = (String) message.get("fileMd5");
-                if (fileMd5 != null) {
-                    MediaMetadata failedMetadata = new MediaMetadata();
-                    failedMetadata.setFileMd5(fileMd5);
-                    failedMetadata.setExtractionStatus(MediaMetadata.ExtractionStatus.FAILED);
-                    failedMetadata.setAnalysisNotes("Extraction failed: " + e.getMessage());
-                    metadataRepository.save(failedMetadata);
+                Long userId = ((Number) message.get("userId")).longValue();
+                if (fileMd5 != null && userId != null) {
+                    User user = userRepository.findById(userId).orElse(null);
+                    if (user != null) {
+                        MediaMetadata failedMetadata = new MediaMetadata();
+                        failedMetadata.setFileMd5(fileMd5);
+                        failedMetadata.setUser(user);
+                        failedMetadata.setExtractionStatus(MediaMetadata.ExtractionStatus.FAILED);
+                        failedMetadata.setAnalysisNotes("Extraction failed: " + e.getMessage());
+                        metadataRepository.save(failedMetadata);
+                    }
                 }
             } catch (Exception saveError) {
                 log.error("Failed to save error status", saveError);
@@ -124,11 +142,16 @@ public class MetadataAnalysisService {
     }
     
     /**
-     * Get metadata analysis for a file
+     * Get metadata analysis for a file (user-specific)
      */
     public MetadataAnalysisResponse getMetadataAnalysis(String fileMd5) {
         try {
-            Optional<MediaMetadata> metadataOpt = metadataRepository.findByFileMd5(fileMd5);
+            User currentUser = SecurityUtils.getCurrentUser();
+            if (currentUser == null) {
+                return MetadataAnalysisResponse.error("用户未登录");
+            }
+            
+            Optional<MediaMetadata> metadataOpt = metadataRepository.findByFileMd5AndUser(fileMd5, currentUser);
             
             if (metadataOpt.isEmpty()) {
                 return MetadataAnalysisResponse.error("Metadata not found for file: " + fileMd5);

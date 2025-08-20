@@ -1,5 +1,8 @@
 package com.itproject.metadata.entity;
 
+import com.itproject.analysis.entity.AnalysisTask;
+import com.itproject.auth.entity.User;
+import com.itproject.project.entity.Project;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -8,6 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Media metadata entity for storing extracted metadata information
@@ -110,6 +114,21 @@ public class MediaMetadata {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+    
+    // User relationship
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+    
+    // Project relationship
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id", nullable = false)
+    private Project project;
+    
+    // Analysis task relationship - this metadata belongs to a specific analysis task
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "analysis_task_id")
+    private AnalysisTask analysisTask;
     
     public enum ExtractionStatus {
         PENDING,

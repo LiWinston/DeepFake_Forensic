@@ -12,6 +12,8 @@ import {
   Menu,
   Typography,
   Button,
+  Avatar,
+  Dropdown,
 } from 'antd';
 import {
   HomeOutlined,
@@ -20,6 +22,9 @@ import {
   BarChartOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  ProjectOutlined,
 } from '@ant-design/icons';
 
 // Import pages
@@ -27,6 +32,13 @@ import HomePage from './pages/HomePage';
 import UploadPage from './pages/UploadPage';
 import FilesPage from './pages/FilesPage';
 import AnalysisPage from './pages/AnalysisPage';
+import ProjectsPage from './pages/ProjectsPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
+import AuthPage from './pages/AuthPage';
+
+// Import components and contexts
+import ProtectedRoute from './components/ProtectedRoute';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -36,12 +48,40 @@ const AppNavigation: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/auth');
+  };
+
+  const userMenuItems = [
+    {
+      key: 'user-info',
+      label: `${user?.username}`,
+      disabled: true,
+    },
+    {
+      type: 'divider' as const,
+    },
+    {
+      key: 'logout',
+      label: 'Logout',
+      icon: <LogoutOutlined />,
+      onClick: handleLogout,
+    },
+  ];
 
   const menuItems = [
     {
       key: '/',
       icon: <HomeOutlined />,
       label: 'Home',
+    },
+    {
+      key: '/projects',
+      icon: <ProjectOutlined />,
+      label: 'Projects',
     },
     {
       key: '/upload',
@@ -94,26 +134,44 @@ const AppNavigation: React.FC = () => {
           background: '#fff',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           boxShadow: '0 1px 4px rgba(0,21,41,.08)'
         }}>
-          <Button
-            type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              fontSize: '16px',
-              width: 64,
-              height: 64,
-            }}
-          />
-          <Title level={4} style={{ margin: 0, marginLeft: '16px' }}>
-            Deepfake Detection & Forensic Analysis Platform
-          </Title>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Button
+              type="text"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setCollapsed(!collapsed)}
+              style={{
+                fontSize: '16px',
+                width: 64,
+                height: 64,
+              }}
+            />
+            <Title level={4} style={{ margin: 0, marginLeft: '16px' }}>
+              Deepfake Detection & Forensic Analysis Platform
+            </Title>
+          </div>
+          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              cursor: 'pointer',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              transition: 'background-color 0.3s'
+            }}>
+              <Avatar icon={<UserOutlined />} size="small" style={{ marginRight: '8px' }} />
+              <span>{user?.username}</span>
+            </div>
+          </Dropdown>
         </Header>
         <Content style={{ margin: '24px 16px 0', overflow: 'initial' }}>
           <div style={{ padding: 24, background: '#fff', minHeight: 360 }}>
             <Routes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/files" element={<FilesPage />} />
               <Route path="/analysis" element={<AnalysisPage />} />
@@ -129,9 +187,18 @@ const AppNavigation: React.FC = () => {
 // Main App component
 const App: React.FC = () => {
   return (
-    <Router>
-      <AppNavigation />
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/*" element={
+            <ProtectedRoute>
+              <AppNavigation />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 };
 

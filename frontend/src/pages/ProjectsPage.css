@@ -1,0 +1,134 @@
+/* ProjectsPage responsive styles */
+
+.projects-page {
+  padding: 16px;
+}
+
+/* Mobile styles */
+@media (max-width: 576px) {
+  .projects-page {
+    padding: 8px;
+  }
+  
+  /* Hide less important columns on mobile */
+  .ant-table-tbody .mobile-hide {
+    display: none;
+  }
+  
+  /* Stack search controls on mobile */
+  .projects-controls {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .projects-controls .ant-input,
+  .projects-controls .ant-select {
+    width: 100% !important;
+    min-width: unset !important;
+  }
+  
+  /* Adjust statistics cards on mobile */
+  .projects-stats {
+    margin-bottom: 16px;
+  }
+  
+  .projects-stats .ant-statistic-title {
+    font-size: 12px;
+  }
+  
+  .projects-stats .ant-statistic-content {
+    font-size: 18px;
+  }
+}
+
+/* Tablet styles */
+@media (max-width: 768px) {
+  .projects-page {
+    padding: 12px;
+  }
+  
+  /* Adjust card title and extra content */
+  .ant-card-head-title {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .ant-card-extra {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* Large screen optimizations */
+@media (min-width: 1200px) {
+  .projects-page {
+    padding: 24px;
+  }
+}
+
+/* Table responsive adjustments */
+.projects-table .ant-table-thead > tr > th {
+  font-weight: 600;
+  background: #fafafa;
+}
+
+.projects-table .ant-table-tbody > tr > td {
+  vertical-align: top;
+}
+
+/* Action buttons responsive */
+.table-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.table-actions .ant-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal responsive adjustments */
+@media (max-width: 576px) {
+  .ant-modal {
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    height: 100%;
+    top: 0 !important;
+  }
+  
+  .ant-modal-content {
+    height: 100%;
+    border-radius: 0;
+  }
+  
+  .ant-modal-body {
+    padding: 16px;
+    max-height: calc(100vh - 108px);
+    overflow-y: auto;
+  }
+}
+
+/* Form responsive adjustments */
+.project-form .ant-form-item-label {
+  line-height: 1.4;
+}
+
+.project-form .ant-form-item {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 576px) {
+  .project-form .ant-form-item {
+    margin-bottom: 12px;
+  }
+  
+  .project-form .ant-form-item-label {
+    font-size: 14px;
+  }
+}

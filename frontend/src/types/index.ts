@@ -15,6 +15,97 @@ export interface PaginationResponse<T> {
   pageSize: number;
 }
 
+// Project Management Types
+export interface Project {
+  id: number;
+  name: string;
+  description?: string;
+  caseNumber: string;
+  clientName?: string;
+  clientContact?: string;
+  projectType: ProjectType;
+  status: ProjectStatus;
+  tags?: string;
+  deadline?: string;
+  caseDate?: string;
+  evidenceDescription?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProjectType = 
+  | 'GENERAL'
+  | 'CRIMINAL'
+  | 'CIVIL'
+  | 'CORPORATE'
+  | 'ACADEMIC_RESEARCH';
+
+export type ProjectStatus = 
+  | 'ACTIVE'
+  | 'COMPLETED'
+  | 'SUSPENDED'
+  | 'ARCHIVED';
+
+export interface CreateProjectRequest {
+  name: string;
+  description?: string;
+  caseNumber?: string;
+  clientName?: string;
+  clientContact?: string;
+  projectType?: ProjectType;
+  deadline?: string;
+  caseDate?: string;
+  evidenceDescription?: string;
+  notes?: string;
+  tags?: string;
+}
+
+// Analysis Task Types
+export interface AnalysisTask {
+  id: number;
+  taskName: string;
+  analysisType: AnalysisType;
+  status: TaskStatus;
+  description?: string;
+  resultData?: string;
+  confidenceScore?: number;
+  notes?: string;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  projectId: number;
+}
+
+export type AnalysisType = 
+  | 'METADATA_ANALYSIS'
+  | 'DEEPFAKE_DETECTION'
+  | 'EDIT_DETECTION'
+  | 'COMPRESSION_ANALYSIS'
+  | 'HASH_VERIFICATION'
+  | 'EXIF_ANALYSIS'
+  | 'STEGANOGRAPHY_DETECTION'
+  | 'SIMILARITY_ANALYSIS'
+  | 'TEMPORAL_ANALYSIS'
+  | 'QUALITY_ASSESSMENT';
+
+export type TaskStatus = 
+  | 'PENDING'
+  | 'RUNNING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'PAUSED';
+
+export interface CreateAnalysisTaskRequest {
+  taskName?: string;
+  analysisType: AnalysisType;
+  description?: string;
+  notes?: string;
+  projectId: number;
+}
+
 // File Upload Types
 export interface UploadFile {
   id: string;
@@ -28,6 +119,7 @@ export interface UploadFile {
   chunkTotal?: number;
   chunkUploaded?: number;
   md5Hash?: string;
+  projectId?: number; // Associated project ID
 }
 
 export interface ChunkUploadRequest {
