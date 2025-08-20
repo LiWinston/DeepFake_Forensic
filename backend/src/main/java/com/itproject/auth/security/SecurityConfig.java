@@ -56,11 +56,16 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(authz -> authz
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))            .authorizeHttpRequests(authz -> authz
                 .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/account/password/reset-request").permitAll()
+                .requestMatchers("/api/v1/account/password/reset-confirm").permitAll()
+                .requestMatchers("/api/v1/account/password/validate-token").permitAll()
+                .requestMatchers("/api/v1/account/email/verify-request").permitAll()
+                .requestMatchers("/api/v1/account/email/verify").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health/**").permitAll()
+                .requestMatchers("/api/email/test/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 // Allow public access to file preview and thumbnail endpoints
                 .requestMatchers("/api/v1/upload/files/*/preview", "/api/v1/upload/files/*/thumbnail").permitAll()

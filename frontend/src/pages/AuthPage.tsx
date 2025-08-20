@@ -35,14 +35,12 @@ const AuthPage: React.FC = () => {
       </div>
     );
   }
-
   const handleLogin = async (values: LoginRequest) => {
     setLoading(true);
     try {
       await login(values.username, values.password);
       message.success('Login successful!');
-      const from = (location.state as any)?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      // Don't navigate here - let the useEffect handle it after state update
     } catch (error: any) {
       message.error(error.response?.data?.message || 'Login failed');
     } finally {
@@ -55,8 +53,7 @@ const AuthPage: React.FC = () => {
       message.success('Registration successful!');
       // Auto login after successful registration
       await login(values.username, values.password);
-      const from = (location.state as any)?.from?.pathname || '/';
-      navigate(from, { replace: true });
+      // Don't navigate here - let the useEffect handle it after state update
     } catch (error: any) {
       message.error(error.response?.data?.message || 'Registration failed');
     } finally {

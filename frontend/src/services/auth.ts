@@ -108,8 +108,8 @@ class AuthService {
     this.setAuthData(response.data);
     return response.data;
   }  // Request password reset
-  async requestPasswordReset(email: string): Promise<void> {
-    await http.post('/api/v1/account/password/reset-request', { email });
+  async requestPasswordReset(username: string): Promise<void> {
+    await http.post('/api/v1/account/password/reset-request', { username });
   }
 
   // Validate reset token

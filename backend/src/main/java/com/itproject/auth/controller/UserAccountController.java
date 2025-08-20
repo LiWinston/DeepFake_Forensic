@@ -21,14 +21,13 @@ import org.springframework.web.bind.annotation.*;
 public class UserAccountController {
     
     private final UserAccountService userAccountService;
-    
-    /**
+      /**
      * Request password reset
      */
     @PostMapping("/password/reset-request")
     public Result<Void> requestPasswordReset(@Valid @RequestBody PasswordResetRequestDTO request) {
         try {
-            boolean success = userAccountService.sendPasswordResetEmail(request.getEmail());
+            boolean success = userAccountService.sendPasswordResetEmailByUsername(request.getUsername());
             if (success) {
                 return Result.success(null, "Password reset email sent successfully");
             } else {

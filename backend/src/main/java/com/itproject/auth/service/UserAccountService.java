@@ -84,6 +84,48 @@ public class UserAccountService {
     }
     
     /**
+     * Send password reset email by username
+     */
+    public boolean sendPasswordResetEmailByUsername(String username) {
+        try {
+            Optional<User> userOpt = userRepository.findByUsername(username);
+            if (userOpt.isEmpty()) {
+                log.warn("Password reset requested for non-existent username: {}", username);
+                // For security reasons, we don't reveal if username exists
+                return true;
+            }
+            
+            User user = userOpt.get();
+            
+            // Delete any existing tokens for this user
+            passwordResetTokenRepository.deleteAllByUser(user);
+            
+            // Generate new token
+            String token = UUID.randomUUID().toString();
+            LocalDateTime expiryDate = LocalDateTime.now()
+                    .plusSeconds(mailProperties.getResetPasswordExpiration() / 1000);
+            
+            PasswordResetToken resetToken = new PasswordResetToken();
+            resetToken.setToken(token);
+            resetToken.setUser(user);
+            resetToken.setExpiryDate(expiryDate);
+            
+            passwordResetTokenRepository.save(resetToken);
+            
+            // Send email
+            String resetUrl = frontendUrl + "/reset-password?token=" + token;
+            emailService.sendPasswordResetEmail(user.getEmail(), user.getUsername(), resetUrl);
+            
+            log.info("Password reset email sent to user: {}", user.getUsername());
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Failed to send password reset email for username: {}", username, e);
+            return false;
+        }
+    }
+    
+    /**
      * Reset password using token
      */
     public boolean resetPassword(String token, String newPassword) {

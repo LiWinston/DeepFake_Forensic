@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Card, message, Result } from 'antd';
-import { MailOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { UserOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import authService from '../services/auth';
 import './AuthPage.css';
@@ -8,15 +8,15 @@ import './AuthPage.css';
 const ForgotPasswordPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
 
-  const handleSubmit = async (values: { email: string }) => {
+  const handleSubmit = async (values: { username: string }) => {
     setLoading(true);
     try {
-      await authService.requestPasswordReset(values.email);
-      setEmail(values.email);
+      await authService.requestPasswordReset(values.username);
+      setUsername(values.username);
       setEmailSent(true);
-      message.success('Password reset email sent successfully!');
+      message.success('If the username exists, a password reset email has been sent!');
     } catch (error: any) {
       message.error(error.response?.data?.message || 'Failed to send reset email');
     } finally {
@@ -30,8 +30,8 @@ const ForgotPasswordPage: React.FC = () => {
         <Card className="auth-card">
           <Result
             status="success"
-            title="Reset Email Sent!"
-            subTitle={`We've sent a password reset link to ${email}. Please check your email and follow the instructions to reset your password.`}
+            title="Reset Request Submitted!"
+            subTitle={`If the username "${username}" exists in our system, we've sent a password reset link to the associated email address. Please check your email and follow the instructions to reset your password.`}
             extra={[
               <Link to="/auth" key="back">
                 <Button type="primary" icon={<ArrowLeftOutlined />}>
@@ -47,24 +47,23 @@ const ForgotPasswordPage: React.FC = () => {
 
   return (
     <div className="auth-page">
-      <Card className="auth-card" title="Forgot Password">
-        <Form
+      <Card className="auth-card" title="Forgot Password">        <Form
           name="forgotPassword"
           onFinish={handleSubmit}
           autoComplete="off"
           layout="vertical"
         >
           <Form.Item
-            label="Email Address"
-            name="email"
+            label="Username"
+            name="username"
             rules={[
-              { required: true, message: 'Please enter your email!' },
-              { type: 'email', message: 'Please enter a valid email address!' },
+              { required: true, message: 'Please enter your username!' },
+              { min: 3, message: 'Username must be at least 3 characters!' },
             ]}
           >
             <Input
-              prefix={<MailOutlined />}
-              placeholder="Enter your email address"
+              prefix={<UserOutlined />}
+              placeholder="Enter your username"
               size="large"
             />
           </Form.Item>
