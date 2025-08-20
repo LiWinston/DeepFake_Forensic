@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout,
   Row,
@@ -11,27 +12,50 @@ import {
   Tabs,
   Alert,
   Divider,
+  Breadcrumb,
+  Tag,
 } from 'antd';
 import {
   FileTextOutlined,
   BarChartOutlined,
   EyeOutlined,
+  HomeOutlined,
+  ProjectOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons';
 import FilesList from '../components/FilesList';
 import FileUpload from '../components/FileUpload';
 import MetadataAnalysis from '../components/MetadataAnalysis';
-import type { UploadFile } from '../types';
+import type { UploadFile, Project } from '../types';
 import uploadService from '../services/upload';
+import { projectApi } from '../services/project';
 
 const { Content } = Layout;
 const { Title, Paragraph } = Typography;
 const { TabPane } = Tabs;
 
 const FilesPage: React.FC = () => {
+  const { projectId } = useParams<{ projectId?: string }>();
+  const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState<UploadFile | null>(null);
   const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
-  const [previewModalVisible, setPreviewModalVisible] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);  const [refreshTrigger, setRefreshTrigger] = useState(0);  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+
+  // Load project info if projectId is provided
+  useEffect(() => {
+    const loadProjectInfo = async () => {
+      if (projectId) {
+        try {
+          const response = await projectApi.getProject(Number(projectId));
+          setCurrentProject(response.data);
+        } catch (error) {
+          console.error('Failed to load project info:', error);
+        }
+      }
+    };
+
+    loadProjectInfo();
+  }, [projectId]);
 
   const handleFileSelect = (file: UploadFile) => {
     setSelectedFile(file);
@@ -66,21 +90,89 @@ const FilesPage: React.FC = () => {
   const handleUploadError = (error: string) => {
     console.error('Upload error:', error);
   };
-
   return (
-    <Content style={{ padding: '24px' }}>      {/* Page Header */}
-      <div style={{ marginBottom: 24 }}>
-        <Title level={2}>File Management</Title>
-        <Paragraph>
-          Upload files and manage your media collection for forensic analysis. 
-          Select a file to view its properties and analysis results.
-        </Paragraph>      </div>
+    <Content style={{ padding: '24px' }}>
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb style={{ marginBottom: 16 }}>
+        <Breadcrumb.Item>
+          <HomeOutlined />
+          <span onClick={() => navigate('/')} style={{ cursor: 'pointer', marginLeft: 8 }}>
+            Home
+          </span>
+        </Breadcrumb.Item>
+        {currentProject && (
+          <Breadcrumb.Item>
+            <ProjectOutlined />
+            <span onClick={() => navigate('/projects')} style={{ cursor: 'pointer', marginLeft: 8 }}>
+              Projects
+            </span>
+          </Breadcrumb.Item>
+        )}
+        <Breadcrumb.Item>
+          <FileTextOutlined />
+          <span style={{ marginLeft: 8 }}>
+            {currentProject ? `Files - ${currentProject.name}` : 'File Management'}
+          </span>
+        </Breadcrumb.Item>
+      </Breadcrumb>
 
-      {/* Upload Section */}
+      {/* Project Information Banner */}
+      {currentProject && (
+        <Card style={{ marginBottom: 24, background: 'linear-gradient(135deg, #f0f9ff, #e0f2fe)' }}>
+          <Row align="middle" justify="space-between">
+            <Col>
+              <Space direction="vertical" size="small">
+                <Title level={4} style={{ margin: 0, color: '#1890ff' }}>
+                  <ProjectOutlined /> {currentProject.name}
+                </Title>                <Space wrap>
+                  <Tag color="blue">{currentProject.projectType}</Tag>
+                  <Tag color={
+                    currentProject.status === 'ACTIVE' ? 'green' :
+                    currentProject.status === 'COMPLETED' ? 'blue' :
+                    currentProject.status === 'SUSPENDED' ? 'orange' : 'default'
+                  }>
+                    {currentProject.status}
+                  </Tag>
+                  {currentProject.caseNumber && (
+                    <Tag color="purple">Case: {currentProject.caseNumber}</Tag>
+                  )}
+                </Space>
+                {currentProject.description && (
+                  <Paragraph style={{ margin: 0, color: '#666' }}>
+                    {currentProject.description}
+                  </Paragraph>
+                )}
+              </Space>
+            </Col>
+            <Col>
+              <Button 
+                icon={<ArrowLeftOutlined />} 
+                onClick={() => navigate('/projects')}
+              >
+                Back to Projects
+              </Button>
+            </Col>
+          </Row>
+        </Card>
+      )}
+
+      {/* Page Header */}
+      <div style={{ marginBottom: 24 }}>
+        <Title level={2}>
+          {currentProject ? `File Management - ${currentProject.name}` : 'File Management'}
+        </Title>
+        <Paragraph>
+          {currentProject 
+            ? `Upload and manage files for the ${currentProject.name} project. Select a file to view its properties and analysis results.`
+            : 'Upload files and manage your media collection for forensic analysis. Select a file to view its properties and analysis results.'
+          }
+        </Paragraph>
+      </div>      {/* Upload Section */}
       <FileUpload
         onUploadSuccess={handleUploadSuccess}
         onUploadError={handleUploadError}
         showProgress={true}
+        defaultProjectId={projectId ? Number(projectId) : undefined}
       />
 
       <Divider />
@@ -91,7 +183,8 @@ const FilesPage: React.FC = () => {
             onFileSelect={handleFileSelect}
             selectable={true}
             showActions={true}
-            key={refreshTrigger} // Force refresh when upload succeeds
+            defaultProjectId={projectId ? Number(projectId) : undefined}
+            key={`${refreshTrigger}-${projectId}`} // Force refresh when upload succeeds or project changes
           />
         </Col>
 

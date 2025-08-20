@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Table,
@@ -25,10 +26,10 @@ import {
   SearchOutlined,
   CalendarOutlined,
   UserOutlined,
-  PlayCircleOutlined,
-  PauseCircleOutlined,
+  PlayCircleOutlined,  PauseCircleOutlined,
   CheckCircleOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -41,6 +42,7 @@ const { TextArea } = Input;
 const { RangePicker } = DatePicker;
 
 const ProjectsPage: React.FC = () => {
+  const navigate = useNavigate();
   // Use shared project context for active projects, but maintain local state for all projects
   const { addProject: addToActiveProjects, updateProject: updateActiveProject, removeProject: removeFromActiveProjects } = useProjectContext();
   
@@ -339,13 +341,20 @@ const ProjectsPage: React.FC = () => {
       width: 110,
       responsive: ['md'],
       render: (createdAt) => dayjs(createdAt).format('YYYY-MM-DD'),
-    },
-    {
+    },    {
       title: 'Actions',
       key: 'action',
-      width: 120,
-      fixed: 'right',      render: (_, record) => (
-        <Space size="small" className="table-actions">
+      width: 140,
+      fixed: 'right',render: (_, record) => (        <Space size="small" className="table-actions">
+          <Tooltip title="File Management">
+            <Button
+              type="link"
+              size="small"
+              icon={<FileTextOutlined />}
+              onClick={() => navigate(`/files/${record.id}`)}
+            />
+          </Tooltip>
+          
           <Tooltip title="Edit">
             <Button
               type="link"

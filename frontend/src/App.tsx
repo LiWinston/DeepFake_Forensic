@@ -277,6 +277,7 @@ const AppNavigation: React.FC = () => {
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
               <Route path="/files" element={<FilesPage />} />
+              <Route path="/files/:projectId" element={<FilesPage />} />
               <Route path="/analysis" element={<AnalysisPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
