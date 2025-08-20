@@ -286,4 +286,30 @@ public class MetadataController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
+    
+    /**
+     * Fix existing metadata records by re-extracting from raw metadata
+     */
+    @PostMapping("/fix/{fileMd5}")
+    public ResponseEntity<Map<String, Object>> fixMetadata(@PathVariable String fileMd5) {
+        try {
+            log.info("Attempting to fix metadata for file: {}", fileMd5);
+            metadataAnalysisService.fixExistingMetadata(fileMd5);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Metadata fixed successfully for file: " + fileMd5);
+            response.put("fileMd5", fileMd5);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error fixing metadata for file: {}", fileMd5, e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "修复元数据失败: " + e.getMessage());
+            response.put("fileMd5", fileMd5);
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
 }

@@ -161,7 +161,10 @@ public class MetadataAnalysisService {
                 metadata.setAnalysisNotes("Partial extraction failure: " + e.getMessage());
             }
             
-            metadataRepository.save(metadata);
+            MediaMetadata savedMetadata = metadataRepository.save(metadata);
+            log.info("Saved metadata for file {}: format={}, mimeType={}, dimensions={}x{}", 
+                    savedMetadata.getFileMd5(), savedMetadata.getFileFormat(), savedMetadata.getMimeType(),
+                    savedMetadata.getImageWidth(), savedMetadata.getImageHeight());
             
         } catch (Exception e) {
             log.error("Failed to process metadata analysis", e);
@@ -215,6 +218,118 @@ public class MetadataAnalysisService {
     }
     
     /**
+     * Fix existing metadata records by re-extracting technical data from raw metadata
+     */
+    @Transactional
+    public void fixExistingMetadata(String fileMd5) {
+        try {
+            Optional<MediaMetadata> metadataOpt = metadataRepository.findByFileMd5(fileMd5);
+            if (metadataOpt.isPresent()) {
+                MediaMetadata metadata = metadataOpt.get();
+                if (metadata.getRawMetadata() != null && 
+                    (metadata.getFileFormat() == null || metadata.getMimeType() == null)) {
+                    
+                    log.info("Fixing metadata for file: {}", fileMd5);
+                    
+                    // Parse raw metadata to extract structured fields
+                    parseRawMetadataToStructuredFields(metadata);
+                    
+                    // Re-run forensic analysis with new data
+                    performForensicAnalysis(metadata);
+                    
+                    metadataRepository.save(metadata);
+                    log.info("Fixed metadata for file: {}", fileMd5);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to fix metadata for file: {}", fileMd5, e);
+        }
+    }
+    
+    /**
+     * Parse raw metadata string to extract structured fields
+     */
+    private void parseRawMetadataToStructuredFields(MediaMetadata metadata) {
+        String rawMetadata = metadata.getRawMetadata();
+        if (rawMetadata == null) return;
+        
+        String[] lines = rawMetadata.split("\\n");
+        
+        for (String line : lines) {
+            line = line.trim();
+            
+            // Extract file type information
+            if (line.startsWith("Detected File Type Name:")) {
+                String fileType = extractValue(line);
+                if (fileType != null) {
+                    metadata.setFileFormat(fileType.toUpperCase());
+                }
+            } else if (line.startsWith("Detected MIME Type:")) {
+                String mimeType = extractValue(line);
+                if (mimeType != null) {
+                    metadata.setMimeType(mimeType);
+                }
+            }
+            
+            // Extract image dimensions
+            else if (line.startsWith("Image Width:") || line.startsWith("Exif Image Width:")) {
+                Integer width = extractIntValue(line);
+                if (width != null && metadata.getImageWidth() == null) {
+                    metadata.setImageWidth(width);
+                }
+            } else if (line.startsWith("Image Height:") || line.startsWith("Exif Image Height:")) {
+                Integer height = extractIntValue(line);
+                if (height != null && metadata.getImageHeight() == null) {
+                    metadata.setImageHeight(height);
+                }
+            }
+            
+            // Extract compression information
+            else if (line.contains("Compression") && line.contains("Quality")) {
+                Integer quality = extractIntValue(line);
+                if (quality != null && metadata.getCompressionLevel() == null) {
+                    metadata.setCompressionLevel(quality);
+                }
+            }
+            
+            // Extract additional technical details if missing
+            if (metadata.getColorSpace() == null && line.startsWith("Color Space:")) {
+                String colorSpace = extractValue(line);
+                metadata.setColorSpace(colorSpace);
+            }
+        }
+        
+        // Set default compression level for JPEG if not found
+        if (metadata.getCompressionLevel() == null && "JPEG".equalsIgnoreCase(metadata.getFileFormat())) {
+            metadata.setCompressionLevel(85); // Default high quality assumption
+        }
+    }
+    
+    private String extractValue(String line) {
+        int colonIndex = line.indexOf(':');
+        if (colonIndex > 0 && colonIndex < line.length() - 1) {
+            return line.substring(colonIndex + 1).trim();
+        }
+        return null;
+    }
+    
+    private Integer extractIntValue(String line) {
+        String value = extractValue(line);
+        if (value != null) {
+            // Extract numbers from the value
+            String numbers = value.replaceAll("[^0-9]", "");
+            if (!numbers.isEmpty()) {
+                try {
+                    return Integer.parseInt(numbers);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+    
+    /**
      * Get metadata analysis for a file (user-specific)
      */
     public MetadataAnalysisResponse getMetadataAnalysis(String fileMd5) {
@@ -231,6 +346,28 @@ public class MetadataAnalysisService {
             }
             
             MediaMetadata metadata = metadataOpt.get();
+            
+            // Check if technical metadata needs to be fixed
+            if ((metadata.getFileFormat() == null || metadata.getMimeType() == null || 
+                 metadata.getImageWidth() == null || metadata.getImageHeight() == null) && 
+                metadata.getRawMetadata() != null) {
+                log.info("Detected missing technical metadata for {}, attempting to fix...", fileMd5);
+                fixExistingMetadata(fileMd5);
+                
+                // Re-fetch the updated metadata
+                metadataOpt = metadataRepository.findByFileMd5AndUser(fileMd5, currentUser);
+                if (metadataOpt.isPresent()) {
+                    metadata = metadataOpt.get();
+                    log.info("Metadata fixed for {}", fileMd5);
+                }
+            }
+            
+            // Debug log to check what we actually retrieved from database
+            log.info("Retrieved metadata from DB for {}: format={}, mimeType={}, dimensions={}x{}, compression={}", 
+                    metadata.getFileMd5(), metadata.getFileFormat(), metadata.getMimeType(),
+                    metadata.getImageWidth(), metadata.getImageHeight(), metadata.getCompressionLevel());
+            log.info("EXIF data: make={}, model={}, colorSpace={}", 
+                    metadata.getCameraMake(), metadata.getCameraModel(), metadata.getColorSpace());
             
             MetadataAnalysisResponse response = MetadataAnalysisResponse.success("Metadata retrieved successfully");
             response.setFileMd5(fileMd5);
@@ -507,8 +644,8 @@ public class MetadataAnalysisService {
             }
         }
         
-        log.debug("Extracted technical metadata: format={}, mimeType={}, dimensions={}x{}, compression={}",
-                metadata.getFileFormat(), metadata.getMimeType(), metadata.getImageWidth(), 
+        log.info("Extracted technical metadata for {}: format={}, mimeType={}, dimensions={}x{}, compression={}",
+                metadata.getFileMd5(), metadata.getFileFormat(), metadata.getMimeType(), metadata.getImageWidth(), 
                 metadata.getImageHeight(), metadata.getCompressionLevel());
     }
     
@@ -592,10 +729,23 @@ public class MetadataAnalysisService {
     }
     
     private void analyzeExifData(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
-        // Check for missing EXIF data (potential manipulation)
+        // Distinguish between image and video analysis
+        boolean isVideo = metadata.getVideoDuration() != null || metadata.getVideoCodec() != null;
+        
+        // For videos, missing camera info is more normal than for photos
         if (metadata.getCameraMake() == null && metadata.getCameraModel() == null) {
-            indicators.add("缺少相机信息：可能是经过编辑处理的图片");
-            notes.append("EXIF数据中缺少相机制造商和型号信息; ");
+            if (isVideo) {
+                // Videos often don't have camera info, especially from mobile devices or editing software
+                // Only flag if other suspicious patterns exist
+                if (metadata.getDateTaken() == null && metadata.getFileFormat() == null) {
+                    indicators.add("视频缺少基本设备信息：可能经过处理或转换");
+                    notes.append("视频文件缺少拍摄设备和时间信息; ");
+                }
+            } else {
+                // For images, missing camera info is more suspicious
+                indicators.add("图像缺少相机信息：可能是截图、编辑或AI生成内容");
+                notes.append("EXIF数据中缺少相机制造商和型号信息; ");
+            }
         }
         
         // Check for incomplete EXIF data
@@ -606,8 +756,12 @@ public class MetadataAnalysisService {
         if (metadata.getOrientation() != null) exifFields++;
         if (metadata.getColorSpace() != null) exifFields++;
         
-        if (exifFields < 2 && exifFields > 0) {
-            indicators.add("EXIF数据不完整：可能经过处理或来源可疑");
+        // Be more lenient with video files
+        int threshold = isVideo ? 0 : 1;  // Videos can have 0 EXIF fields normally
+        if (exifFields <= threshold && exifFields > 0) {
+            if (!isVideo) {  // Only flag for images
+                indicators.add("EXIF数据不完整：可能经过处理或来源可疑");
+            }
         }
     }
     
@@ -707,14 +861,52 @@ public class MetadataAnalysisService {
     }
     
     private void analyzeAIGenerationPatterns(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
+        boolean isVideo = metadata.getVideoDuration() != null || metadata.getVideoCodec() != null;
+        
         // Check for patterns common in AI-generated content
         if (metadata.getCameraMake() == null && metadata.getCameraModel() == null && 
             metadata.getDateTaken() == null && metadata.getGpsLatitude() == null) {
             
-            // If image has dimensions but no metadata, it's suspicious
-            if (metadata.getImageWidth() != null && metadata.getImageHeight() != null) {
-                indicators.add("完全缺少拍摄信息：高度疑似AI生成内容");
-                notes.append("无任何拍摄设备信息，符合AI生成特征; ");
+            // For images: missing metadata is more suspicious
+            if (!isVideo && metadata.getImageWidth() != null && metadata.getImageHeight() != null) {
+                // Check if it's common AI dimensions before flagging
+                if (isAICommonResolution(metadata.getImageWidth(), metadata.getImageHeight())) {
+                    indicators.add("完全缺少拍摄信息且为AI常见尺寸：高度疑似AI生成内容");
+                    notes.append("无任何拍摄设备信息且符合AI生成尺寸特征; ");
+                } else {
+                    indicators.add("图像缺少拍摄信息：可能是截图、编辑或AI生成内容");
+                    notes.append("无任何拍摄设备信息; ");
+                }
+            }
+            
+            // For videos: only flag if additional suspicious patterns exist
+            else if (isVideo) {
+                // Check for additional video-specific suspicious patterns
+                boolean hasVideoSuspiciousPatterns = false;
+                
+                // Very low or very high frame rates can be suspicious
+                if (metadata.getFrameRate() != null) {
+                    double fps = metadata.getFrameRate();
+                    if (fps < 15 || fps > 120) {
+                        hasVideoSuspiciousPatterns = true;
+                    }
+                }
+                
+                // Unusual video dimensions for mobile content
+                if (metadata.getImageWidth() != null && metadata.getImageHeight() != null) {
+                    int width = metadata.getImageWidth();
+                    int height = metadata.getImageHeight();
+                    
+                    // Check for perfect squares or very unusual ratios
+                    if (width == height || Math.abs(width - height) / (double)Math.max(width, height) < 0.1) {
+                        hasVideoSuspiciousPatterns = true;
+                    }
+                }
+                
+                if (hasVideoSuspiciousPatterns) {
+                    indicators.add("视频缺少设备信息且具有异常技术参数：可能经过生成或大量处理");
+                    notes.append("视频文件无设备信息且技术参数异常; ");
+                }
             }
         }
         
@@ -723,34 +915,69 @@ public class MetadataAnalysisService {
         if (rawMetadata != null) {
             String rawLower = rawMetadata.toLowerCase();
             if (rawLower.contains("stable diffusion") || rawLower.contains("midjourney") ||
-                rawLower.contains("dalle") || rawLower.contains("generated")) {
+                rawLower.contains("dalle") || rawLower.contains("generated") || 
+                rawLower.contains("artificial") || rawLower.contains("synthetic")) {
                 indicators.add("检测到AI生成工具标识：确认为人工智能生成内容");
             }
         }
     }
     
     private void analyzeMetadataCompleteness(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
+        boolean isVideo = metadata.getVideoDuration() != null || metadata.getVideoCodec() != null;
+        
         int totalFields = 0;
         int populatedFields = 0;
         
-        // Count important metadata fields
-        String[] fields = {
-            metadata.getCameraMake(), metadata.getCameraModel(), 
-            metadata.getFileFormat(), metadata.getMimeType(),
-            metadata.getColorSpace()
-        };
-        
-        for (String field : fields) {
-            totalFields++;
-            if (field != null && !field.isEmpty()) {
-                populatedFields++;
+        // Different field expectations for images vs videos
+        if (isVideo) {
+            // For videos, focus on technical metadata that should be present
+            String[] videoFields = {
+                metadata.getVideoCodec(), metadata.getFileFormat(), 
+                metadata.getMimeType()
+            };
+            
+            for (String field : videoFields) {
+                totalFields++;
+                if (field != null && !field.isEmpty()) {
+                    populatedFields++;
+                }
+            }
+            
+            // Add video-specific technical fields
+            if (metadata.getVideoDuration() != null && metadata.getVideoDuration() > 0) populatedFields++;
+            if (metadata.getFrameRate() != null && metadata.getFrameRate() > 0) populatedFields++;
+            if (metadata.getImageWidth() != null && metadata.getImageHeight() != null) populatedFields++;
+            totalFields += 3;
+            
+        } else {
+            // For images, include camera and EXIF fields
+            String[] imageFields = {
+                metadata.getCameraMake(), metadata.getCameraModel(), 
+                metadata.getFileFormat(), metadata.getMimeType(),
+                metadata.getColorSpace()
+            };
+            
+            for (String field : imageFields) {
+                totalFields++;
+                if (field != null && !field.isEmpty()) {
+                    populatedFields++;
+                }
             }
         }
         
-        double completeness = (double) populatedFields / totalFields;
-        if (completeness < 0.3) {
-            indicators.add("元数据完整性极低：可能经过清理或来源可疑");
-            notes.append(String.format("元数据完整性: %.1f%%; ", completeness * 100));
+        double completeness = totalFields > 0 ? (double) populatedFields / totalFields : 0;
+        
+        // Different thresholds for images vs videos
+        double threshold = isVideo ? 0.2 : 0.3;  // Videos can have lower metadata completeness
+        
+        if (completeness < threshold) {
+            if (isVideo) {
+                indicators.add("视频技术元数据不完整：可能经过转换或处理");
+                notes.append(String.format("视频元数据完整性: %.1f%%; ", completeness * 100));
+            } else {
+                indicators.add("图像元数据完整性极低：可能经过清理或来源可疑");
+                notes.append(String.format("图像元数据完整性: %.1f%%; ", completeness * 100));
+            }
         }
     }
     
@@ -888,11 +1115,24 @@ public class MetadataAnalysisService {
     // Response building methods
     private Map<String, Object> buildBasicMetadata(MediaMetadata metadata) {
         Map<String, Object> basic = new HashMap<>();
+        
+        // Debug logging to trace the issue
+        log.debug("Building basic metadata for file: {}", metadata.getFileMd5());
+        log.debug("FileFormat: {}", metadata.getFileFormat());
+        log.debug("MimeType: {}", metadata.getMimeType());
+        log.debug("ImageWidth: {}", metadata.getImageWidth());
+        log.debug("ImageHeight: {}", metadata.getImageHeight());
+        log.debug("CompressionLevel: {}", metadata.getCompressionLevel());
+        
         basic.put("fileFormat", metadata.getFileFormat());
         basic.put("mimeType", metadata.getMimeType());
         basic.put("imageWidth", metadata.getImageWidth());
         basic.put("imageHeight", metadata.getImageHeight());
         basic.put("compressionLevel", metadata.getCompressionLevel());
+        
+        // Additional debug to see what's actually in the map
+        log.debug("Built basic metadata map: {}", basic);
+        
         return basic;
     }
     
