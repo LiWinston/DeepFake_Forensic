@@ -39,8 +39,7 @@ public class UserAccountController {
             return Result.error("Internal server error");
         }
     }
-    
-    /**
+      /**
      * Reset password with token
      */
     @PostMapping("/password/reset-confirm")
@@ -58,6 +57,24 @@ public class UserAccountController {
             }
         } catch (Exception e) {
             log.error("Error confirming password reset", e);
+            return Result.error("Internal server error");
+        }
+    }
+    
+    /**
+     * Validate password reset token
+     */
+    @GetMapping("/password/validate-token")
+    public Result<Void> validateResetToken(@RequestParam String token) {
+        try {
+            boolean valid = userAccountService.validatePasswordResetToken(token);
+            if (valid) {
+                return Result.success(null, "Token is valid");
+            } else {
+                return Result.error("Invalid or expired reset token");
+            }
+        } catch (Exception e) {
+            log.error("Error validating reset token", e);
             return Result.error("Internal server error");
         }
     }

@@ -33,6 +33,9 @@ import AnalysisPage from './pages/AnalysisPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import AuthPage from './pages/AuthPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import EmailVerificationPage from './pages/EmailVerificationPage';
 
 // Import components and contexts
 import ProtectedRoute from './components/ProtectedRoute';
@@ -296,10 +299,12 @@ const AppWithProjectProvider: React.FC = () => {
     return <div>Loading...</div>;
   }
   
-  return (
-    <Router>
+  return (    <Router>
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<EmailVerificationPage />} />
         <Route path="/*" element={
           <ProtectedRoute>
             {isLoggedIn ? (

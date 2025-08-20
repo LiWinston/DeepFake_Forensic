@@ -161,8 +161,7 @@ public class UserAccountService {
             return false;
         }
     }
-    
-    /**
+      /**
      * Verify email using token
      */
     public boolean verifyEmail(String token) {
@@ -193,6 +192,26 @@ public class UserAccountService {
             
         } catch (Exception e) {
             log.error("Failed to verify email with token: {}", token, e);
+            return false;
+        }
+    }
+    
+    /**
+     * Validate password reset token
+     */
+    public boolean validatePasswordResetToken(String token) {
+        try {
+            Optional<PasswordResetToken> tokenOpt = passwordResetTokenRepository.findByTokenAndUsedFalse(token);
+            if (tokenOpt.isEmpty()) {
+                log.warn("Invalid or used password reset token: {}", token);
+                return false;
+            }
+            
+            PasswordResetToken resetToken = tokenOpt.get();
+            return resetToken.isValid();
+            
+        } catch (Exception e) {
+            log.error("Failed to validate password reset token: {}", token, e);
             return false;
         }
     }

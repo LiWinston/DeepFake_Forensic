@@ -107,42 +107,59 @@ class AuthService {
     });
     this.setAuthData(response.data);
     return response.data;
+  }  // Request password reset
+  async requestPasswordReset(email: string): Promise<void> {
+    await http.post('/api/v1/account/password/reset-request', { email });
   }
-  // Request password reset
-  async requestPasswordReset(data: PasswordResetRequest): Promise<void> {
-    await http.post('/account/password/reset-request', data);
+
+  // Validate reset token
+  async validateResetToken(token: string): Promise<void> {
+    await http.get(`/api/v1/account/password/validate-token?token=${token}`);
+  }
+  // Reset password with token
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await http.post('/api/v1/account/password/reset-confirm', {
+      token,
+      password: newPassword,
+      confirmPassword: newPassword
+    });
   }
 
   // Confirm password reset
   async confirmPasswordReset(data: PasswordResetConfirm): Promise<void> {
-    await http.post('/account/password/reset-confirm', data);
+    await http.post('/api/v1/account/password/reset-confirm', data);
   }
 
   // Change password
   async changePassword(data: PasswordChange): Promise<void> {
-    await http.post('/account/password/change', data);
+    await http.post('/api/v1/account/password/change', data);
   }
 
   // Request email verification
   async requestEmailVerification(data: EmailVerificationRequest): Promise<void> {
-    await http.post('/account/email/verify-request', data);
+    await http.post('/api/v1/account/email/verify-request', data);
   }
 
   // Verify email
   async verifyEmail(token: string): Promise<void> {
-    await http.post(`/account/email/verify?token=${token}`);
+    await http.post(`/api/v1/account/email/verify?token=${token}`);
   }
 
   // Update profile
   async updateProfile(data: UserProfileUpdate): Promise<User> {
-    const response = await http.put<User>('/account/profile', data);
+    const response = await http.put<User>('/api/v1/account/profile', data);
     return response.data;
   }
 
-  // Get profile
-  async getProfile(): Promise<User> {
-    const response = await http.get<User>('/account/profile');
+  // Get current user
+  async getCurrentUser(): Promise<User> {
+    const response = await http.get<User>('/api/v1/account/profile');
     return response.data;
+  }
+
+  // Get profile (alias for getCurrentUser)
+  async getProfile(): Promise<User> {
+    return this.getCurrentUser();
   }
 
   // Set authentication data

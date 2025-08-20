@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Input, Button, Card, message, Tabs } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import authService from '../services/auth';
 import type { LoginRequest, RegisterRequest } from '../services/auth';
@@ -11,15 +11,38 @@ const { TabPane } = Tabs;
 
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const location = useLocation();
+  const { login, isLoggedIn, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    if (!authLoading && isLoggedIn) {
+      const from = (location.state as any)?.from?.pathname || '/';
+      navigate(from, { replace: true });
+    }
+  }, [isLoggedIn, authLoading, navigate, location]);
+
+  // Show loading if auth is still initializing
+  if (authLoading) {
+    return (
+      <div className="auth-page">
+        <Card className="auth-card">
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            Loading...
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   const handleLogin = async (values: LoginRequest) => {
     setLoading(true);
     try {
       await login(values.username, values.password);
       message.success('Login successful!');
-      navigate('/');
+      const from = (location.state as any)?.from?.pathname || '/';
+      navigate(from, { replace: true });
     } catch (error: any) {
       message.error(error.response?.data?.message || 'Login failed');
     } finally {
@@ -32,7 +55,8 @@ const AuthPage: React.FC = () => {
       message.success('Registration successful!');
       // Auto login after successful registration
       await login(values.username, values.password);
-      navigate('/');
+      const from = (location.state as any)?.from?.pathname || '/';
+      navigate(from, { replace: true });
     } catch (error: any) {
       message.error(error.response?.data?.message || 'Registration failed');
     } finally {
@@ -73,9 +97,7 @@ const AuthPage: React.FC = () => {
                   placeholder="Password"
                   size="large"
                 />
-              </Form.Item>
-
-              <Form.Item>
+              </Form.Item>              <Form.Item>
                 <Button
                   type="primary"
                   htmlType="submit"
@@ -85,6 +107,14 @@ const AuthPage: React.FC = () => {
                 >
                   Login
                 </Button>
+              </Form.Item>
+
+              <Form.Item>
+                <div style={{ textAlign: 'center' }}>
+                  <Link to="/forgot-password">
+                    Forgot your password?
+                  </Link>
+                </div>
               </Form.Item>
             </Form>
           </TabPane>
