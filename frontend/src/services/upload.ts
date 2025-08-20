@@ -132,9 +132,8 @@ class UploadService {
     );
     return (res.data?.data as any) || (res.data as any);
   }
-
   // GET /upload/files
-  async getFiles(page: number = 1, pageSize: number = 20, status?: string, type?: string): Promise<{
+  async getFiles(page: number = 1, pageSize: number = 20, status?: string, type?: string, projectId?: number): Promise<{
     files: any[],
     total: number,
     current: number,
@@ -147,6 +146,7 @@ class UploadService {
     
     if (status) params.status = status;
     if (type) params.type = type;
+    if (projectId) params.projectId = projectId;
 
     const res = await httpClient.get<ApiResponse<any>>(API_ENDPOINTS.UPLOAD_FILES, { params });
     const data = (res.data?.data as any) || (res.data as any);

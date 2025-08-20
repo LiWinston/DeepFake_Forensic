@@ -2,6 +2,7 @@ package com.itproject.upload.repository;
 
 import com.itproject.upload.entity.MediaFile;
 import com.itproject.auth.entity.User;
+import com.itproject.project.entity.Project;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -82,11 +83,31 @@ public interface MediaFileRepository extends JpaRepository<MediaFile, Long> {
      * Find media files by upload status and media type and user with pagination
      */
     Page<MediaFile> findByUploadStatusAndMediaTypeAndUser(MediaFile.UploadStatus uploadStatus, MediaFile.MediaType mediaType, User user, Pageable pageable);
-    
-    /**
+      /**
      * Find media files by upload status and media type with pagination
      */
     Page<MediaFile> findByUploadStatusAndMediaType(MediaFile.UploadStatus uploadStatus, MediaFile.MediaType mediaType, Pageable pageable);
+    
+    // Project-based queries
+    /**
+     * Find media files by project with pagination
+     */
+    Page<MediaFile> findByProject(Project project, Pageable pageable);
+    
+    /**
+     * Find media files by project and upload status with pagination
+     */
+    Page<MediaFile> findByProjectAndUploadStatus(Project project, MediaFile.UploadStatus uploadStatus, Pageable pageable);
+    
+    /**
+     * Find media files by project and media type with pagination
+     */
+    Page<MediaFile> findByProjectAndMediaType(Project project, MediaFile.MediaType mediaType, Pageable pageable);
+    
+    /**
+     * Find media files by project, upload status and media type with pagination
+     */
+    Page<MediaFile> findByProjectAndUploadStatusAndMediaType(Project project, MediaFile.UploadStatus uploadStatus, MediaFile.MediaType mediaType, Pageable pageable);
     
     /**
      * Check if file exists by MD5 and user

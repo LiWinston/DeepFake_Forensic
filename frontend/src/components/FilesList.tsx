@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   Table,
   Button,
@@ -22,11 +22,13 @@ import {
   ReloadOutlined,
   SearchOutlined,
   BarChartOutlined,
+  ProjectOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import { useFilesList, useMetadataAnalysis } from '../hooks';
 import { formatFileSize, formatDateTime, getFileCategory } from '../utils';
-import type { UploadFile } from '../types';
+import type { UploadFile, Project } from '../types';
+import { projectApi } from '../services/project';
 import uploadService from '../services/upload';
 
 const { Text, Title } = Typography;
@@ -37,24 +39,71 @@ interface FilesListProps {
   onFileSelect?: (file: UploadFile) => void;
   selectable?: boolean;
   showActions?: boolean;
+  defaultProjectId?: number;
 }
 
 const FilesList: React.FC<FilesListProps> = ({
   onFileSelect,
   selectable = false,
   showActions = true,
+  defaultProjectId,
 }) => {
   const { files, loading, pagination, loadFiles, deleteFile, refreshFiles } = useFilesList();
   const { analyzeFile } = useMetadataAnalysis();
-  
+
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [previewFile, setPreviewFile] = useState<UploadFile | null>(null);
   const [filterType, setFilterType] = useState<string>('');
   const [searchText, setSearchText] = useState<string>('');
+  const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(defaultProjectId);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [showAllFiles, setShowAllFiles] = useState(false);
+
+  // Load projects list on component mount
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setProjectsLoading(true);
+        const response = await projectApi.getActiveProjects();
+        setProjects(response.data);
+        
+        // If no default project is set, auto-select the first active project
+        if (!defaultProjectId && response.data.length > 0 && !showAllFiles) {
+          setSelectedProjectId(response.data[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to load projects:', error);
+        message.warning('Failed to load projects');
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+
+    loadProjects();
+  }, [defaultProjectId, showAllFiles]);
+
+  // Load files when project selection changes
+  useEffect(() => {
+    if (showAllFiles) {
+      loadFiles(1, pagination.pageSize);
+    } else if (selectedProjectId) {
+      loadFiles(1, pagination.pageSize, undefined, undefined, selectedProjectId);
+    } else if (projects.length > 0) {
+      // If no project is selected but projects exist, select the first one
+      const firstProject = projects[0];
+      setSelectedProjectId(firstProject.id);
+      loadFiles(1, pagination.pageSize, undefined, undefined, firstProject.id);
+    }
+  }, [selectedProjectId, showAllFiles, projects, loadFiles, pagination.pageSize]);
 
   const handleTableChange = useCallback((pagination: TablePaginationConfig) => {
-    loadFiles(pagination.current, pagination.pageSize);
-  }, [loadFiles]);
+    if (showAllFiles) {
+      loadFiles(pagination.current, pagination.pageSize);
+    } else {
+      loadFiles(pagination.current, pagination.pageSize, undefined, undefined, selectedProjectId);
+    }
+  }, [loadFiles, selectedProjectId, showAllFiles]);
 
   const handleDelete = useCallback(async (fileId: string) => {
     await deleteFile(fileId);
@@ -80,15 +129,41 @@ const FilesList: React.FC<FilesListProps> = ({
 
   const handleFilterChange = useCallback((value: string) => {
     setFilterType(value);
-    loadFiles(1, pagination.pageSize);
-  }, [loadFiles, pagination.pageSize]);
+    if (showAllFiles) {
+      loadFiles(1, pagination.pageSize);
+    } else {
+      loadFiles(1, pagination.pageSize, undefined, undefined, selectedProjectId);
+    }
+  }, [loadFiles, pagination.pageSize, selectedProjectId, showAllFiles]);
 
   const handleSearch = useCallback((value: string) => {
     setSearchText(value);
     // Implement search logic here
     // For now, we'll just filter by filename
-    loadFiles(1, pagination.pageSize);
-  }, [loadFiles, pagination.pageSize]);
+    if (showAllFiles) {
+      loadFiles(1, pagination.pageSize);
+    } else {
+      loadFiles(1, pagination.pageSize, undefined, undefined, selectedProjectId);
+    }
+  }, [loadFiles, pagination.pageSize, selectedProjectId, showAllFiles]);
+
+  const handleProjectChange = useCallback((value: number | 'all') => {
+    if (value === 'all') {
+      setShowAllFiles(true);
+      setSelectedProjectId(undefined);
+    } else {
+      setShowAllFiles(false);
+      setSelectedProjectId(value);
+    }
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    if (showAllFiles) {
+      refreshFiles();
+    } else {
+      refreshFiles(selectedProjectId);
+    }
+  }, [refreshFiles, selectedProjectId, showAllFiles]);
 
   const getFileStatusTag = (status: string) => {
     const statusConfig = {
@@ -231,12 +306,20 @@ const FilesList: React.FC<FilesListProps> = ({
     type: 'radio' as const,
   } : undefined;
 
+  const getCurrentProjectName = () => {
+    if (showAllFiles) return 'All Projects';
+    if (!selectedProjectId) return 'No Project Selected';
+    const project = projects.find(p => p.id === selectedProjectId);
+    return project ? project.name : 'Unknown Project';
+  };
+
   return (
     <Card
       title={
         <Space>
+          <ProjectOutlined />
           <Title level={4} style={{ margin: 0 }}>
-            Files ({pagination.total})
+            Files - {getCurrentProjectName()} ({pagination.total})
           </Title>
         </Space>
       }
@@ -244,7 +327,7 @@ const FilesList: React.FC<FilesListProps> = ({
         <Space>
           <Button
             icon={<ReloadOutlined />}
-            onClick={refreshFiles}
+            onClick={handleRefresh}
             loading={loading}
           >
             Refresh
@@ -253,6 +336,23 @@ const FilesList: React.FC<FilesListProps> = ({
       }
     >
       <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col span={6}>
+          <Select
+            placeholder="Select project..."
+            allowClear={false}
+            style={{ width: '100%' }}
+            loading={projectsLoading}
+            value={showAllFiles ? 'all' : selectedProjectId}
+            onChange={handleProjectChange}
+          >
+            <Option value="all">🗂️ All Projects</Option>
+            {projects.map(project => (
+              <Option key={project.id} value={project.id}>
+                📁 {project.name}
+              </Option>
+            ))}
+          </Select>
+        </Col>
         <Col span={8}>
           <Search
             placeholder="Search files..."

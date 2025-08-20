@@ -200,8 +200,7 @@ public class UploadController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
-    
-    /**
+      /**
      * Get files list with pagination
      */
     @GetMapping("/files")
@@ -209,13 +208,13 @@ public class UploadController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "type", required = false) String type) {
-        
-        try {
-            log.info("Getting files list: page={}, size={}, status={}, type={}", page, size, status, type);
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "projectId", required = false) Long projectId) {
+          try {
+            log.info("Getting files list: page={}, size={}, status={}, type={}, projectId={}", page, size, status, type, projectId);
             
             Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-            Page<MediaFile> filesPage = uploadService.getFilesList(pageable, status, type);
+            Page<MediaFile> filesPage = uploadService.getFilesList(pageable, status, type, projectId);
             
             // Convert to response format
             List<Map<String, Object>> fileList = filesPage.getContent().stream()

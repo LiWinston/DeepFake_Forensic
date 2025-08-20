@@ -551,39 +551,67 @@ public class UploadService {
         
         return response;
     }
-    
-    /**
+      /**
      * Get files list with pagination and filtering for current user
      */
-    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type) {
+    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type, Long projectId) {
         try {
             User currentUser = SecurityUtils.getCurrentUser();
             if (currentUser == null) {
                 throw new RuntimeException("用户未登录");
             }
             
-            log.debug("Getting files list for user {}: pageable={}, status={}, type={}", 
-                    currentUser.getUsername(), pageable, status, type);
+            log.debug("Getting files list for user {}: pageable={}, status={}, type={}, projectId={}", 
+                    currentUser.getUsername(), pageable, status, type, projectId);
             
             // Apply filters if provided
-            if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
-                MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                return mediaFileRepository.findByUploadStatusAndMediaTypeAndUser(uploadStatus, mediaType, currentUser, pageable);
-            } else if (StringUtils.hasText(status)) {
-                MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                return mediaFileRepository.findByUploadStatusAndUser(uploadStatus, currentUser, pageable);
-            } else if (StringUtils.hasText(type)) {
-                MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                return mediaFileRepository.findByMediaTypeAndUser(mediaType, currentUser, pageable);
+            if (projectId != null) {
+                // Query by project
+                Project project = projectRepository.findById(projectId)
+                    .filter(p -> p.getUser().getId().equals(currentUser.getId()))
+                    .orElseThrow(() -> new RuntimeException("Project not found or access denied"));
+                
+                if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
+                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
+                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
+                    return mediaFileRepository.findByProjectAndUploadStatusAndMediaType(project, uploadStatus, mediaType, pageable);
+                } else if (StringUtils.hasText(status)) {
+                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
+                    return mediaFileRepository.findByProjectAndUploadStatus(project, uploadStatus, pageable);
+                } else if (StringUtils.hasText(type)) {
+                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
+                    return mediaFileRepository.findByProjectAndMediaType(project, mediaType, pageable);
+                } else {
+                    return mediaFileRepository.findByProject(project, pageable);
+                }
             } else {
-                return mediaFileRepository.findByUser(currentUser, pageable);
+                // Query all files for user (original behavior)
+                if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
+                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
+                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
+                    return mediaFileRepository.findByUploadStatusAndMediaTypeAndUser(uploadStatus, mediaType, currentUser, pageable);
+                } else if (StringUtils.hasText(status)) {
+                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
+                    return mediaFileRepository.findByUploadStatusAndUser(uploadStatus, currentUser, pageable);
+                } else if (StringUtils.hasText(type)) {
+                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
+                    return mediaFileRepository.findByMediaTypeAndUser(mediaType, currentUser, pageable);
+                } else {
+                    return mediaFileRepository.findByUser(currentUser, pageable);
+                }
             }
             
         } catch (Exception e) {
             log.error("Error getting files list", e);
             throw new RuntimeException("Failed to get files list: " + e.getMessage(), e);
         }
+    }
+    
+    /**
+     * Get files list with pagination and filtering for current user (backward compatibility)
+     */
+    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type) {
+        return getFilesList(pageable, status, type, null);
     }
     
     /**

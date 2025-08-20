@@ -91,11 +91,11 @@ export const useFilesList = (pageSize: number = 20) => {
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize, total: 0 });
 
-  const loadFiles = useCallback(async (page: number = 1, size: number = pageSize) => {
+  const loadFiles = useCallback(async (page: number = 1, size: number = pageSize, status?: string, type?: string, projectId?: number) => {
     setLoading(true);
     try {
       // Call API to get files list
-      const result = await uploadService.getFiles(page, size);
+      const result = await uploadService.getFiles(page, size, status, type, projectId);
       setFiles(result.files || []);
       setPagination({
         current: result.current,
@@ -115,7 +115,6 @@ export const useFilesList = (pageSize: number = 20) => {
       setLoading(false);
     }
   }, [pageSize]);
-
   const deleteFile = useCallback(async (fileId: string) => {
     try {
       setLoading(true);
@@ -135,9 +134,9 @@ export const useFilesList = (pageSize: number = 20) => {
     }
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
-  const refreshFiles = useCallback(() => {
+  const refreshFiles = useCallback((projectId?: number) => {
     console.log('Refreshing file list...');
-    loadFiles(pagination.current, pagination.pageSize);
+    loadFiles(pagination.current, pagination.pageSize, undefined, undefined, projectId);
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
   useEffect(() => { 
