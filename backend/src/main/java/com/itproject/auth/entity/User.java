@@ -46,10 +46,15 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role = UserRole.USER;
-    
-    @Enumerated(EnumType.STRING)
+      @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserStatus status = UserStatus.ACTIVE;
+    
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+    
+    @Column
+    private LocalDateTime emailVerifiedAt;
     
     @Column
     private LocalDateTime lastLoginAt;

@@ -4,9 +4,9 @@ import com.itproject.auth.dto.AuthResponse;
 import com.itproject.auth.dto.UserLoginRequest;
 import com.itproject.auth.dto.UserRegistrationRequest;
 import com.itproject.auth.service.AuthService;
+import com.itproject.common.dto.Result;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -21,17 +21,16 @@ import java.util.Map;
 public class AuthController {
     
     private final AuthService authService;
-    
-    /**
+      /**
      * User registration endpoint
      */
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody UserRegistrationRequest request) {
+    public Result<AuthResponse> register(@Valid @RequestBody UserRegistrationRequest request) {
         try {
             AuthResponse response = authService.register(request);
-            return ResponseEntity.ok(response);
+            return Result.success(response, "User registered successfully");
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(null);
+            return Result.error(e.getMessage());
         }
     }
     
@@ -39,12 +38,12 @@ public class AuthController {
      * User login endpoint
      */
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody UserLoginRequest request) {
+    public Result<AuthResponse> login(@Valid @RequestBody UserLoginRequest request) {
         try {
             AuthResponse response = authService.login(request);
-            return ResponseEntity.ok(response);
+            return Result.success(response, "Login successful");
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(null);
+            return Result.error("Invalid username or password");
         }
     }
     
@@ -52,17 +51,17 @@ public class AuthController {
      * Token refresh endpoint
      */
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refreshToken(@RequestBody Map<String, String> request) {
+    public Result<AuthResponse> refreshToken(@RequestBody Map<String, String> request) {
         try {
             String refreshToken = request.get("refreshToken");
             if (refreshToken == null || refreshToken.isEmpty()) {
-                return ResponseEntity.badRequest().body(null);
+                return Result.error("Refresh token is required");
             }
             
             AuthResponse response = authService.refreshToken(refreshToken);
-            return ResponseEntity.ok(response);
+            return Result.success(response, "Token refreshed successfully");
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(null);
+            return Result.error("Invalid refresh token");
         }
     }
     
@@ -70,7 +69,7 @@ public class AuthController {
      * Logout endpoint (client-side token removal)
      */
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout() {
-        return ResponseEntity.ok(Map.of("message", "退出登录成功"));
+    public Result<String> logout() {
+        return Result.success("Logout successful", "Logout successful");
     }
 }

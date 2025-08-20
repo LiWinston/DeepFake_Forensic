@@ -3,8 +3,8 @@ package com.itproject.auth.controller;
 import com.itproject.auth.entity.User;
 import com.itproject.auth.security.SecurityUtils;
 import com.itproject.auth.dto.AuthResponse;
+import com.itproject.common.dto.Result;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,12 +22,12 @@ public class UserController {
      * Get current user information
      */
     @GetMapping("/me")
-    public ResponseEntity<AuthResponse.UserInfo> getCurrentUser() {
+    public Result<AuthResponse.UserInfo> getCurrentUser() {
         User currentUser = SecurityUtils.getCurrentUser();
         if (currentUser == null) {
-            return ResponseEntity.badRequest().build();
+            return Result.error("User not authenticated");
         }
         
-        return ResponseEntity.ok(AuthResponse.UserInfo.fromUser(currentUser));
+        return Result.success(AuthResponse.UserInfo.fromUser(currentUser));
     }
 }

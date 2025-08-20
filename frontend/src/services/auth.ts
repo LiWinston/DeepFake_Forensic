@@ -14,6 +14,31 @@ export interface RegisterRequest {
   lastName?: string;
 }
 
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirm {
+  token: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface PasswordChange {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+export interface EmailVerificationRequest {
+  email: string;
+}
+
+export interface UserProfileUpdate {
+  firstName?: string;
+  lastName?: string;
+}
+
 export interface AuthResponse {
   token: string;
   refreshToken: string;
@@ -35,6 +60,8 @@ export interface User {
   firstName?: string;
   lastName?: string;
   role: 'USER' | 'ADMIN';
+  emailVerified: boolean;
+  emailVerifiedAt?: string;
   lastLoginAt?: string;
 }
 
@@ -81,10 +108,40 @@ class AuthService {
     this.setAuthData(response.data);
     return response.data;
   }
+  // Request password reset
+  async requestPasswordReset(data: PasswordResetRequest): Promise<void> {
+    await http.post('/account/password/reset-request', data);
+  }
 
-  // Get current user information
-  async getCurrentUser(): Promise<User> {
-    const response = await http.get<User>('/users/me');
+  // Confirm password reset
+  async confirmPasswordReset(data: PasswordResetConfirm): Promise<void> {
+    await http.post('/account/password/reset-confirm', data);
+  }
+
+  // Change password
+  async changePassword(data: PasswordChange): Promise<void> {
+    await http.post('/account/password/change', data);
+  }
+
+  // Request email verification
+  async requestEmailVerification(data: EmailVerificationRequest): Promise<void> {
+    await http.post('/account/email/verify-request', data);
+  }
+
+  // Verify email
+  async verifyEmail(token: string): Promise<void> {
+    await http.post(`/account/email/verify?token=${token}`);
+  }
+
+  // Update profile
+  async updateProfile(data: UserProfileUpdate): Promise<User> {
+    const response = await http.put<User>('/account/profile', data);
+    return response.data;
+  }
+
+  // Get profile
+  async getProfile(): Promise<User> {
+    const response = await http.get<User>('/account/profile');
     return response.data;
   }
 

@@ -4,9 +4,11 @@ import com.itproject.auth.dto.AuthResponse;
 import com.itproject.auth.dto.UserLoginRequest;
 import com.itproject.auth.dto.UserRegistrationRequest;
 import com.itproject.auth.entity.User;
+import com.itproject.auth.event.UserRegistrationEvent;
 import com.itproject.auth.repository.UserRepository;
 import com.itproject.auth.security.JwtTokenUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -23,12 +25,11 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class AuthService {
-    
-    private final UserRepository userRepository;
+public class AuthService {    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenUtil jwtTokenUtil;
+    private final ApplicationEventPublisher eventPublisher;
     
     /**
      * Register a new user
@@ -52,9 +53,10 @@ public class AuthService {
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setRole(User.UserRole.USER);
-        user.setStatus(User.UserStatus.ACTIVE);
+        user.setStatus(User.UserStatus.ACTIVE);        User savedUser = userRepository.save(user);
         
-        User savedUser = userRepository.save(user);
+        // Publish registration event for email verification
+        eventPublisher.publishEvent(new UserRegistrationEvent(this, savedUser));
         
         // Generate tokens
         String token = jwtTokenUtil.generateToken(savedUser);
