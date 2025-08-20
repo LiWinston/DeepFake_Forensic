@@ -16,8 +16,7 @@ public class AuthResponse {
     private String token;
     private String refreshToken;
     private UserInfo user;
-    
-    @Data
+      @Data
     @AllArgsConstructor
     public static class UserInfo {
         private Long id;
@@ -26,6 +25,8 @@ public class AuthResponse {
         private String firstName;
         private String lastName;
         private User.UserRole role;
+        private boolean emailVerified;
+        private LocalDateTime emailVerifiedAt;
         private LocalDateTime lastLoginAt;
         
         public static UserInfo fromUser(User user) {
@@ -36,6 +37,8 @@ public class AuthResponse {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getRole(),
+                user.isEmailVerified(),
+                user.getEmailVerifiedAt(),
                 user.getLastLoginAt()
             );
         }

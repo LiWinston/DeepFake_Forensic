@@ -148,17 +148,18 @@ class AuthService {
   async verifyEmail(token: string): Promise<void> {
     await http.post(`/account/email/verify?token=${token}`);
   }
-
   // Update profile
   async updateProfile(data: UserProfileUpdate): Promise<User> {
-    const response = await http.put<User>('/account/profile', data);
-    return response.data;
+    const response = await http.put('/account/profile', data);
+    // Backend returns { success: true, data: AuthResponse.UserInfo }
+    return response.data.data || response.data;
   }
 
   // Get current user
   async getCurrentUser(): Promise<User> {
-    const response = await http.get<User>('/account/profile');
-    return response.data;
+    const response = await http.get('/account/profile');
+    // Backend returns { success: true, data: AuthResponse.UserInfo }
+    return response.data.data || response.data;
   }
 
   // Get profile (alias for getCurrentUser)
