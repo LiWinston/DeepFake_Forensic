@@ -8,6 +8,7 @@ interface AuthContextType {
   isLoggedIn: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   loading: boolean;
 }
 
@@ -48,16 +49,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     initAuth();
-  }, []);
-
-  const login = async (username: string, password: string) => {
+  }, []);  const login = async (username: string, password: string) => {
     const response = await authService.login({ username, password });
     setUser(response.user);
   };
-
   const logout = async () => {
     await authService.logout();
     setUser(null);
+  };
+
+  const refreshUser = async () => {
+    try {
+      if (authService.isLoggedIn() && !authService.isTokenExpired()) {
+        const userInfo = await authService.getCurrentUser();
+        setUser(userInfo);
+      }
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+      await authService.logout();
+      setUser(null);
+    }
   };
 
   const value = {
@@ -65,6 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoggedIn: !!user,
     login,
     logout,
+    refreshUser,
     loading,
   };
 

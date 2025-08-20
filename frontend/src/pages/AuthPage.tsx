@@ -12,7 +12,7 @@ const { TabPane } = Tabs;
 const AuthPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoggedIn, loading: authLoading } = useAuth();
+  const { login, isLoggedIn, loading: authLoading, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
 
   // Check if user is already logged in
@@ -51,9 +51,8 @@ const AuthPage: React.FC = () => {
     try {
       await authService.register(values);
       message.success('Registration successful!');
-      // Auto login after successful registration
-      await login(values.username, values.password);
-      // Don't navigate here - let the useEffect handle it after state update
+      // Refresh user state after registration
+      await refreshUser();
     } catch (error: any) {
       message.error(error.response?.data?.message || 'Registration failed');
     } finally {

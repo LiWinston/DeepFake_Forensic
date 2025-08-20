@@ -49,6 +49,8 @@ export interface AuthResponse {
     firstName?: string;
     lastName?: string;
     role: 'USER' | 'ADMIN';
+    emailVerified?: boolean;
+    emailVerifiedAt?: string;
     lastLoginAt?: string;
   };
 }
@@ -60,7 +62,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   role: 'USER' | 'ADMIN';
-  emailVerified: boolean;
+  emailVerified?: boolean;
   emailVerifiedAt?: string;
   lastLoginAt?: string;
 }
@@ -69,19 +71,22 @@ class AuthService {
   private readonly TOKEN_KEY = 'auth_token';
   private readonly REFRESH_TOKEN_KEY = 'refresh_token';
   private readonly USER_KEY = 'user_info';
-
   // User login
   async login(data: LoginRequest): Promise<AuthResponse> {
-    const response = await http.post<AuthResponse>('/auth/login', data);
-    this.setAuthData(response.data);
-    return response.data;
+    const response = await http.post('/auth/login', data);
+    // Backend returns { success: true, data: { token, refreshToken, user } }
+    const authData = response.data.data || response.data;
+    this.setAuthData(authData);
+    return authData;
   }
 
   // User registration
   async register(data: RegisterRequest): Promise<AuthResponse> {
-    const response = await http.post<AuthResponse>('/auth/register', data);
-    this.setAuthData(response.data);
-    return response.data;
+    const response = await http.post('/auth/register', data);
+    // Backend returns { success: true, data: { token, refreshToken, user } }
+    const authData = response.data.data || response.data;
+    this.setAuthData(authData);
+    return authData;
   }
 
   // User logout
@@ -94,7 +99,6 @@ class AuthService {
       this.clearAuthData();
     }
   }
-
   // Refresh token
   async refreshToken(): Promise<AuthResponse> {
     const refreshToken = this.getRefreshToken();
@@ -102,12 +106,14 @@ class AuthService {
       throw new Error('No refresh token available');
     }
 
-    const response = await http.post<AuthResponse>('/auth/refresh', {
+    const response = await http.post('/auth/refresh', {
       refreshToken,
     });
-    this.setAuthData(response.data);
-    return response.data;
-  }  // Request password reset
+    // Backend returns { success: true, data: { token, refreshToken, user } }
+    const authData = response.data.data || response.data;
+    this.setAuthData(authData);
+    return authData;
+  }// Request password reset
   async requestPasswordReset(username: string): Promise<void> {
     await http.post('/api/v1/account/password/reset-request', { username });
   }
