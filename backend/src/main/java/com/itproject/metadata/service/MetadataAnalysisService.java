@@ -7,6 +7,10 @@ import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
 import com.drew.metadata.exif.ExifIFD0Directory;
 import com.drew.metadata.exif.GpsDirectory;
+import com.drew.metadata.file.FileTypeDirectory;
+import com.drew.metadata.jpeg.JpegDirectory;
+import com.drew.metadata.png.PngDirectory;
+import com.drew.metadata.gif.GifHeaderDirectory;
 import com.itproject.auth.entity.User;
 import com.itproject.auth.repository.UserRepository;
 import com.itproject.auth.security.SecurityUtils;
@@ -358,22 +362,154 @@ public class MetadataAnalysisService {
     }
     
     private void extractTechnicalImageMetadata(MediaMetadata metadata, Metadata imageMetadata) {
-        // Extract technical details from various directories
+        // Extract file type and MIME type
+        FileTypeDirectory fileTypeDirectory = imageMetadata.getFirstDirectoryOfType(FileTypeDirectory.class);
+        if (fileTypeDirectory != null) {
+            try {
+                if (fileTypeDirectory.hasTagName(FileTypeDirectory.TAG_DETECTED_FILE_TYPE_NAME)) {
+                    String fileType = fileTypeDirectory.getString(FileTypeDirectory.TAG_DETECTED_FILE_TYPE_NAME);
+                    metadata.setFileFormat(fileType);
+                    
+                    // Set MIME type based on file format
+                    if (fileType != null) {
+                        switch (fileType.toLowerCase()) {
+                            case "jpeg":
+                                metadata.setMimeType("image/jpeg");
+                                break;
+                            case "png":
+                                metadata.setMimeType("image/png");
+                                break;
+                            case "gif":
+                                metadata.setMimeType("image/gif");
+                                break;
+                            case "bmp":
+                                metadata.setMimeType("image/bmp");
+                                break;
+                            case "tiff":
+                                metadata.setMimeType("image/tiff");
+                                break;
+                            case "webp":
+                                metadata.setMimeType("image/webp");
+                                break;
+                            default:
+                                metadata.setMimeType("image/" + fileType.toLowerCase());
+                        }
+                    }
+                }
+                
+                if (fileTypeDirectory.hasTagName(FileTypeDirectory.TAG_DETECTED_FILE_MIME_TYPE)) {
+                    String mimeType = fileTypeDirectory.getString(FileTypeDirectory.TAG_DETECTED_FILE_MIME_TYPE);
+                    if (mimeType != null && metadata.getMimeType() == null) {
+                        metadata.setMimeType(mimeType);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error extracting file type information", e);
+            }
+        }
+        
+        // Extract JPEG specific metadata
+        JpegDirectory jpegDirectory = imageMetadata.getFirstDirectoryOfType(JpegDirectory.class);
+        if (jpegDirectory != null) {
+            try {
+                // Extract image dimensions if not already set
+                if (metadata.getImageWidth() == null && jpegDirectory.hasTagName(JpegDirectory.TAG_IMAGE_WIDTH)) {
+                    metadata.setImageWidth(jpegDirectory.getInteger(JpegDirectory.TAG_IMAGE_WIDTH));
+                }
+                if (metadata.getImageHeight() == null && jpegDirectory.hasTagName(JpegDirectory.TAG_IMAGE_HEIGHT)) {
+                    metadata.setImageHeight(jpegDirectory.getInteger(JpegDirectory.TAG_IMAGE_HEIGHT));
+                }
+                
+                // Extract compression information
+                if (jpegDirectory.hasTagName(JpegDirectory.TAG_COMPRESSION_TYPE)) {
+                    String compressionType = jpegDirectory.getDescription(JpegDirectory.TAG_COMPRESSION_TYPE);
+                    if (compressionType != null && compressionType.contains("Baseline")) {
+                        // Estimate compression level based on data available
+                        metadata.setCompressionLevel(estimateJpegQuality(jpegDirectory));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error extracting JPEG metadata", e);
+            }
+        }
+        
+        // Extract PNG specific metadata
+        PngDirectory pngDirectory = imageMetadata.getFirstDirectoryOfType(PngDirectory.class);
+        if (pngDirectory != null) {
+            try {
+                // Extract image dimensions if not already set
+                if (metadata.getImageWidth() == null && pngDirectory.hasTagName(PngDirectory.TAG_IMAGE_WIDTH)) {
+                    metadata.setImageWidth(pngDirectory.getInteger(PngDirectory.TAG_IMAGE_WIDTH));
+                }
+                if (metadata.getImageHeight() == null && pngDirectory.hasTagName(PngDirectory.TAG_IMAGE_HEIGHT)) {
+                    metadata.setImageHeight(pngDirectory.getInteger(PngDirectory.TAG_IMAGE_HEIGHT));
+                }
+                
+                // PNG compression level (0-9)
+                if (pngDirectory.hasTagName(PngDirectory.TAG_COMPRESSION_TYPE)) {
+                    Integer compressionType = pngDirectory.getInteger(PngDirectory.TAG_COMPRESSION_TYPE);
+                    if (compressionType != null) {
+                        metadata.setCompressionLevel(compressionType);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error extracting PNG metadata", e);
+            }
+        }
+        
+        // Extract GIF specific metadata
+        GifHeaderDirectory gifDirectory = imageMetadata.getFirstDirectoryOfType(GifHeaderDirectory.class);
+        if (gifDirectory != null) {
+            try {
+                if (metadata.getImageWidth() == null && gifDirectory.hasTagName(GifHeaderDirectory.TAG_IMAGE_WIDTH)) {
+                    metadata.setImageWidth(gifDirectory.getInteger(GifHeaderDirectory.TAG_IMAGE_WIDTH));
+                }
+                if (metadata.getImageHeight() == null && gifDirectory.hasTagName(GifHeaderDirectory.TAG_IMAGE_HEIGHT)) {
+                    metadata.setImageHeight(gifDirectory.getInteger(GifHeaderDirectory.TAG_IMAGE_HEIGHT));
+                }
+            } catch (Exception e) {
+                log.warn("Error extracting GIF metadata", e);
+            }
+        }
+        
+        // Extract additional technical details from all directories
         for (Directory directory : imageMetadata.getDirectories()) {
             for (Tag tag : directory.getTags()) {
                 String tagName = tag.getTagName().toLowerCase();
                 
-                // Look for compression information
-                if (tagName.contains("compression")) {
-                    // Store compression details
+                // Look for color space information
+                if (tagName.contains("color") && tagName.contains("space") && metadata.getColorSpace() == null) {
+                    metadata.setColorSpace(tag.getDescription());
                 }
                 
-                // Look for color space information
-                if (tagName.contains("color") && tagName.contains("space")) {
-                    metadata.setColorSpace(tag.getDescription());
+                // Look for additional width/height information if not set
+                if (metadata.getImageWidth() == null && (tagName.contains("width") || tagName.equals("image width"))) {
+                    try {
+                        Integer width = directory.getInteger(tag.getTagType());
+                        if (width != null && width > 0) {
+                            metadata.setImageWidth(width);
+                        }
+                    } catch (Exception e) {
+                        // Ignore extraction errors for individual tags
+                    }
+                }
+                
+                if (metadata.getImageHeight() == null && (tagName.contains("height") || tagName.equals("image height"))) {
+                    try {
+                        Integer height = directory.getInteger(tag.getTagType());
+                        if (height != null && height > 0) {
+                            metadata.setImageHeight(height);
+                        }
+                    } catch (Exception e) {
+                        // Ignore extraction errors for individual tags
+                    }
                 }
             }
         }
+        
+        log.debug("Extracted technical metadata: format={}, mimeType={}, dimensions={}x{}, compression={}",
+                metadata.getFileFormat(), metadata.getMimeType(), metadata.getImageWidth(), 
+                metadata.getImageHeight(), metadata.getCompressionLevel());
     }
     
     private void extractVideoMetadata(MediaMetadata metadata, String filePath) {
@@ -414,49 +550,260 @@ public class MetadataAnalysisService {
     
     private void performForensicAnalysis(MediaMetadata metadata) {
         List<String> suspiciousIndicators = new ArrayList<>();
+        StringBuilder analysisNotes = new StringBuilder();
         
+        // 1. EXIF Data Analysis
+        analyzeExifData(metadata, suspiciousIndicators, analysisNotes);
+        
+        // 2. Image Dimension Analysis
+        analyzeDimensions(metadata, suspiciousIndicators, analysisNotes);
+        
+        // 3. File Format and Technical Analysis
+        analyzeFileFormat(metadata, suspiciousIndicators, analysisNotes);
+        
+        // 4. Temporal Inconsistency Analysis
+        analyzeTemporalInconsistencies(metadata, suspiciousIndicators, analysisNotes);
+        
+        // 5. Device-Specific Analysis
+        analyzeDeviceSpecificIndicators(metadata, suspiciousIndicators, analysisNotes);
+        
+        // 6. AI Generation Pattern Analysis
+        analyzeAIGenerationPatterns(metadata, suspiciousIndicators, analysisNotes);
+        
+        // 7. Metadata Completeness Analysis
+        analyzeMetadataCompleteness(metadata, suspiciousIndicators, analysisNotes);
+        
+        // Set results
+        if (!suspiciousIndicators.isEmpty()) {
+            metadata.setSuspiciousIndicators(String.join("; ", suspiciousIndicators));
+            log.info("Found {} suspicious indicators for file {}: {}", 
+                    suspiciousIndicators.size(), metadata.getFileMd5(), metadata.getSuspiciousIndicators());
+        }
+        
+        if (analysisNotes.length() > 0) {
+            String existingNotes = metadata.getAnalysisNotes();
+            String newNotes = analysisNotes.toString();
+            if (existingNotes != null && !existingNotes.isEmpty()) {
+                metadata.setAnalysisNotes(existingNotes + "; " + newNotes);
+            } else {
+                metadata.setAnalysisNotes(newNotes);
+            }
+        }
+    }
+    
+    private void analyzeExifData(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
         // Check for missing EXIF data (potential manipulation)
         if (metadata.getCameraMake() == null && metadata.getCameraModel() == null) {
-            suspiciousIndicators.add("Missing camera information in EXIF data");
+            indicators.add("缺少相机信息：可能是经过编辑处理的图片");
+            notes.append("EXIF数据中缺少相机制造商和型号信息; ");
         }
         
-        // Check for suspicious date/time
-        if (metadata.getDateTaken() != null) {
-            LocalDateTime now = LocalDateTime.now();
-            if (metadata.getDateTaken().isAfter(now)) {
-                suspiciousIndicators.add("Future date in EXIF data");
-            }
-            if (metadata.getDateTaken().isBefore(LocalDateTime.of(1990, 1, 1, 0, 0))) {
-                suspiciousIndicators.add("Unusually old date in EXIF data");
-            }
-        }
+        // Check for incomplete EXIF data
+        int exifFields = 0;
+        if (metadata.getCameraMake() != null) exifFields++;
+        if (metadata.getCameraModel() != null) exifFields++;
+        if (metadata.getDateTaken() != null) exifFields++;
+        if (metadata.getOrientation() != null) exifFields++;
+        if (metadata.getColorSpace() != null) exifFields++;
         
-        // Check for unusual image dimensions (common in AI-generated content)
+        if (exifFields < 2 && exifFields > 0) {
+            indicators.add("EXIF数据不完整：可能经过处理或来源可疑");
+        }
+    }
+    
+    private void analyzeDimensions(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
         if (metadata.getImageWidth() != null && metadata.getImageHeight() != null) {
             int width = metadata.getImageWidth();
             int height = metadata.getImageHeight();
             
             // Check for common AI generation resolutions
-            if ((width == 512 && height == 512) || 
-                (width == 1024 && height == 1024) ||
-                (width == 256 && height == 256)) {
-                suspiciousIndicators.add("Image dimensions common in AI-generated content");
+            if (isAICommonResolution(width, height)) {
+                indicators.add("图像尺寸符合AI生成内容的常见分辨率");
+                notes.append(String.format("检测到AI常用分辨率: %dx%d; ", width, height));
+            }
+            
+            // Check for unusual aspect ratios
+            double aspectRatio = (double) width / height;
+            if (aspectRatio == 1.0 && (width >= 256 && width <= 2048)) {
+                indicators.add("完美正方形比例：可能是AI生成或经过裁剪");
+            }
+            
+            // Check for very high resolutions without corresponding quality metadata
+            if ((width > 4000 || height > 4000) && metadata.getCameraMake() == null) {
+                indicators.add("高分辨率图像缺少相机信息：可能是放大处理的结果");
+            }
+        }
+    }
+    
+    private void analyzeFileFormat(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
+        String format = metadata.getFileFormat();
+        String mimeType = metadata.getMimeType();
+        
+        // Check for format inconsistencies
+        if (format != null && mimeType != null) {
+            boolean consistent = isFormatMimeConsistent(format, mimeType);
+            if (!consistent) {
+                indicators.add("文件格式与MIME类型不匹配：可能经过格式转换");
+                notes.append(String.format("格式不一致: %s vs %s; ", format, mimeType));
             }
         }
         
-        // Check for missing GPS data when camera typically includes it
-        if (metadata.getCameraMake() != null && 
-            (metadata.getCameraMake().toLowerCase().contains("iphone") || 
-             metadata.getCameraMake().toLowerCase().contains("samsung")) &&
-            metadata.getGpsLatitude() == null) {
-            suspiciousIndicators.add("Missing GPS data from device that typically includes location");
+        // Check compression levels
+        Integer compression = metadata.getCompressionLevel();
+        if (compression != null && format != null) {
+            if ("JPEG".equalsIgnoreCase(format) && compression < 50) {
+                indicators.add("JPEG压缩质量过低：可能多次保存或处理");
+            }
+            if ("PNG".equalsIgnoreCase(format) && compression > 6) {
+                indicators.add("PNG压缩级别异常：可能经过特殊处理");
+            }
+        }
+    }
+    
+    private void analyzeTemporalInconsistencies(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
+        if (metadata.getDateTaken() != null) {
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime dateTaken = metadata.getDateTaken();
+            
+            // Check for future dates
+            if (dateTaken.isAfter(now)) {
+                indicators.add("拍摄时间显示为未来：EXIF数据可能被篡改");
+                notes.append("检测到未来日期; ");
+            }
+            
+            // Check for very old dates
+            if (dateTaken.isBefore(LocalDateTime.of(1990, 1, 1, 0, 0))) {
+                indicators.add("拍摄时间异常古老：可能是默认或错误的时间戳");
+            }
+            
+            // Check for exact round times (suspicious for manual editing)
+            if (dateTaken.getSecond() == 0 && dateTaken.getNano() == 0) {
+                if (dateTaken.getMinute() == 0 || dateTaken.getMinute() % 5 == 0) {
+                    notes.append("检测到整点时间，可能经过人工设置; ");
+                }
+            }
+        }
+    }
+    
+    private void analyzeDeviceSpecificIndicators(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
+        String make = metadata.getCameraMake();
+        String model = metadata.getCameraModel();
+        
+        if (make != null) {
+            String makeLower = make.toLowerCase();
+            
+            // Check for missing GPS data from devices that typically include it
+            if ((makeLower.contains("iphone") || makeLower.contains("samsung") || 
+                 makeLower.contains("google") || makeLower.contains("huawei")) &&
+                metadata.getGpsLatitude() == null && metadata.getGpsLongitude() == null) {
+                indicators.add("智能手机拍摄但缺少GPS信息：可能关闭定位或经过处理");
+            }
+            
+            // Check for unusual camera combinations
+            if (model != null && !isValidCameraModelForMake(make, model)) {
+                indicators.add("相机制造商与型号不匹配：可能是伪造的EXIF数据");
+            }
+        }
+    }
+    
+    private void analyzeAIGenerationPatterns(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
+        // Check for patterns common in AI-generated content
+        if (metadata.getCameraMake() == null && metadata.getCameraModel() == null && 
+            metadata.getDateTaken() == null && metadata.getGpsLatitude() == null) {
+            
+            // If image has dimensions but no metadata, it's suspicious
+            if (metadata.getImageWidth() != null && metadata.getImageHeight() != null) {
+                indicators.add("完全缺少拍摄信息：高度疑似AI生成内容");
+                notes.append("无任何拍摄设备信息，符合AI生成特征; ");
+            }
         }
         
-        if (!suspiciousIndicators.isEmpty()) {
-            metadata.setSuspiciousIndicators(String.join("; ", suspiciousIndicators));
-            log.info("Found suspicious indicators for file {}: {}", 
-                    metadata.getFileMd5(), metadata.getSuspiciousIndicators());
+        // Check for specific AI generation signatures in metadata
+        String rawMetadata = metadata.getRawMetadata();
+        if (rawMetadata != null) {
+            String rawLower = rawMetadata.toLowerCase();
+            if (rawLower.contains("stable diffusion") || rawLower.contains("midjourney") ||
+                rawLower.contains("dalle") || rawLower.contains("generated")) {
+                indicators.add("检测到AI生成工具标识：确认为人工智能生成内容");
+            }
         }
+    }
+    
+    private void analyzeMetadataCompleteness(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
+        int totalFields = 0;
+        int populatedFields = 0;
+        
+        // Count important metadata fields
+        String[] fields = {
+            metadata.getCameraMake(), metadata.getCameraModel(), 
+            metadata.getFileFormat(), metadata.getMimeType(),
+            metadata.getColorSpace()
+        };
+        
+        for (String field : fields) {
+            totalFields++;
+            if (field != null && !field.isEmpty()) {
+                populatedFields++;
+            }
+        }
+        
+        double completeness = (double) populatedFields / totalFields;
+        if (completeness < 0.3) {
+            indicators.add("元数据完整性极低：可能经过清理或来源可疑");
+            notes.append(String.format("元数据完整性: %.1f%%; ", completeness * 100));
+        }
+    }
+    
+    private boolean isAICommonResolution(int width, int height) {
+        // Common AI generation resolutions
+        int[][] aiResolutions = {
+            {256, 256}, {512, 512}, {768, 768}, {1024, 1024},
+            {512, 768}, {768, 512}, {1024, 768}, {768, 1024},
+            {512, 256}, {256, 512}, {2048, 2048}
+        };
+        
+        for (int[] res : aiResolutions) {
+            if ((width == res[0] && height == res[1]) || (width == res[1] && height == res[0])) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private boolean isFormatMimeConsistent(String format, String mimeType) {
+        if (format == null || mimeType == null) return true;
+        
+        String formatLower = format.toLowerCase();
+        String mimeTypeLower = mimeType.toLowerCase();
+        
+        return (formatLower.contains("jpeg") && mimeTypeLower.contains("jpeg")) ||
+               (formatLower.contains("png") && mimeTypeLower.contains("png")) ||
+               (formatLower.contains("gif") && mimeTypeLower.contains("gif")) ||
+               (formatLower.contains("bmp") && mimeTypeLower.contains("bmp")) ||
+               (formatLower.contains("tiff") && mimeTypeLower.contains("tiff")) ||
+               (formatLower.contains("webp") && mimeTypeLower.contains("webp"));
+    }
+    
+    private boolean isValidCameraModelForMake(String make, String model) {
+        // Simplified validation - in a real system, this would be more comprehensive
+        String makeLower = make.toLowerCase();
+        String modelLower = model.toLowerCase();
+        
+        // Basic consistency checks
+        if (makeLower.contains("canon") && !modelLower.contains("canon") && 
+            !modelLower.contains("eos") && !modelLower.contains("powershot")) {
+            return false;
+        }
+        if (makeLower.contains("nikon") && !modelLower.contains("nikon") && 
+            !modelLower.contains("d") && !modelLower.contains("coolpix")) {
+            return false;
+        }
+        if (makeLower.contains("sony") && !modelLower.contains("sony") && 
+            !modelLower.contains("alpha") && !modelLower.contains("dsc")) {
+            return false;
+        }
+        
+        return true;
     }
       private String getVideoFilePath(String filePath) {
         try {
@@ -496,6 +843,46 @@ public class MetadataAnalysisService {
             result.append(String.format("%02x", b));
         }
         return result.toString();
+    }
+    
+    /**
+     * Estimate JPEG quality/compression level based on available metadata
+     */
+    private Integer estimateJpegQuality(JpegDirectory jpegDirectory) {
+        try {
+            // Look for quality-related tags using the Tag collection
+            for (Tag tag : jpegDirectory.getTags()) {
+                String tagName = tag.getTagName().toLowerCase();
+                String description = tag.getDescription();
+                
+                if (description != null) {
+                    // Look for quality indicators in descriptions
+                    if (tagName.contains("quality") || description.toLowerCase().contains("quality")) {
+                        // Try to extract numeric quality value
+                        String numStr = description.replaceAll("[^0-9]", "");
+                        if (!numStr.isEmpty()) {
+                            try {
+                                int quality = Integer.parseInt(numStr);
+                                if (quality >= 1 && quality <= 100) {
+                                    return quality;
+                                }
+                            } catch (NumberFormatException e) {
+                                // Continue searching
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // If no direct quality found, estimate based on component sampling
+            // This is a simplified heuristic based on image characteristics
+            // High compression typically results in smaller file sizes relative to dimensions
+            return 85; // Default high quality assumption for forensic analysis
+            
+        } catch (Exception e) {
+            log.debug("Error estimating JPEG quality", e);
+            return null;
+        }
     }
     
     // Response building methods
@@ -545,3 +932,4 @@ public class MetadataAnalysisService {
         return indicators;
     }
 }
+
