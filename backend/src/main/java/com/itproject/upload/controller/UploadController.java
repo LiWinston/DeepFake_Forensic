@@ -1,6 +1,9 @@
 package com.itproject.upload.controller;
 
+import com.itproject.common.dto.Result;
 import com.itproject.upload.dto.ChunkUploadRequest;
+import com.itproject.upload.dto.FileListResponseDTO;
+import com.itproject.upload.dto.FileResponseDTO;
 import com.itproject.upload.dto.UploadResponse;
 import com.itproject.upload.entity.MediaFile;
 import com.itproject.upload.service.FileTypeValidationService;
@@ -199,42 +202,43 @@ public class UploadController {
             errorResponse.put("message", "Validation error: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
-    }
-      /**
-     * Get files list with pagination
+    }    /**
+     * Get files list with pagination using Result wrapper and DTO
      */
     @GetMapping("/files")
-    public ResponseEntity<Map<String, Object>> getFiles(
+    public Result<FileListResponseDTO> getFiles(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "type", required = false) String type,
             @RequestParam(value = "projectId", required = false) Long projectId) {
           try {
-            log.info("Getting files list: page={}, size={}, status={}, type={}, projectId={}", page, size, status, type, projectId);
+            // Add request tracking for debugging duplicate requests
+            String requestSignature = String.format("page=%d,size=%d,status=%s,type=%s,projectId=%s", 
+                page, size, status, type, projectId);
+            log.info("Received files list request: {} at {}", requestSignature, System.currentTimeMillis());
             
             Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
             Page<MediaFile> filesPage = uploadService.getFilesList(pageable, status, type, projectId);
             
-            // Convert to response format
-            List<Map<String, Object>> fileList = filesPage.getContent().stream()
-                .map(this::convertToFileResponse)
+            // Convert to DTO format
+            List<FileResponseDTO> fileList = filesPage.getContent().stream()
+                .map(this::convertToFileResponseDTO)
                 .toList();
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("files", fileList);
-            response.put("total", filesPage.getTotalElements());
-            response.put("current", page + 1); // Frontend uses 1-based pagination
-            response.put("pageSize", size);
-            response.put("totalPages", filesPage.getTotalPages());
+            FileListResponseDTO responseData = new FileListResponseDTO(
+                fileList,
+                filesPage.getTotalElements(),
+                page + 1, // Frontend uses 1-based pagination
+                size,
+                filesPage.getTotalPages()
+            );
             
-            return ResponseEntity.ok(response);
+            return Result.success(responseData, "Files retrieved successfully");
             
         } catch (Exception e) {
             log.error("Error getting files list", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("error", "Failed to get files: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+            return Result.error("Failed to get files: " + e.getMessage(), "FILES_LIST_ERROR");
         }
     }
     
@@ -267,25 +271,31 @@ public class UploadController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
-    
-    /**
-     * Convert MediaFile entity to response format
+      /**
+     * Convert MediaFile entity to DTO format
      */
-    private Map<String, Object> convertToFileResponse(MediaFile mediaFile) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", mediaFile.getId().toString());
-        response.put("filename", mediaFile.getFileName());
-        response.put("originalName", mediaFile.getOriginalFileName());
-        response.put("fileType", mediaFile.getFileType());
-        response.put("fileSize", mediaFile.getFileSize());
-        response.put("filePath", mediaFile.getFilePath());
-        response.put("uploadTime", mediaFile.getCreatedAt().toString());
-        response.put("status", mediaFile.getUploadStatus().name());
-        response.put("chunkTotal", mediaFile.getTotalChunks());
-        response.put("chunkUploaded", mediaFile.getUploadedChunks());
-        response.put("md5Hash", mediaFile.getFileMd5());
-        response.put("uploadedBy", mediaFile.getUploadedBy());
-        return response;
+    private FileResponseDTO convertToFileResponseDTO(MediaFile mediaFile) {
+        FileResponseDTO dto = new FileResponseDTO();
+        dto.setId(mediaFile.getId().toString());
+        dto.setFilename(mediaFile.getFileName());
+        dto.setOriginalName(mediaFile.getOriginalFileName());
+        dto.setFileType(mediaFile.getFileType());
+        dto.setFileSize(mediaFile.getFileSize());
+        dto.setFilePath(mediaFile.getFilePath());
+        dto.setUploadTime(mediaFile.getCreatedAt().toString());
+        dto.setStatus(mediaFile.getUploadStatus().name());
+        dto.setChunkTotal(mediaFile.getTotalChunks());
+        dto.setChunkUploaded(mediaFile.getUploadedChunks());
+        dto.setMd5Hash(mediaFile.getFileMd5());
+        dto.setUploadedBy(mediaFile.getUploadedBy());
+        
+        // Add project information if available
+        if (mediaFile.getProject() != null) {
+            dto.setProjectId(mediaFile.getProject().getId());
+            dto.setProjectName(mediaFile.getProject().getName());
+        }
+        
+        return dto;
     }
     
     /**

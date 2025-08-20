@@ -14,6 +14,7 @@ import io.minio.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -550,15 +551,16 @@ public class UploadService {
         response.setFileId(mediaFile.getId());
         
         return response;
-    }
-      /**
+    }    /**
      * Get files list with pagination and filtering for current user
+     * Uses short-term caching to prevent duplicate requests within seconds
      */
+    @Cacheable(value = "filesList", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + (#status ?: 'null') + '-' + (#type ?: 'null') + '-' + (#projectId ?: 'null') + '-' + T(com.itproject.auth.security.SecurityUtils).getCurrentUser().id")
     public Page<MediaFile> getFilesList(Pageable pageable, String status, String type, Long projectId) {
         try {
             User currentUser = SecurityUtils.getCurrentUser();
             if (currentUser == null) {
-                throw new RuntimeException("用户未登录");
+                throw new RuntimeException("User not logged in");
             }
             
             log.debug("Getting files list for user {}: pageable={}, status={}, type={}, projectId={}", 

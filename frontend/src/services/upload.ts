@@ -131,8 +131,7 @@ class UploadService {
       { headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return (res.data?.data as any) || (res.data as any);
-  }
-  // GET /upload/files
+  }  // GET /upload/files
   async getFiles(page: number = 1, pageSize: number = 20, status?: string, type?: string, projectId?: number): Promise<{
     files: any[],
     total: number,
@@ -148,9 +147,23 @@ class UploadService {
     if (type) params.type = type;
     if (projectId) params.projectId = projectId;
 
-    const res = await httpClient.get<ApiResponse<any>>(API_ENDPOINTS.UPLOAD_FILES, { params });
-    const data = (res.data?.data as any) || (res.data as any);
+    console.log('Frontend: Making getFiles request with params:', params, 'at', Date.now());
     
+    const res = await httpClient.get<ApiResponse<any>>(API_ENDPOINTS.UPLOAD_FILES, { params });
+    
+    // Handle new Result<FileListResponseDTO> format
+    if (res.data?.success && res.data?.data) {
+      const responseData = res.data.data;
+      return {
+        files: responseData.files || [],
+        total: responseData.total || 0,
+        current: responseData.current || page,
+        pageSize: responseData.pageSize || pageSize
+      };
+    }
+    
+    // Fallback for old format compatibility
+    const data = (res.data?.data as any) || (res.data as any);
     return {
       files: data.files || [],
       total: data.total || 0,

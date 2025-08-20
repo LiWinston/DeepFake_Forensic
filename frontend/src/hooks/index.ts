@@ -84,36 +84,62 @@ export const useFileUpload = () => {
 };
 
 /**
- * Hook for managing uploaded files list
+ * Hook for managing uploaded files list with request deduplication
  */
 export const useFilesList = (pageSize: number = 20) => {
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize, total: 0 });
+  
+  // Request deduplication using Map to track ongoing requests
+  const ongoingRequests = useRef<Map<string, Promise<any>>>(new Map());
 
   const loadFiles = useCallback(async (page: number = 1, size: number = pageSize, status?: string, type?: string, projectId?: number) => {
-    setLoading(true);
-    try {
-      // Call API to get files list
-      const result = await uploadService.getFiles(page, size, status, type, projectId);
-      setFiles(result.files || []);
-      setPagination({
-        current: result.current,
-        pageSize: result.pageSize,
-        total: result.total
-      });
-      
-      if (result.files.length === 0) {
-        message.info('No file data available, please upload files first');
-      }
-    } catch (error) {
-      message.error('Failed to load file list');
-      console.error('Failed to load files:', error);
-      setFiles([]);
-      setPagination({ current: page, pageSize: size, total: 0 });
-    } finally {
-      setLoading(false);
+    // Create unique request key for deduplication
+    const requestKey = `${page}-${size}-${status || ''}-${type || ''}-${projectId || ''}`;
+    
+    // Check if same request is already ongoing
+    const ongoingRequest = ongoingRequests.current.get(requestKey);
+    if (ongoingRequest) {
+      console.log('Request deduplication: returning existing promise for key:', requestKey);
+      return ongoingRequest;
     }
+    
+    setLoading(true);
+    
+    // Create new request promise
+    const requestPromise = (async () => {
+      try {
+        console.log('Making new request with key:', requestKey);
+        const result = await uploadService.getFiles(page, size, status, type, projectId);
+        setFiles(result.files || []);
+        setPagination({
+          current: result.current,
+          pageSize: result.pageSize,
+          total: result.total
+        });
+        
+        if (result.files.length === 0) {
+          message.info('No file data available, please upload files first');
+        }
+        return result;
+      } catch (error) {
+        message.error('Failed to load file list');
+        console.error('Failed to load files:', error);
+        setFiles([]);
+        setPagination({ current: page, pageSize: size, total: 0 });
+        throw error;
+      } finally {
+        setLoading(false);
+        // Clean up the request from map after completion
+        ongoingRequests.current.delete(requestKey);
+      }
+    })();
+    
+    // Store ongoing request
+    ongoingRequests.current.set(requestKey, requestPromise);
+    
+    return requestPromise;
   }, [pageSize]);
   const deleteFile = useCallback(async (fileId: string) => {
     try {
@@ -132,15 +158,13 @@ export const useFilesList = (pageSize: number = 20) => {
     } finally {
       setLoading(false);
     }
-  }, [loadFiles, pagination.current, pagination.pageSize]);
-  const refreshFiles = useCallback((projectId?: number, filterType?: string) => {
+  }, [loadFiles, pagination.current, pagination.pageSize]);  const refreshFiles = useCallback((projectId?: number, filterType?: string) => {
     console.log('Refreshing file list...');
     loadFiles(pagination.current, pagination.pageSize, undefined, filterType, projectId);
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
-  useEffect(() => { 
-    loadFiles(1, pageSize); 
-  }, [loadFiles, pageSize]);
+  // Don't auto-load files in the hook, let the component control when to load
+  // This prevents duplicate requests when the hook is used in different components
 
   return { files, loading, pagination, loadFiles, deleteFile, refreshFiles };
 };

@@ -59,7 +59,6 @@ const FilesList: React.FC<FilesListProps> = ({
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [showAllFiles, setShowAllFiles] = useState(false);
-
   // Load projects list on component mount
   useEffect(() => {
     const loadProjects = async () => {
@@ -82,19 +81,28 @@ const FilesList: React.FC<FilesListProps> = ({
 
     loadProjects();
   }, [defaultProjectId, showAllFiles]);
-  // Load files when project selection changes
+
+  // Load files when project selection changes with debouncing to prevent duplicate requests
   useEffect(() => {
-    if (showAllFiles) {
-      loadFiles(1, pagination.pageSize, undefined, filterType || undefined);
-    } else if (selectedProjectId) {
-      loadFiles(1, pagination.pageSize, undefined, filterType || undefined, selectedProjectId);
-    } else if (projects.length > 0) {
-      // If no project is selected but projects exist, select the first one
-      const firstProject = projects[0];
-      setSelectedProjectId(firstProject.id);
-      loadFiles(1, pagination.pageSize, undefined, filterType || undefined, firstProject.id);
+    if (projectsLoading || projects.length === 0) {
+      return; // Don't load files until projects are loaded
     }
-  }, [selectedProjectId, showAllFiles, projects, loadFiles, pagination.pageSize, filterType]);
+
+    const timeoutId = setTimeout(() => {
+      if (showAllFiles) {
+        loadFiles(1, pagination.pageSize, undefined, filterType || undefined);
+      } else if (selectedProjectId) {
+        loadFiles(1, pagination.pageSize, undefined, filterType || undefined, selectedProjectId);
+      } else if (projects.length > 0 && !selectedProjectId) {
+        // If no project is selected but projects exist, select the first one
+        const firstProject = projects[0];
+        setSelectedProjectId(firstProject.id);
+        // Don't call loadFiles here as it will be triggered by the selectedProjectId change
+      }
+    }, 100); // 100ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [selectedProjectId, showAllFiles, projects, projectsLoading, loadFiles, pagination.pageSize, filterType]);
   const handleTableChange = useCallback((pagination: TablePaginationConfig) => {
     if (showAllFiles) {
       loadFiles(pagination.current, pagination.pageSize, undefined, filterType || undefined);
