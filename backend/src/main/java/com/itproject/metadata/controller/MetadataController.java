@@ -227,6 +227,8 @@ public class MetadataController {
             analysisMessage.put("fileName", mediaFile.getOriginalFileName());
             analysisMessage.put("fileType", mediaFile.getMediaType().name());
             analysisMessage.put("filePath", mediaFile.getFilePath());
+            analysisMessage.put("userId", mediaFile.getUser().getId()); // 添加用户ID
+            analysisMessage.put("projectId", mediaFile.getProject().getId()); // 添加项目ID
             analysisMessage.put("forceReAnalysis", true); // 强制重新分析
             
             kafkaTemplate.send(metadataAnalysisTopic, analysisMessage);

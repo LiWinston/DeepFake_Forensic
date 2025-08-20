@@ -10,6 +10,8 @@ import com.drew.metadata.exif.GpsDirectory;
 import com.itproject.auth.entity.User;
 import com.itproject.auth.repository.UserRepository;
 import com.itproject.auth.security.SecurityUtils;
+import com.itproject.project.entity.Project;
+import com.itproject.project.repository.ProjectRepository;
 import com.itproject.metadata.dto.MetadataAnalysisResponse;
 import com.itproject.metadata.entity.MediaMetadata;
 import com.itproject.metadata.repository.MediaMetadataRepository;
@@ -18,7 +20,6 @@ import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -46,6 +47,9 @@ public class MetadataAnalysisService {
     private UserRepository userRepository;
     
     @Autowired
+    private ProjectRepository projectRepository;
+    
+    @Autowired
     private MinioClient minioClient;
     
     @Autowired
@@ -64,6 +68,7 @@ public class MetadataAnalysisService {
             String filePath = (String) message.get("filePath");
             Boolean forceReAnalysis = (Boolean) message.get("forceReAnalysis");
             Long userId = ((Number) message.get("userId")).longValue();
+            Long projectId = ((Number) message.get("projectId")).longValue();
             
             log.info("Processing metadata analysis for file: {} (MD5: {}), user: {}, forceReAnalysis: {}", 
                     fileName, fileMd5, userId, forceReAnalysis);
@@ -71,6 +76,10 @@ public class MetadataAnalysisService {
             // Get user
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+            
+            // Get project
+            Project project = projectRepository.findById(projectId)
+                    .orElseThrow(() -> new RuntimeException("Project not found: " + projectId));
             
             // Check if metadata already exists for this user
             Optional<MediaMetadata> existingMetadata = metadataRepository.findByFileMd5AndUser(fileMd5, user);
@@ -89,6 +98,7 @@ public class MetadataAnalysisService {
             MediaMetadata metadata = new MediaMetadata();
             metadata.setFileMd5(fileMd5);
             metadata.setUser(user); // Set user relationship
+            metadata.setProject(project); // Set project relationship
             metadata.setExtractionStatus(MediaMetadata.ExtractionStatus.PENDING);
             
             try (InputStream fileStream = getFileStream(filePath)) {
@@ -124,12 +134,15 @@ public class MetadataAnalysisService {
             try {
                 String fileMd5 = (String) message.get("fileMd5");
                 Long userId = ((Number) message.get("userId")).longValue();
-                if (fileMd5 != null && userId != null) {
+                Long projectId = ((Number) message.get("projectId")).longValue();
+                if (fileMd5 != null && userId != null && projectId != null) {
                     User user = userRepository.findById(userId).orElse(null);
-                    if (user != null) {
+                    Project project = projectRepository.findById(projectId).orElse(null);
+                    if (user != null && project != null) {
                         MediaMetadata failedMetadata = new MediaMetadata();
                         failedMetadata.setFileMd5(fileMd5);
                         failedMetadata.setUser(user);
+                        failedMetadata.setProject(project);
                         failedMetadata.setExtractionStatus(MediaMetadata.ExtractionStatus.FAILED);
                         failedMetadata.setAnalysisNotes("Extraction failed: " + e.getMessage());
                         metadataRepository.save(failedMetadata);
