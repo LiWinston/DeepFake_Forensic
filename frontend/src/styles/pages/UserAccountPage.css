@@ -1,0 +1,27 @@
+/* User Account Page Styles */
+.account-tabs .ant-tabs-nav .ant-tabs-tab {
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 5px;
+  padding: 10px 20px;
+  border-radius: 5px;
+  transition: all 0.3s;
+  backdrop-filter: blur(3px);
+}
+
+.account-tabs .ant-tabs-nav .ant-tabs-tab:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.account-tabs .ant-tabs-nav .ant-tabs-tab-active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.account-tabs .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn span {
+  color: #ffffff !important;
+  font-weight: bold;
+}
+
+.account-tabs .ant-tabs-ink-bar {
+  background: #00d4ff;
+  height: 3px;
+}
