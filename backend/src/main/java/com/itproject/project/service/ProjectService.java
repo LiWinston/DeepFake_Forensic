@@ -35,8 +35,7 @@ public class ProjectService {
         log.info("Creating new project: {} for user: {}", project.getName(), user.getUsername());
         return projectRepository.save(project);
     }
-    
-    /**
+      /**
      * Update an existing project
      */
     public Project updateProject(Long projectId, Project updatedProject, User user) {
@@ -48,6 +47,7 @@ public class ProjectService {
         existingProject.setClientName(updatedProject.getClientName());
         existingProject.setClientContact(updatedProject.getClientContact());
         existingProject.setProjectType(updatedProject.getProjectType());
+        existingProject.setCaseNumber(updatedProject.getCaseNumber());
         existingProject.setDeadline(updatedProject.getDeadline());
         existingProject.setCaseDate(updatedProject.getCaseDate());
         existingProject.setEvidenceDescription(updatedProject.getEvidenceDescription());
