@@ -30,6 +30,14 @@
 .ant-drawer { z-index: 1060; }
 .ant-drawer.drawer-level-1 { z-index: 1060; }
 .ant-drawer .ant-drawer { z-index: 1070; }
+/* Explicit top level class for detail drawer */
+.drawer-level-2 .ant-drawer { z-index: 1070; }
+
+/* Ensure transparent mask still intercepts clicks to close child drawer */
+.drawer-level-2 .ant-drawer-mask {
+  background: rgba(0,0,0,0) !important;
+  pointer-events: auto;
+}
 
 /* When detail drawer is open, push the level-1 drawer slightly left to let top drawer hug the right edge */
 .drawer-level-1.drawer-pushed .ant-drawer-content-wrapper {

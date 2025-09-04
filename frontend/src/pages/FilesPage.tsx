@@ -350,7 +350,7 @@ const FilesPage: React.FC = () => {
         )}
 
         {/* Detail Drawer (Level 2 - nested) */}
-  <Drawer
+        <Drawer
           title={
             <Space>
               <EyeOutlined />
@@ -367,6 +367,7 @@ const FilesPage: React.FC = () => {
           maskStyle={{ backgroundColor: 'rgba(0,0,0,0)' }}
           destroyOnClose
           styles={{ body: { overflow: 'auto' } }}
+          rootClassName="drawer-level-2"
         >
           {selectedRecord && (
             <AnalysisDetails file={selectedFile || undefined} record={selectedRecord} />
