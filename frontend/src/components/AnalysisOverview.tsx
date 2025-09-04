@@ -80,45 +80,37 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisRecord | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
+  // State for traditional analysis
+  const [traditionalAnalysis, setTraditionalAnalysis] = useState<TraditionalAnalysisResult | null>(null);
+
+  // Load traditional analysis
+  const loadTraditionalAnalysis = useCallback(async (fileMd5: string) => {
+    try {
+      const traditionalResult = await traditionalAnalysisAPI.getAnalysisResult(fileMd5);
+      setTraditionalAnalysis(traditionalResult);
+      return traditionalResult;
+    } catch (error) {
+      console.error('Error loading traditional analysis:', error);
+      setTraditionalAnalysis(null);
+      return null;
+    }
+  }, []);
+
   // Load all analysis types
   const loadAllAnalyses = useCallback(async (fileMd5?: string) => {
     if (!fileMd5) {
       setAllAnalyses([]);
+      setTraditionalAnalysis(null);
       return;
     }
 
     setLoading(true);
-    const analyses: AnalysisRecord[] = [];
-
     try {
       // Load metadata analyses
       await loadMetadataAnalyses(fileMd5);
       
       // Load traditional analysis
-      const traditionalResult = await traditionalAnalysisAPI.getAnalysisResult(fileMd5);
-      if (traditionalResult) {
-        analyses.push({
-          id: `traditional-${traditionalResult.id}`,
-          type: 'TRADITIONAL',
-          status: traditionalResult.analysisStatus,
-          riskScore: traditionalResult.overallConfidenceScore,
-          createdTime: traditionalResult.createdAt,
-          completedTime: traditionalResult.updatedAt,
-          errorMessage: traditionalResult.errorMessage,
-          data: traditionalResult
-        });
-      } else {
-        // Check if traditional analysis is in progress
-        const traditionalStatus = await traditionalAnalysisAPI.getAnalysisStatus(fileMd5);
-        if (traditionalStatus !== 'NOT_FOUND') {
-          analyses.push({
-            id: `traditional-pending`,
-            type: 'TRADITIONAL',
-            status: traditionalStatus,
-            createdTime: new Date().toISOString(),
-          });
-        }
-      }
+      await loadTraditionalAnalysis(fileMd5);
 
       // TODO: Add AI analysis loading here when implemented
       
@@ -128,10 +120,13 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [loadMetadataAnalyses]);
+  }, [loadMetadataAnalyses, loadTraditionalAnalysis]);
 
-  // Convert metadata analyses to AnalysisRecord format
+  // Convert all analyses to AnalysisRecord format
   useEffect(() => {
+    const analyses: AnalysisRecord[] = [];
+
+    // Add metadata analyses
     const metadataRecords: AnalysisRecord[] = metadataAnalyses.map(analysis => ({
       id: `metadata-${analysis.id}`,
       type: 'METADATA' as const,
@@ -142,13 +137,24 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       errorMessage: analysis.errorMessage,
       data: analysis
     }));
+    analyses.push(...metadataRecords);
 
-    // Merge with existing traditional/AI analyses
-    setAllAnalyses(prev => {
-      const nonMetadata = prev.filter(a => a.type !== 'METADATA');
-      return [...metadataRecords, ...nonMetadata];
-    });
-  }, [metadataAnalyses]);
+    // Add traditional analysis
+    if (traditionalAnalysis) {
+      analyses.push({
+        id: `traditional-${traditionalAnalysis.id}`,
+        type: 'TRADITIONAL',
+        status: traditionalAnalysis.analysisStatus,
+        riskScore: traditionalAnalysis.overallConfidenceScore,
+        createdTime: traditionalAnalysis.createdAt,
+        completedTime: traditionalAnalysis.updatedAt,
+        errorMessage: traditionalAnalysis.errorMessage,
+        data: traditionalAnalysis
+      });
+    }
+
+    setAllAnalyses(analyses);
+  }, [metadataAnalyses, traditionalAnalysis]);
 
   // Load analyses when file changes
   useEffect(() => {
@@ -408,7 +414,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
                     value={analysis.elaAnalysis.suspiciousRegions}
                     style={{ marginBottom: 16 }}
                   />
-                  <Text>{analysis.elaAnalysis.analysisNotes}</Text>
+                  <Text>{analysis.elaAnalysis.analysis}</Text>
                 </Card>
               </Col>
               {analysis.elaAnalysis.resultImageUrl && (
@@ -442,7 +448,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
                     value={analysis.cfaAnalysis.interpolationAnomalies}
                     style={{ marginBottom: 16 }}
                   />
-                  <Text>{analysis.cfaAnalysis.analysisNotes}</Text>
+                  <Text>{analysis.cfaAnalysis.analysis}</Text>
                 </Card>
               </Col>
               {analysis.cfaAnalysis.heatmapImageUrl && (
@@ -476,7 +482,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
                     value={analysis.copyMoveAnalysis.suspiciousBlocks}
                     style={{ marginBottom: 16 }}
                   />
-                  <Text>{analysis.copyMoveAnalysis.analysisNotes}</Text>
+                  <Text>{analysis.copyMoveAnalysis.analysis}</Text>
                 </Card>
               </Col>
               {analysis.copyMoveAnalysis.resultImageUrl && (
@@ -506,11 +512,11 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
                     style={{ marginBottom: 16 }}
                   />
                   <Statistic
-                    title="Lighting Inconsistencies"
-                    value={analysis.lightingAnalysis.lightingInconsistencies}
+                    title="Inconsistencies"
+                    value={analysis.lightingAnalysis.inconsistencies}
                     style={{ marginBottom: 16 }}
                   />
-                  <Text>{analysis.lightingAnalysis.analysisNotes}</Text>
+                  <Text>{analysis.lightingAnalysis.analysis}</Text>
                 </Card>
               </Col>
               {analysis.lightingAnalysis.analysisImageUrl && (

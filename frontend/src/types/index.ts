@@ -231,26 +231,26 @@ export interface ElaAnalysisResult {
   confidenceScore: number;
   resultImageUrl?: string;
   suspiciousRegions: number;
-  analysisNotes: string;
+  analysis: string;
 }
 
 export interface CfaAnalysisResult {
   confidenceScore: number;
   heatmapImageUrl?: string;
   interpolationAnomalies: number;
-  analysisNotes: string;
+  analysis: string;
 }
 
 export interface CopyMoveAnalysisResult {
   confidenceScore: number;
   resultImageUrl?: string;
   suspiciousBlocks: number;
-  analysisNotes: string;
+  analysis: string;
 }
 
 export interface LightingAnalysisResult {
   confidenceScore: number;
   analysisImageUrl?: string;
-  lightingInconsistencies: number;
-  analysisNotes: string;
+  inconsistencies: number;
+  analysis: string;
 }
