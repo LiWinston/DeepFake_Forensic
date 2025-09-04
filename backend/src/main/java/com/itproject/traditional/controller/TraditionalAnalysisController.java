@@ -4,9 +4,6 @@ import com.itproject.common.dto.Result;
 import com.itproject.traditional.dto.TraditionalAnalysisRequest;
 import com.itproject.traditional.dto.TraditionalAnalysisResponse;
 import com.itproject.traditional.service.TraditionalAnalysisService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -24,7 +21,6 @@ import java.util.Optional;
 @Slf4j
 @RestController
 @RequestMapping("/api/traditional-analysis")
-@Tag(name = "Traditional Analysis", description = "Traditional forensic analysis operations")
 public class TraditionalAnalysisController {
     
     @Autowired
@@ -35,10 +31,8 @@ public class TraditionalAnalysisController {
      */
     @GetMapping("/result/{fileMd5}")
     @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "Get traditional analysis result", 
-              description = "Retrieve traditional forensic analysis result for a specific file")
     public ResponseEntity<Result<TraditionalAnalysisResponse>> getAnalysisResult(
-            @Parameter(description = "File MD5 hash") @PathVariable String fileMd5) {
+            @PathVariable String fileMd5) {
         
         try {
             Optional<TraditionalAnalysisResponse> result = traditionalAnalysisService.getAnalysisResult(fileMd5);
@@ -60,12 +54,10 @@ public class TraditionalAnalysisController {
      */
     @GetMapping("/project/{projectId}")
     @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "Get project traditional analysis results", 
-              description = "Retrieve all traditional analysis results for a specific project with pagination")
     public ResponseEntity<Result<Page<TraditionalAnalysisResponse>>> getProjectAnalysisResults(
-            @Parameter(description = "Project ID") @PathVariable Long projectId,
-            @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size) {
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
         
         try {
             Pageable pageable = PageRequest.of(page, size);
@@ -84,10 +76,8 @@ public class TraditionalAnalysisController {
      */
     @GetMapping("/status/{fileMd5}")
     @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "Check analysis status", 
-              description = "Check the status of traditional analysis for a specific file")
     public ResponseEntity<Result<String>> getAnalysisStatus(
-            @Parameter(description = "File MD5 hash") @PathVariable String fileMd5) {
+            @PathVariable String fileMd5) {
         
         try {
             Optional<TraditionalAnalysisResponse> result = traditionalAnalysisService.getAnalysisResult(fileMd5);
@@ -110,10 +100,8 @@ public class TraditionalAnalysisController {
      */
     @GetMapping("/summary/{fileMd5}")
     @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "Get analysis summary", 
-              description = "Get a lightweight summary of traditional analysis results")
     public ResponseEntity<Result<AnalysisSummaryDto>> getAnalysisSummary(
-            @Parameter(description = "File MD5 hash") @PathVariable String fileMd5) {
+            @PathVariable String fileMd5) {
         
         try {
             Optional<TraditionalAnalysisResponse> result = traditionalAnalysisService.getAnalysisResult(fileMd5);
@@ -147,10 +135,7 @@ public class TraditionalAnalysisController {
      */
     @PostMapping("/compare")
     @PreAuthorize("hasRole('USER')")
-    @Operation(summary = "Compare analysis results", 
-              description = "Compare traditional analysis results between multiple files")
     public ResponseEntity<Result<AnalysisComparisonDto>> compareAnalysisResults(
-            @Parameter(description = "List of file MD5 hashes to compare") 
             @RequestBody CompareAnalysisRequest request) {
         
         try {
