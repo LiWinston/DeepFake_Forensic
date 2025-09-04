@@ -188,3 +188,69 @@ export interface UploadProgress {
   status: 'uploading' | 'success' | 'error';
   errorMessage?: string;
 }
+
+// Traditional Analysis Types
+export interface TraditionalAnalysisResult {
+  id: number;
+  fileMd5: string;
+  originalFilePath: string;
+  analysisStatus: TraditionalAnalysisStatus;
+  overallConfidenceScore: number;
+  authenticityAssessment: AuthenticityAssessment;
+  analysisSummary: string;
+  detailedFindings: string;
+  errorMessage?: string;
+  processingTimeMs: number;
+  imageWidth: number;
+  imageHeight: number;
+  fileSizeBytes: number;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Individual analysis results
+  elaAnalysis?: ElaAnalysisResult;
+  cfaAnalysis?: CfaAnalysisResult;
+  copyMoveAnalysis?: CopyMoveAnalysisResult;
+  lightingAnalysis?: LightingAnalysisResult;
+}
+
+export type TraditionalAnalysisStatus = 
+  | 'PENDING'
+  | 'IN_PROGRESS' 
+  | 'COMPLETED'
+  | 'FAILED';
+
+export type AuthenticityAssessment = 
+  | 'AUTHENTIC'
+  | 'LIKELY_AUTHENTIC'
+  | 'SUSPICIOUS'
+  | 'LIKELY_MANIPULATED'
+  | 'MANIPULATED';
+
+export interface ElaAnalysisResult {
+  confidenceScore: number;
+  resultImageUrl?: string;
+  suspiciousRegions: number;
+  analysisNotes: string;
+}
+
+export interface CfaAnalysisResult {
+  confidenceScore: number;
+  heatmapImageUrl?: string;
+  interpolationAnomalies: number;
+  analysisNotes: string;
+}
+
+export interface CopyMoveAnalysisResult {
+  confidenceScore: number;
+  resultImageUrl?: string;
+  suspiciousBlocks: number;
+  analysisNotes: string;
+}
+
+export interface LightingAnalysisResult {
+  confidenceScore: number;
+  analysisImageUrl?: string;
+  lightingInconsistencies: number;
+  analysisNotes: string;
+}

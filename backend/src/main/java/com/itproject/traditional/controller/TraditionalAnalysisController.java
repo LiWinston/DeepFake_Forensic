@@ -20,7 +20,7 @@ import java.util.Optional;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/traditional-analysis")
+@RequestMapping("/api/v1/traditional-analysis")
 public class TraditionalAnalysisController {
     
     @Autowired

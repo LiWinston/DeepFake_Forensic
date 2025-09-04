@@ -25,7 +25,7 @@ import {
 } from '@ant-design/icons';
 import FilesList from '../components/FilesList';
 import FileUpload from '../components/FileUpload';
-import MetadataAnalysis from '../components/MetadataAnalysis';
+import AnalysisOverview from '../components/AnalysisOverview';
 import type { UploadFile, Project } from '../types';
 import uploadService from '../services/upload';
 import { projectApi } from '../services/project';
@@ -296,7 +296,7 @@ const FilesPage: React.FC = () => {
 
       {/* Analysis Modal */}
       <Modal
-        title={`Metadata Analysis - ${selectedFile?.originalName}`}
+        title={`Forensic Analysis Results For : ‘${selectedFile?.originalName}’`}
         open={analysisModalVisible}
         onCancel={handleCloseAnalysisModal}
         footer={null}
@@ -304,7 +304,7 @@ const FilesPage: React.FC = () => {
         centered
       >
         {selectedFile && (
-          <MetadataAnalysis
+          <AnalysisOverview
             file={selectedFile}
             showFileInfo={false}
           />

@@ -7,7 +7,7 @@ import {
   Col,
   Alert,
 } from 'antd';
-import MetadataAnalysis from '../components/MetadataAnalysis';
+import AnalysisOverview from '../components/AnalysisOverview';
 
 const { Content } = Layout;
 const { Title, Paragraph } = Typography;
@@ -43,7 +43,7 @@ const AnalysisPage: React.FC = () => {
       {/* Analysis Component */}
       <Row>
         <Col span={24}>
-          <MetadataAnalysis showFileInfo={false} />
+          <AnalysisOverview showFileInfo={false} />
         </Col>
       </Row>
 
