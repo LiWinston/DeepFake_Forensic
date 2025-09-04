@@ -40,12 +40,12 @@ public class TraditionalAnalysisController {
             if (result.isPresent()) {
                 return ResponseEntity.ok(Result.success(result.get()));
             } else {
-                return ResponseEntity.ok(Result.error(404, "Traditional analysis result not found for file: " + fileMd5));
+                return ResponseEntity.ok(Result.error("Traditional analysis result not found for file: " + fileMd5));
             }
             
         } catch (Exception e) {
             log.error("Error retrieving traditional analysis result for file: {}", fileMd5, e);
-            return ResponseEntity.ok(Result.error(500, "Failed to retrieve analysis result: " + e.getMessage()));
+            return ResponseEntity.ok(Result.error("Failed to retrieve analysis result: " + e.getMessage()));
         }
     }
     
@@ -67,7 +67,7 @@ public class TraditionalAnalysisController {
             
         } catch (Exception e) {
             log.error("Error retrieving traditional analysis results for project: {}", projectId, e);
-            return ResponseEntity.ok(Result.error(500, "Failed to retrieve analysis results: " + e.getMessage()));
+            return ResponseEntity.ok(Result.error("Failed to retrieve analysis results: " + e.getMessage()));
         }
     }
     
@@ -91,7 +91,7 @@ public class TraditionalAnalysisController {
             
         } catch (Exception e) {
             log.error("Error checking traditional analysis status for file: {}", fileMd5, e);
-            return ResponseEntity.ok(Result.error(500, "Failed to check analysis status: " + e.getMessage()));
+            return ResponseEntity.ok(Result.error("Failed to check analysis status: " + e.getMessage()));
         }
     }
     
@@ -121,12 +121,12 @@ public class TraditionalAnalysisController {
                 
                 return ResponseEntity.ok(Result.success(summary));
             } else {
-                return ResponseEntity.ok(Result.error(404, "Traditional analysis result not found for file: " + fileMd5));
+                return ResponseEntity.ok(Result.error("Traditional analysis result not found for file: " + fileMd5));
             }
             
         } catch (Exception e) {
             log.error("Error retrieving traditional analysis summary for file: {}", fileMd5, e);
-            return ResponseEntity.ok(Result.error(500, "Failed to retrieve analysis summary: " + e.getMessage()));
+            return ResponseEntity.ok(Result.error("Failed to retrieve analysis summary: " + e.getMessage()));
         }
     }
     
@@ -140,11 +140,11 @@ public class TraditionalAnalysisController {
         
         try {
             if (request.getFileMd5List() == null || request.getFileMd5List().size() < 2) {
-                return ResponseEntity.ok(Result.error(400, "At least 2 files required for comparison"));
+                return ResponseEntity.ok(Result.error("At least 2 files required for comparison"));
             }
             
             if (request.getFileMd5List().size() > 10) {
-                return ResponseEntity.ok(Result.error(400, "Maximum 10 files allowed for comparison"));
+                return ResponseEntity.ok(Result.error("Maximum 10 files allowed for comparison"));
             }
             
             AnalysisComparisonDto comparison = new AnalysisComparisonDto();
@@ -155,7 +155,7 @@ public class TraditionalAnalysisController {
             
         } catch (Exception e) {
             log.error("Error comparing traditional analysis results", e);
-            return ResponseEntity.ok(Result.error(500, "Failed to compare analysis results: " + e.getMessage()));
+            return ResponseEntity.ok(Result.error("Failed to compare analysis results: " + e.getMessage()));
         }
     }
     
