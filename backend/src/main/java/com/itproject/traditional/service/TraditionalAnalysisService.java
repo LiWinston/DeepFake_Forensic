@@ -329,8 +329,9 @@ public class TraditionalAnalysisService {
      */
     private void performLightingAnalysis(TraditionalAnalysisResult result, InputStream imageStream) {
         try {
+            // Use lower sensitivity (3) for more conservative analysis
             LightingAnalysisUtil.LightingResult lightingResult = lightingUtil.performLightingAnalysis(
-                imageStream, 5);
+                imageStream, 3);
             
             // Upload analysis image to MinIO
             String lightingImagePath = uploadAnalysisResult(

@@ -16,7 +16,16 @@ import java.util.List;
 
 /**
  * Lighting Analysis implementation for detecting inconsistent lighting patterns
- * Simplified version that analyzes lighting without GUI interaction
+ * 
+ * NOTE: This implementation differs from WU's original interactive tool which required
+ * manual point selection for geometric light ray analysis. This automated version
+ * analyzes lighting patterns through statistical analysis of image regions.
+ * 
+ * Original concept: User clicks points to define object-shadow relationships,
+ * then geometric light ray consistency is checked.
+ * 
+ * Current implementation: Automated grid-based analysis of brightness, contrast,
+ * and color temperature variations across image regions.
  */
 @Slf4j
 @Component
@@ -74,11 +83,12 @@ public class LightingAnalysisUtil {
         
         List<LightingRegion> regions = new ArrayList<>();
         
-        // Divide image into analysis regions (grid-based approach)
-        int regionSize = Math.max(32, Math.min(width, height) / 10); // Adaptive region size
+        // Divide image into analysis regions (less dense grid for more reasonable analysis)
+        int regionSize = Math.max(64, Math.min(width, height) / 8); // Larger regions, less dense
+        int stepSize = regionSize / 2; // 50% overlap instead of no overlap
         
-        for (int y = 0; y < height - regionSize; y += regionSize) {
-            for (int x = 0; x < width - regionSize; x += regionSize) {
+        for (int y = 0; y < height - regionSize; y += stepSize) {
+            for (int x = 0; x < width - regionSize; x += stepSize) {
                 LightingRegion region = analyzeRegionLighting(image, x, y, regionSize, sensitivity);
                 if (region != null) {
                     regions.add(region);
@@ -211,40 +221,56 @@ public class LightingAnalysisUtil {
         
         if (regions.size() < 2) return inconsistencies;
         
-        // Calculate thresholds based on sensitivity
-        double brightnessThreshold = 50.0 - (sensitivity * 3.0); // More sensitive = lower threshold
-        double contrastThreshold = 30.0 - (sensitivity * 2.0);
-        double colorThreshold = 40.0 - (sensitivity * 2.5);
+        // Calculate more reasonable thresholds based on sensitivity
+        // These thresholds are adjusted to be less sensitive for natural variations
+        double brightnessThreshold = Math.max(30.0, 80.0 - (sensitivity * 5.0)); // More reasonable range: 30-75
+        double contrastThreshold = Math.max(20.0, 50.0 - (sensitivity * 3.0));   // More reasonable range: 20-47
+        double colorThreshold = Math.max(25.0, 60.0 - (sensitivity * 3.5));      // More reasonable range: 25-57
         
         for (int i = 0; i < regions.size(); i++) {
             for (int j = i + 1; j < regions.size(); j++) {
                 LightingRegion region1 = regions.get(i);
                 LightingRegion region2 = regions.get(j);
                 
+                // Calculate distance between regions - closer regions should have more similar lighting
+                double distance = Math.sqrt(
+                    Math.pow(region1.getCenterX() - region2.getCenterX(), 2) + 
+                    Math.pow(region1.getCenterY() - region2.getCenterY(), 2)
+                );
+                
+                // Apply distance-based threshold adjustment - farther regions can have more variation
+                double distanceFactor = Math.max(0.5, Math.min(2.0, distance / 200.0)); // Normalize distance
+                double adjustedBrightnessThreshold = brightnessThreshold * distanceFactor;
+                double adjustedContrastThreshold = contrastThreshold * distanceFactor;
+                double adjustedColorThreshold = colorThreshold * distanceFactor;
+                
                 // Check brightness inconsistency
                 double brightnessDiff = Math.abs(region1.getAvgBrightness() - region2.getAvgBrightness());
-                if (brightnessDiff > brightnessThreshold) {
+                if (brightnessDiff > adjustedBrightnessThreshold) {
                     inconsistencies.add(new LightingInconsistency(
                         "BRIGHTNESS", region1, region2, brightnessDiff,
-                        String.format("Significant brightness difference: %.2f", brightnessDiff)
+                        String.format("Significant brightness difference: %.2f (threshold: %.2f)", 
+                                    brightnessDiff, adjustedBrightnessThreshold)
                     ));
                 }
                 
                 // Check contrast inconsistency
                 double contrastDiff = Math.abs(region1.getContrast() - region2.getContrast());
-                if (contrastDiff > contrastThreshold) {
+                if (contrastDiff > adjustedContrastThreshold) {
                     inconsistencies.add(new LightingInconsistency(
                         "CONTRAST", region1, region2, contrastDiff,
-                        String.format("Significant contrast difference: %.2f", contrastDiff)
+                        String.format("Significant contrast difference: %.2f (threshold: %.2f)", 
+                                    contrastDiff, adjustedContrastThreshold)
                     ));
                 }
                 
                 // Check color temperature inconsistency
                 double colorDiff = calculateColorDifference(region1.getColorChannels(), region2.getColorChannels());
-                if (colorDiff > colorThreshold) {
+                if (colorDiff > adjustedColorThreshold) {
                     inconsistencies.add(new LightingInconsistency(
                         "COLOR_TEMPERATURE", region1, region2, colorDiff,
-                        String.format("Significant color temperature difference: %.2f", colorDiff)
+                        String.format("Significant color temperature difference: %.2f (threshold: %.2f)", 
+                                    colorDiff, adjustedColorThreshold)
                     ));
                 }
             }
@@ -322,9 +348,22 @@ public class LightingAnalysisUtil {
         int inconsistencies = lightingData.getInconsistencies().size();
         int totalRegions = lightingData.getRegions().size();
         
-        // Calculate confidence based on inconsistency ratio
+        // Calculate confidence based on inconsistency ratio with more reasonable scaling
         double inconsistencyRatio = totalRegions > 0 ? (double) inconsistencies / totalRegions : 0;
-        double confidenceScore = Math.min(100, inconsistencyRatio * 150); // Scale factor
+        
+        // More conservative confidence calculation
+        // Only severe inconsistencies should result in high confidence scores
+        double confidenceScore = 0.0;
+        if (inconsistencyRatio > 0.5) {
+            // More than 50% of regions have inconsistencies - high confidence of manipulation
+            confidenceScore = Math.min(100, 50 + (inconsistencyRatio - 0.5) * 100);
+        } else if (inconsistencyRatio > 0.2) {
+            // 20-50% inconsistencies - moderate confidence
+            confidenceScore = inconsistencyRatio * 125; // Scale to 25-62.5 range
+        } else {
+            // Less than 20% inconsistencies - low confidence
+            confidenceScore = inconsistencyRatio * 50; // Scale to 0-10 range
+        }
         
         String analysisSummary = generateLightingAnalysisSummary(inconsistencies, totalRegions, confidenceScore);
         
@@ -340,16 +379,20 @@ public class LightingAnalysisUtil {
         summary.append("Lighting Analysis Results:\n");
         summary.append(String.format("- Analyzed regions: %d\n", totalRegions));
         summary.append(String.format("- Lighting inconsistencies found: %d\n", inconsistencies));
-        summary.append(String.format("- Confidence score: %.2f/100\n", confidenceScore));
+        summary.append(String.format("- Confidence score: %.1f/100\n", confidenceScore));
+        
+        double inconsistencyRatio = totalRegions > 0 ? (double) inconsistencies / totalRegions : 0;
         
         if (inconsistencies == 0) {
-            summary.append("- Assessment: Lighting appears consistent across the image");
-        } else if (inconsistencies < 3) {
-            summary.append("- Assessment: Minor lighting inconsistencies detected");
-        } else if (inconsistencies < 8) {
-            summary.append("- Assessment: Moderate lighting inconsistencies suggest possible manipulation");
+            summary.append("- Assessment: No lighting inconsistencies detected - image appears authentic");
+        } else if (inconsistencyRatio < 0.1) {
+            summary.append("- Assessment: Very few lighting inconsistencies - likely natural lighting variation");
+        } else if (inconsistencyRatio < 0.3) {
+            summary.append("- Assessment: Some lighting inconsistencies detected - requires further investigation");
+        } else if (inconsistencyRatio < 0.6) {
+            summary.append("- Assessment: Significant lighting inconsistencies suggest possible manipulation");
         } else {
-            summary.append("- Assessment: Significant lighting inconsistencies indicate likely manipulation");
+            summary.append("- Assessment: Extensive lighting inconsistencies indicate likely manipulation");
         }
         
         return summary.toString();
