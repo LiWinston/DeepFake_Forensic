@@ -3,6 +3,7 @@ package com.itproject.traditional.service;
 import com.itproject.auth.entity.User;
 import com.itproject.auth.repository.UserRepository;
 import com.itproject.auth.security.SecurityUtils;
+import com.itproject.common.service.EmailService;
 import com.itproject.project.entity.Project;
 import com.itproject.project.repository.ProjectRepository;
 import com.itproject.upload.entity.MediaFile;
@@ -31,6 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
@@ -71,6 +75,9 @@ public class TraditionalAnalysisService {
     
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
+    
+    @Autowired
+    private EmailService emailService;
     
     @Value("${minio.bucket-name}")
     private String bucketName;
@@ -238,6 +245,9 @@ public class TraditionalAnalysisService {
             result.setProcessingTimeMs(System.currentTimeMillis() - startTime);
         } finally {
             analysisRepository.save(result);
+            
+            // Send completion email notification
+            sendAnalysisCompleteEmail(result, mediaFile);
         }
     }
     
@@ -598,6 +608,76 @@ public class TraditionalAnalysisService {
             
         } catch (Exception e) {
             log.error("Failed to create failed analysis record for file: {}", fileMd5, e);
+        }
+    }
+    
+    /**
+     * Send analysis completion email notification
+     */
+    private void sendAnalysisCompleteEmail(TraditionalAnalysisResult result, MediaFile mediaFile) {
+        try {
+            if (mediaFile.getUser() == null || mediaFile.getUser().getEmail() == null) {
+                log.warn("Cannot send email notification - user or email is null for file: {}", result.getFileMd5());
+                return;
+            }
+            
+            Map<String, Object> emailVariables = new HashMap<>();
+            
+            // Basic information
+            emailVariables.put("userName", mediaFile.getUser().getUsername());
+            emailVariables.put("fileName", mediaFile.getOriginalFileName());
+            emailVariables.put("projectName", mediaFile.getProject() != null ? mediaFile.getProject().getName() : "Unknown Project");
+            emailVariables.put("analysisDate", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            
+            // Analysis status and results
+            String status = result.getAnalysisStatus().name();
+            emailVariables.put("analysisStatus", status);
+            emailVariables.put("isSuccessful", "COMPLETED".equals(status));
+            
+            if ("COMPLETED".equals(status)) {
+                // Success case - include detailed results
+                emailVariables.put("overallScore", String.format("%.1f", result.getOverallConfidenceScore()));
+                emailVariables.put("authenticityAssessment", result.getAuthenticityAssessment().name());
+                
+                // Individual scores
+                emailVariables.put("elaScore", String.format("%.1f", result.getElaConfidenceScore() != null ? result.getElaConfidenceScore() : 0.0));
+                emailVariables.put("cfaScore", String.format("%.1f", result.getCfaConfidenceScore() != null ? result.getCfaConfidenceScore() : 0.0));
+                emailVariables.put("copyMoveScore", String.format("%.1f", result.getCopyMoveConfidenceScore() != null ? result.getCopyMoveConfidenceScore() : 0.0));
+                emailVariables.put("lightingScore", String.format("%.1f", result.getLightingConfidenceScore() != null ? result.getLightingConfidenceScore() : 0.0));
+                
+                // Processing information
+                emailVariables.put("processingTime", String.format("%.2f", result.getProcessingTimeMs() / 1000.0));
+                emailVariables.put("imageWidth", result.getImageWidth());
+                emailVariables.put("imageHeight", result.getImageHeight());
+                emailVariables.put("fileSize", String.format("%.2f", result.getFileSizeBytes() / (1024.0 * 1024.0))); // MB
+                
+                // Analysis summary
+                emailVariables.put("analysisSummary", result.getAnalysisSummary());
+                emailVariables.put("detailedFindings", result.getDetailedFindings());
+                
+            } else {
+                // Failed case
+                emailVariables.put("errorMessage", result.getErrorMessage() != null ? result.getErrorMessage() : "Unknown error occurred");
+                emailVariables.put("processingTime", result.getProcessingTimeMs() != null ? 
+                    String.format("%.2f", result.getProcessingTimeMs() / 1000.0) : "Unknown");
+            }
+            
+            // Send email asynchronously
+            emailService.sendTraditionalAnalysisCompleteEmail(mediaFile.getUser().getEmail(), emailVariables)
+                .thenAccept(success -> {
+                    if (success) {
+                        log.info("Analysis completion email sent successfully for file: {}", result.getFileMd5());
+                    } else {
+                        log.error("Failed to send analysis completion email for file: {}", result.getFileMd5());
+                    }
+                })
+                .exceptionally(throwable -> {
+                    log.error("Exception while sending analysis completion email for file: {}", result.getFileMd5(), throwable);
+                    return null;
+                });
+                
+        } catch (Exception e) {
+            log.error("Error preparing analysis completion email for file: {}", result.getFileMd5(), e);
         }
     }
 }

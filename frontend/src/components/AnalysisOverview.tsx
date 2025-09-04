@@ -327,9 +327,10 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       try {
         const result = await traditionalAnalysisAPI.triggerAnalysis(file.md5Hash, false);
         if (result.success) {
-          message.success(result.message);
-          // Refresh analysis list after delay
-          setTimeout(() => loadAllAnalyses(file.md5Hash), 2000);
+          message.success({
+            content: 'Traditional analysis started! You will receive an email when it\'s complete.',
+            duration: 5
+          });
         } else {
           message.error(result.message);
         }
@@ -358,6 +359,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
           <div>
             <p>Are you sure you want to re-run the traditional analysis?</p>
             <p><strong>Note:</strong> Traditional analysis has high computational cost and will take approximately <strong>2-5 minutes</strong> to complete.</p>
+            <p>You will receive an email notification when the analysis is complete.</p>
           </div>
         ),
         okText: 'Yes, Re-analyze',
@@ -368,9 +370,10 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
           try {
             const result = await traditionalAnalysisAPI.triggerAnalysis(file.md5Hash, true);
             if (result.success) {
-              message.success(result.message);
-              // Refresh analysis list after delay
-              setTimeout(() => loadAllAnalyses(file.md5Hash), 2000);
+              message.success({
+                content: 'Traditional analysis started! You will receive an email when it\'s complete.',
+                duration: 5
+              });
             } else {
               message.error(result.message);
             }

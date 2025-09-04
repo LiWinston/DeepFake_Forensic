@@ -95,6 +95,34 @@ public class EmailService {
     }
     
     /**
+     * Send traditional analysis completion notification email
+     */
+    public CompletableFuture<Boolean> sendTraditionalAnalysisCompleteEmail(String to, Map<String, Object> variables) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Context context = new Context();
+                variables.forEach(context::setVariable);
+                
+                String html = templateEngine.process("email/traditional-analysis-complete", context);
+                
+                String subject = "Traditional Analysis Complete - DeepFake Forensic";
+                String status = (String) variables.get("analysisStatus");
+                if ("FAILED".equals(status)) {
+                    subject = "Traditional Analysis Failed - DeepFake Forensic";
+                }
+                
+                sendHtmlEmail(to, subject, html);
+                log.info("Traditional analysis complete email sent successfully to: {}", to);
+                return true;
+                
+            } catch (Exception e) {
+                log.error("Failed to send traditional analysis complete email to: {}", to, e);
+                return false;
+            }
+        });
+    }
+    
+    /**
      * Send generic notification email
      */
     public CompletableFuture<Boolean> sendNotificationEmail(String to, String subject, String content) {
