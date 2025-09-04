@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   Table,
   Button,
@@ -56,13 +56,38 @@ const FilesList: React.FC<FilesListProps> = ({
   const [previewFile, setPreviewFile] = useState<UploadFile | null>(null);
   const [filterType, setFilterType] = useState<string>('');
   const [searchText, setSearchText] = useState<string>('');
+  const [debouncedSearchText, setDebouncedSearchText] = useState<string>('');
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(defaultProjectId);
-  const [showAllFiles, setShowAllFiles] = useState(false);  // Auto-select first project if no default is set
+  const [showAllFiles, setShowAllFiles] = useState(false);
+  
+  // Debounce timer reference
+  const searchDebounceRef = useRef<number | null>(null);
+  
+  // Search state: indicates user is typing but search hasn't been triggered yet
+  const isSearchPending = searchText !== debouncedSearchText;  // Auto-select first project if no default is set
   useEffect(() => {
     if (!defaultProjectId && projects.length > 0 && !showAllFiles && !selectedProjectId) {
       setSelectedProjectId(projects[0].id);
     }
   }, [defaultProjectId, projects, showAllFiles, selectedProjectId]);
+
+  // Debounced search: trigger search 800ms after user stops typing
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    
+    searchDebounceRef.current = setTimeout(() => {
+      setDebouncedSearchText(searchText);
+    }, 800); // 800ms debounce delay
+    
+    // Cleanup function
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [searchText]);
 
   // Load files when project selection changes with debouncing to prevent duplicate requests
   useEffect(() => {
@@ -72,9 +97,9 @@ const FilesList: React.FC<FilesListProps> = ({
 
     const timeoutId = setTimeout(() => {
       if (showAllFiles) {
-        loadFiles(1, pagination.pageSize, undefined, filterType || undefined, undefined, searchText || undefined);
+        loadFiles(1, pagination.pageSize, undefined, filterType || undefined, undefined, debouncedSearchText || undefined);
       } else if (selectedProjectId) {
-        loadFiles(1, pagination.pageSize, undefined, filterType || undefined, selectedProjectId, searchText || undefined);
+        loadFiles(1, pagination.pageSize, undefined, filterType || undefined, selectedProjectId, debouncedSearchText || undefined);
       } else if (projects.length > 0 && !selectedProjectId) {
         // If no project is selected but projects exist, select the first one
         const firstProject = projects[0];
@@ -84,14 +109,14 @@ const FilesList: React.FC<FilesListProps> = ({
     }, 100); // 100ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [selectedProjectId, showAllFiles, projects, projectsLoading, loadFiles, pagination.pageSize, filterType, searchText]);
+  }, [selectedProjectId, showAllFiles, projects, projectsLoading, loadFiles, pagination.pageSize, filterType, debouncedSearchText]);
   const handleTableChange = useCallback((pagination: TablePaginationConfig) => {
     if (showAllFiles) {
-      loadFiles(pagination.current, pagination.pageSize, undefined, filterType || undefined, undefined, searchText || undefined);
+      loadFiles(pagination.current, pagination.pageSize, undefined, filterType || undefined, undefined, debouncedSearchText || undefined);
     } else {
-      loadFiles(pagination.current, pagination.pageSize, undefined, filterType || undefined, selectedProjectId, searchText || undefined);
+      loadFiles(pagination.current, pagination.pageSize, undefined, filterType || undefined, selectedProjectId, debouncedSearchText || undefined);
     }
-  }, [loadFiles, selectedProjectId, showAllFiles, filterType, searchText]);
+  }, [loadFiles, selectedProjectId, showAllFiles, filterType, debouncedSearchText]);
   const handleDelete = useCallback(async (fileId: string) => {
     // Find the project for this file to check permissions
     const file = files.find(f => f.id === fileId);
@@ -148,20 +173,20 @@ const FilesList: React.FC<FilesListProps> = ({
   const handleFilterChange = useCallback((value: string) => {
     setFilterType(value);
     if (showAllFiles) {
-      loadFiles(1, pagination.pageSize, undefined, value || undefined, undefined, searchText || undefined);
+      loadFiles(1, pagination.pageSize, undefined, value || undefined, undefined, debouncedSearchText || undefined);
     } else {
-      loadFiles(1, pagination.pageSize, undefined, value || undefined, selectedProjectId, searchText || undefined);
+      loadFiles(1, pagination.pageSize, undefined, value || undefined, selectedProjectId, debouncedSearchText || undefined);
     }
-  }, [loadFiles, pagination.pageSize, selectedProjectId, showAllFiles, searchText]);
+  }, [loadFiles, pagination.pageSize, selectedProjectId, showAllFiles, debouncedSearchText]);
   const handleSearch = useCallback((value: string) => {
-    setSearchText(value);
-    // Implement search logic here - pass search keyword to loadFiles
-    if (showAllFiles) {
-      loadFiles(1, pagination.pageSize, undefined, filterType || undefined, undefined, value);
-    } else {
-      loadFiles(1, pagination.pageSize, undefined, filterType || undefined, selectedProjectId, value);
+    // Clear debounce timer and execute search immediately
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
     }
-  }, [loadFiles, pagination.pageSize, selectedProjectId, showAllFiles, filterType]);
+    
+    setSearchText(value);
+    setDebouncedSearchText(value); // Immediately update debounced text to trigger search
+  }, []);
 
   const handleProjectChange = useCallback((value: number | 'all') => {
     if (value === 'all') {
@@ -173,11 +198,11 @@ const FilesList: React.FC<FilesListProps> = ({
     }
   }, []);  const handleRefresh = useCallback(() => {
     if (showAllFiles) {
-      refreshFiles(undefined, filterType || undefined, searchText || undefined);
+      refreshFiles(undefined, filterType || undefined, debouncedSearchText || undefined);
     } else {
-      refreshFiles(selectedProjectId, filterType || undefined, searchText || undefined);
+      refreshFiles(selectedProjectId, filterType || undefined, debouncedSearchText || undefined);
     }
-  }, [refreshFiles, selectedProjectId, showAllFiles, filterType, searchText]);
+  }, [refreshFiles, selectedProjectId, showAllFiles, filterType, debouncedSearchText]);
 
   const getFileStatusTag = (status: string) => {
     const statusConfig = {
@@ -383,6 +408,7 @@ const FilesList: React.FC<FilesListProps> = ({
             onSearch={handleSearch}
             onChange={(e) => setSearchText(e.target.value)}
             value={searchText}
+            loading={isSearchPending} // Show loading when user is typing but search hasn't been triggered yet
           />
         </Col>
         <Col span={6}>
