@@ -278,7 +278,8 @@ public class CopyMoveDetectionUtil {
                                  .orElse(0.0);
         
         // Calculate confidence based on number of pairs and their similarity
-        double confidenceScore = Math.min(100, pairs.size() * 20); // Scale factor
+        // Lower pairs count = lower confidence of copy-move manipulation
+        double confidenceScore = Math.min(100, pairs.size() * 10.5); // Adjusted scale factor
         
         String analysisSummary = generateCopyMoveAnalysisSummary(pairs.size(), suspiciousBlocks, avgDistance, confidenceScore);
         

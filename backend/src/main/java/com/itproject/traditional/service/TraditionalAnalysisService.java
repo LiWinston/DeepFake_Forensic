@@ -636,8 +636,12 @@ public class TraditionalAnalysisService {
             
             if ("COMPLETED".equals(status)) {
                 // Success case - include detailed results
-                emailVariables.put("overallScore", String.format("%.1f", result.getOverallConfidenceScore()));
-                emailVariables.put("authenticityAssessment", result.getAuthenticityAssessment().name());
+                Double overallScore = result.getOverallConfidenceScore() != null ? result.getOverallConfidenceScore() : 0.0;
+                emailVariables.put("overallScore", String.format("%.1f", overallScore));
+                
+                String authenticityAssessment = result.getAuthenticityAssessment() != null ? 
+                    result.getAuthenticityAssessment().name() : "UNKNOWN";
+                emailVariables.put("authenticityAssessment", authenticityAssessment);
                 
                 // Individual scores
                 emailVariables.put("elaScore", String.format("%.1f", result.getElaConfidenceScore() != null ? result.getElaConfidenceScore() : 0.0));
