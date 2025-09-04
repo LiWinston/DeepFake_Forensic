@@ -21,6 +21,7 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +29,9 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -78,6 +82,14 @@ public class TraditionalAnalysisService {
     
     @Autowired
     private EmailService emailService;
+    
+    @Autowired
+    @Qualifier("traditionalAnalysisExecutor")
+    private Executor traditionalAnalysisExecutor;
+    
+    @Autowired
+    @Qualifier("ioTaskExecutor")
+    private Executor ioTaskExecutor;
     
     @Value("${minio.bucket-name}")
     private String bucketName;
@@ -216,17 +228,37 @@ public class TraditionalAnalysisService {
             // Save initial record
             result = analysisRepository.save(result);
             
-            // Perform ELA Analysis
-            performELAAnalysis(result, new ByteArrayInputStream(imageData));
+            // Store image data for reuse across all analyses (make final for lambda)
+            final byte[] finalImageData = imageData.clone();
+            final TraditionalAnalysisResult finalResult = result;
+            final MediaFile finalMediaFile = mediaFile;
             
-            // Perform CFA Analysis
-            performCFAAnalysis(result, new ByteArrayInputStream(imageData));
+            // Execute all four analyses in parallel using CompletableFuture
+            CompletableFuture<Void> elaFuture = CompletableFuture.runAsync(() -> {
+                performELAAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+            }, traditionalAnalysisExecutor);
             
-            // Perform Copy-Move Detection
-            performCopyMoveAnalysis(result, new ByteArrayInputStream(imageData));
+            CompletableFuture<Void> cfaFuture = CompletableFuture.runAsync(() -> {
+                performCFAAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+            }, traditionalAnalysisExecutor);
             
-            // Perform Lighting Analysis
-            performLightingAnalysis(result, new ByteArrayInputStream(imageData));
+            CompletableFuture<Void> copyMoveFuture = CompletableFuture.runAsync(() -> {
+                performCopyMoveAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+            }, traditionalAnalysisExecutor);
+            
+            CompletableFuture<Void> lightingFuture = CompletableFuture.runAsync(() -> {
+                performLightingAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+            }, traditionalAnalysisExecutor);
+            
+            // Wait for all analyses to complete
+            CompletableFuture<Void> allAnalyses = CompletableFuture.allOf(
+                elaFuture, cfaFuture, copyMoveFuture, lightingFuture
+            );
+            
+            // Block until all analyses are complete
+            allAnalyses.join();
+            
+            log.info("All parallel analyses completed for file: {}", finalMediaFile.getFileMd5());
             
             // Calculate overall results
             calculateOverallResults(result);
