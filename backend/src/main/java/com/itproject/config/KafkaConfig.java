@@ -8,9 +8,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.apache.kafka.clients.admin.NewTopic;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -82,5 +84,33 @@ public class KafkaConfig {
     @Bean("traditionalAnalysisTopic")
     public String traditionalAnalysisTopic() {
         return "traditional-analysis-tasks";
+    }
+    
+    // Auto-create topics on application startup
+    @Bean
+    public NewTopic metadataAnalysisTopicCreate() {
+        return TopicBuilder.name("metadata-analysis")
+                .partitions(3)
+                .replicas(1)
+                .compact()
+                .build();
+    }
+    
+    @Bean 
+    public NewTopic fileProcessingTopicCreate() {
+        return TopicBuilder.name("file-processing")
+                .partitions(3)
+                .replicas(1)
+                .compact()
+                .build();
+    }
+    
+    @Bean
+    public NewTopic traditionalAnalysisTopicCreate() {
+        return TopicBuilder.name("traditional-analysis-tasks")
+                .partitions(3)
+                .replicas(1)
+                .compact()
+                .build();
     }
 }
