@@ -1,3 +1,5 @@
+package com.itproject.traditional.OriginalFuncsReferencedByWU;
+
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;
 import javax.imageio.IIOImage;
