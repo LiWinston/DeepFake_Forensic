@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,11 +68,40 @@ public class TraditionalAnalysisService {
     @Autowired
     private LightingAnalysisUtil lightingUtil;
     
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
+    
     @Value("${minio.bucket-name}")
     private String bucketName;
     
     @Value("${minio.traditional-analysis-folder:traditional-analysis}")
     private String traditionalAnalysisFolder;
+    
+    @Value("${kafka.topics.traditional-analysis:traditional-analysis-tasks}")
+    private String traditionalAnalysisTopic;
+    
+    /**
+     * Manually trigger traditional analysis for a file
+     */
+    public boolean triggerTraditionalAnalysis(String fileMd5) {
+        try {
+            // Check if file exists
+            Optional<MediaFile> mediaFileOpt = mediaFileRepository.findByFileMd5(fileMd5);
+            if (mediaFileOpt.isEmpty()) {
+                log.error("Media file not found for MD5: {}", fileMd5);
+                return false;
+            }
+            
+            // Send Kafka message to trigger analysis
+            kafkaTemplate.send(traditionalAnalysisTopic, fileMd5);
+            log.info("Traditional analysis task triggered for file: {}", fileMd5);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Error triggering traditional analysis for file: {}", fileMd5, e);
+            return false;
+        }
+    }
     
     /**
      * Kafka listener for traditional analysis tasks

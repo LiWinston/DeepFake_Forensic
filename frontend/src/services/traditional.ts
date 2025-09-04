@@ -51,5 +51,24 @@ export const traditionalAnalysisAPI = {
       console.error('Failed to get project traditional analysis results:', error);
       return null;
     }
+  },
+
+  // Trigger traditional analysis for a file
+  triggerAnalysis: async (fileMd5: string, force: boolean = false): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await httpClient.post(`/traditional-analysis/trigger/${fileMd5}`, null, {
+        params: { force }
+      });
+      return {
+        success: response.data?.success || false,
+        message: response.data?.message || response.data?.data || 'Unknown error'
+      };
+    } catch (error: any) {
+      console.error('Failed to trigger traditional analysis:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to trigger analysis'
+      };
+    }
   }
 };

@@ -96,6 +96,39 @@ public class TraditionalAnalysisController {
     }
     
     /**
+     * Manually trigger traditional analysis for a file
+     */
+    @PostMapping("/trigger/{fileMd5}")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<Result<String>> triggerTraditionalAnalysis(
+            @PathVariable String fileMd5,
+            @RequestParam(defaultValue = "false") boolean force) {
+        
+        try {
+            // Check if analysis already exists
+            if (!force) {
+                Optional<TraditionalAnalysisResponse> existing = traditionalAnalysisService.getAnalysisResult(fileMd5);
+                if (existing.isPresent()) {
+                    return ResponseEntity.ok(Result.error("Traditional analysis already exists for this file. Use force=true to re-analyze."));
+                }
+            }
+            
+            // Trigger the analysis
+            boolean triggered = traditionalAnalysisService.triggerTraditionalAnalysis(fileMd5);
+            
+            if (triggered) {
+                return ResponseEntity.ok(Result.success("Traditional analysis triggered successfully. Please wait 2-5 minutes for completion."));
+            } else {
+                return ResponseEntity.ok(Result.error("Failed to trigger traditional analysis. File may not exist."));
+            }
+            
+        } catch (Exception e) {
+            log.error("Error triggering traditional analysis for file: {}", fileMd5, e);
+            return ResponseEntity.ok(Result.error("Failed to trigger analysis: " + e.getMessage()));
+        }
+    }
+    
+    /**
      * Get analysis summary for a file (lightweight version)
      */
     @GetMapping("/summary/{fileMd5}")

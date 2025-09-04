@@ -82,9 +82,12 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
 
   // State for traditional analysis
   const [traditionalAnalysis, setTraditionalAnalysis] = useState<TraditionalAnalysisResult | null>(null);
+  const [traditionalLoading, setTraditionalLoading] = useState(false);
+  const [triggeringAnalysis, setTriggeringAnalysis] = useState(false);
 
   // Load traditional analysis
   const loadTraditionalAnalysis = useCallback(async (fileMd5: string) => {
+    setTraditionalLoading(true);
     try {
       const traditionalResult = await traditionalAnalysisAPI.getAnalysisResult(fileMd5);
       setTraditionalAnalysis(traditionalResult);
@@ -93,6 +96,8 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       console.error('Error loading traditional analysis:', error);
       setTraditionalAnalysis(null);
       return null;
+    } finally {
+      setTraditionalLoading(false);
     }
   }, []);
 
@@ -258,6 +263,51 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
   };
 
+  // Handle triggering traditional analysis with confirmation
+  const handleTriggerTraditionalAnalysis = async (force: boolean = false) => {
+    if (!file?.md5Hash) {
+      message.error('No file selected');
+      return;
+    }
+
+    setTriggeringAnalysis(true);
+    try {
+      const result = await traditionalAnalysisAPI.triggerAnalysis(file.md5Hash, force);
+      
+      if (result.success) {
+        message.success(result.message);
+        // Refresh the analysis list after a short delay
+        setTimeout(() => {
+          loadAllAnalyses(file.md5Hash);
+        }, 2000);
+      } else {
+        if (result.message.includes('already exists')) {
+          // Show confirmation dialog for re-analysis
+          Modal.confirm({
+            title: 'Confirm Re-analysis',
+            icon: <ExclamationCircleOutlined />,
+            content: (
+              <div>
+                <p>Traditional analysis results already exist for this file.</p>
+                <p><strong>Note:</strong> Traditional analysis has high computational cost and will take approximately <strong>2-5 minutes</strong> to complete.</p>
+                <p>Are you sure you want to re-analyze?</p>
+              </div>
+            ),
+            okText: 'Yes, Re-analyze',
+            cancelText: 'Cancel',
+            onOk: () => handleTriggerTraditionalAnalysis(true),
+          });
+        } else {
+          message.error(result.message);
+        }
+      }
+    } catch (error) {
+      message.error('Failed to trigger traditional analysis');
+    } finally {
+      setTriggeringAnalysis(false);
+    }
+  };
+
   const handleStartAnalysis = (type: string) => {
     if (!file?.md5Hash) {
       message.error('No file selected');
@@ -266,6 +316,8 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
 
     if (type === 'METADATA') {
       startMetadataAnalysis(file.md5Hash);
+    } else if (type === 'TRADITIONAL') {
+      handleTriggerTraditionalAnalysis();
     } else {
       message.info(`${type} analysis will be triggered automatically when available`);
     }
@@ -720,10 +772,20 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
             <Space>
               <Button 
                 type="primary"
+                icon={<ScanOutlined />}
                 onClick={() => handleStartAnalysis('METADATA')}
                 loading={metadataLoading}
               >
-                Start Analyze
+                Metadata Analysis
+              </Button>
+              <Button 
+                type="primary"
+                icon={<ExperimentOutlined />}
+                onClick={() => handleStartAnalysis('TRADITIONAL')}
+                loading={triggeringAnalysis}
+                style={{ background: '#722ed1', borderColor: '#722ed1' }}
+              >
+                Traditional Analysis
               </Button>
             </Space>
           )
@@ -742,7 +804,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
           columns={columns}
           dataSource={allAnalyses}
           rowKey="id"
-          loading={loading || metadataLoading}
+          loading={loading || metadataLoading || traditionalLoading}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
