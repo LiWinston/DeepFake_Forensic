@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RecursiveAction;
 
 /**
  * Enhanced Error Level Analysis implementation
@@ -38,17 +40,28 @@ public class ErrorLevelAnalysisUtil {
      * @return ELA analysis result
      */
     public ElaResult performELA(InputStream imageStream, int quality, int scale) {
+        long startTime = System.currentTimeMillis();
         try {
             BufferedImage originalImage = ImageIO.read(imageStream);
             if (originalImage == null) {
                 throw new IllegalArgumentException("Unable to read image from input stream");
             }
             
+            int imageSize = originalImage.getWidth() * originalImage.getHeight();
+            log.info("Starting ELA analysis for {}x{} image ({} pixels)", 
+                    originalImage.getWidth(), originalImage.getHeight(), imageSize);
+            
             // Step 1: Re-save image with specified JPEG quality
             BufferedImage resavedImage = recompressImage(originalImage, quality);
             
-            // Step 2: Calculate pixel differences
-            BufferedImage elaImage = createElaImage(originalImage, resavedImage, scale);
+            // Step 2: Calculate pixel differences (use parallel processing for large images)
+            BufferedImage elaImage;
+            if (imageSize > 5_000_000) { // > 5 megapixels
+                log.info("Using parallel processing for large image ({} MP)", imageSize / 1_000_000);
+                elaImage = createElaImageParallel(originalImage, resavedImage, scale);
+            } else {
+                elaImage = createElaImage(originalImage, resavedImage, scale);
+            }
             
             // Step 3: Analyze the ELA result
             ElaMetrics metrics = analyzeElaImage(elaImage, originalImage);
@@ -57,6 +70,9 @@ public class ErrorLevelAnalysisUtil {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(elaImage, "PNG", baos);
             byte[] resultImageData = baos.toByteArray();
+            
+            long processingTime = System.currentTimeMillis() - startTime;
+            log.info("ELA analysis completed in {}ms for {} pixels", processingTime, imageSize);
             
             return new ElaResult(
                 elaImage,
@@ -123,6 +139,89 @@ public class ErrorLevelAnalysisUtil {
         }
         
         return elaImage;
+    }
+    
+    /**
+     * Parallel version of ELA image creation for large images
+     */
+    private BufferedImage createElaImageParallel(BufferedImage original, BufferedImage resaved, int scale) {
+        int width = original.getWidth();
+        int height = original.getHeight();
+        BufferedImage elaImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        
+        // Use ForkJoinPool for parallel processing
+        ForkJoinPool forkJoinPool = ForkJoinPool.commonPool();
+        
+        try {
+            ElaImageTask task = new ElaImageTask(original, resaved, elaImage, scale, 0, height);
+            forkJoinPool.invoke(task);
+        } finally {
+            // Don't shutdown the common pool
+        }
+        
+        return elaImage;
+    }
+    
+    /**
+     * RecursiveAction for parallel ELA image processing
+     */
+    private static class ElaImageTask extends RecursiveAction {
+        private static final int THRESHOLD = 50; // Process in chunks of 50 rows
+        
+        private final BufferedImage original;
+        private final BufferedImage resaved;
+        private final BufferedImage elaImage;
+        private final int scale;
+        private final int startRow;
+        private final int endRow;
+        
+        public ElaImageTask(BufferedImage original, BufferedImage resaved, BufferedImage elaImage, 
+                           int scale, int startRow, int endRow) {
+            this.original = original;
+            this.resaved = resaved;
+            this.elaImage = elaImage;
+            this.scale = scale;
+            this.startRow = startRow;
+            this.endRow = endRow;
+        }
+        
+        @Override
+        protected void compute() {
+            if (endRow - startRow <= THRESHOLD) {
+                // Process directly
+                processRows();
+            } else {
+                // Split the task
+                int mid = (startRow + endRow) / 2;
+                ElaImageTask leftTask = new ElaImageTask(original, resaved, elaImage, scale, startRow, mid);
+                ElaImageTask rightTask = new ElaImageTask(original, resaved, elaImage, scale, mid, endRow);
+                
+                invokeAll(leftTask, rightTask);
+            }
+        }
+        
+        private void processRows() {
+            int width = original.getWidth();
+            
+            for (int y = startRow; y < endRow; y++) {
+                for (int x = 0; x < width; x++) {
+                    Color originalColor = new Color(original.getRGB(x, y));
+                    Color resavedColor = new Color(resaved.getRGB(x, y));
+                    
+                    // Calculate absolute differences
+                    int diffRed = Math.abs(originalColor.getRed() - resavedColor.getRed());
+                    int diffGreen = Math.abs(originalColor.getGreen() - resavedColor.getGreen());
+                    int diffBlue = Math.abs(originalColor.getBlue() - resavedColor.getBlue());
+                    
+                    // Amplify differences
+                    int amplifiedRed = Math.min(255, diffRed * scale);
+                    int amplifiedGreen = Math.min(255, diffGreen * scale);
+                    int amplifiedBlue = Math.min(255, diffBlue * scale);
+                    
+                    elaImage.setRGB(x, y, new Color(amplifiedRed, amplifiedGreen, amplifiedBlue).getRGB());
+                }
+            }
+        }
     }
     
     /**
@@ -207,17 +306,21 @@ public class ErrorLevelAnalysisUtil {
      */
     private void floodFill(BufferedImage image, boolean[][] visited, int startX, int startY, int threshold) {
         // Use iterative implementation to avoid stack overflow for large connected regions
-        java.util.Stack<int[]> stack = new java.util.Stack<>();
-        stack.push(new int[]{startX, startY});
+        // Dynamic region size limit based on image size
+        int imageSize = image.getWidth() * image.getHeight();
+        int maxRegionSize = Math.max(200000, imageSize / 5); // At least 200k pixels or 20% of image
+        
+        // Use ArrayDeque for better performance than Stack
+        java.util.ArrayDeque<int[]> queue = new java.util.ArrayDeque<>();
+        queue.offer(new int[]{startX, startY});
         
         int[] dx = {-1, -1, -1, 0, 0, 1, 1, 1};
         int[] dy = {-1, 0, 1, -1, 1, -1, 0, 1};
         
-        int maxRegionSize = 50000; // Limit region size to prevent excessive processing
         int processedPixels = 0;
         
-        while (!stack.isEmpty() && processedPixels < maxRegionSize) {
-            int[] current = stack.pop();
+        while (!queue.isEmpty() && processedPixels < maxRegionSize) {
+            int[] current = queue.poll();
             int x = current[0];
             int y = current[1];
             
@@ -230,24 +333,46 @@ public class ErrorLevelAnalysisUtil {
             visited[x][y] = true;
             processedPixels++;
             
-            // Add 8-connected neighbors to stack
+            // Add 8-connected neighbors to queue
             for (int i = 0; i < 8; i++) {
                 int newX = x + dx[i];
                 int newY = y + dy[i];
                 
-                // Only add to stack if it's within bounds, hasn't been visited, and is suspicious
+                // Only add to queue if it's within bounds, hasn't been visited, and is suspicious
                 if (newX >= 0 && newX < image.getWidth() && 
                     newY >= 0 && newY < image.getHeight() && 
                     !visited[newX][newY] && 
                     isSuspiciousPixel(image, newX, newY, threshold)) {
-                    stack.push(new int[]{newX, newY});
+                    queue.offer(new int[]{newX, newY});
+                }
+            }
+            
+            // Periodic memory management for very large regions
+            if (processedPixels % 20000 == 0 && queue.size() > 100000) {
+                log.debug("Large region processing: {} pixels processed, queue size: {}", 
+                         processedPixels, queue.size());
+                
+                // If queue becomes too large, process in smaller chunks
+                if (queue.size() > 200000) {
+                    // Keep only a subset of the queue to prevent memory issues
+                    java.util.ArrayDeque<int[]> reducedQueue = new java.util.ArrayDeque<>();
+                    for (int i = 0; i < 100000 && !queue.isEmpty(); i++) {
+                        reducedQueue.offer(queue.poll());
+                    }
+                    queue = reducedQueue;
+                    log.debug("Reduced queue size to prevent memory overflow: {}", queue.size());
                 }
             }
         }
         
         if (processedPixels >= maxRegionSize) {
-            log.debug("Flood fill reached maximum region size limit: {}", maxRegionSize);
+            log.info("Large suspicious region detected: {} pixels (limit: {} - {}% of image). " +
+                    "This may indicate significant image manipulation.", 
+                    processedPixels, maxRegionSize, (int)(((double)maxRegionSize / imageSize) * 100));
         }
+        
+        // Clear queue to help GC
+        queue.clear();
     }
     
     /**
