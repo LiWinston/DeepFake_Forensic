@@ -69,7 +69,7 @@ public class TraditionalAnalysisService {
     private LightingAnalysisUtil lightingUtil;
     
     @Autowired
-    private KafkaTemplate<String, String> kafkaTemplate;
+    private KafkaTemplate<String, Object> kafkaTemplate;
     
     @Value("${minio.bucket-name}")
     private String bucketName;
