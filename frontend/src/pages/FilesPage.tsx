@@ -362,7 +362,9 @@ const FilesPage: React.FC = () => {
           onClose={handleCloseDetail}
           push={{ distance: 180 }}
           width={Math.min(window.innerWidth * 0.56, 980)}
-          mask={false}
+          mask
+          maskClosable
+          maskStyle={{ backgroundColor: 'rgba(0,0,0,0)' }}
           destroyOnClose
           styles={{ body: { overflow: 'auto' } }}
         >
