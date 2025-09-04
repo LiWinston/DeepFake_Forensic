@@ -132,7 +132,7 @@ class UploadService {
     );
     return (res.data?.data as any) || (res.data as any);
   }  // GET /upload/files
-  async getFiles(page: number = 1, pageSize: number = 20, status?: string, type?: string, projectId?: number): Promise<{
+  async getFiles(page: number = 1, pageSize: number = 20, status?: string, type?: string, projectId?: number, search?: string): Promise<{
     files: any[],
     total: number,
     current: number,
@@ -146,6 +146,7 @@ class UploadService {
     if (status) params.status = status;
     if (type) params.type = type;
     if (projectId) params.projectId = projectId;
+    if (search && search.trim()) params.search = search.trim();
 
     console.log('Frontend: Making getFiles request with params:', params, 'at', Date.now());
     

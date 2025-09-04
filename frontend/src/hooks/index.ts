@@ -94,9 +94,9 @@ export const useFilesList = (pageSize: number = 20) => {
   // Request deduplication using Map to track ongoing requests
   const ongoingRequests = useRef<Map<string, Promise<any>>>(new Map());
 
-  const loadFiles = useCallback(async (page: number = 1, size: number = pageSize, status?: string, type?: string, projectId?: number) => {
+  const loadFiles = useCallback(async (page: number = 1, size: number = pageSize, status?: string, type?: string, projectId?: number, search?: string) => {
     // Create unique request key for deduplication
-    const requestKey = `${page}-${size}-${status || ''}-${type || ''}-${projectId || ''}`;
+    const requestKey = `${page}-${size}-${status || ''}-${type || ''}-${projectId || ''}-${search || ''}`;
     
     // Check if same request is already ongoing
     const ongoingRequest = ongoingRequests.current.get(requestKey);
@@ -111,7 +111,7 @@ export const useFilesList = (pageSize: number = 20) => {
     const requestPromise = (async () => {
       try {
         console.log('Making new request with key:', requestKey);
-        const result = await uploadService.getFiles(page, size, status, type, projectId);
+        const result = await uploadService.getFiles(page, size, status, type, projectId, search);
         setFiles(result.files || []);
         setPagination({
           current: result.current,
@@ -158,9 +158,9 @@ export const useFilesList = (pageSize: number = 20) => {
     } finally {
       setLoading(false);
     }
-  }, [loadFiles, pagination.current, pagination.pageSize]);  const refreshFiles = useCallback((projectId?: number, filterType?: string) => {
+  }, [loadFiles, pagination.current, pagination.pageSize]);  const refreshFiles = useCallback((projectId?: number, filterType?: string, search?: string) => {
     console.log('Refreshing file list...');
-    loadFiles(pagination.current, pagination.pageSize, undefined, filterType, projectId);
+    loadFiles(pagination.current, pagination.pageSize, undefined, filterType, projectId, search);
   }, [loadFiles, pagination.current, pagination.pageSize]);
 
   // Don't auto-load files in the hook, let the component control when to load
