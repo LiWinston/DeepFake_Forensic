@@ -1,5 +1,8 @@
 package com.itproject.upload.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.itproject.auth.entity.User;
 import com.itproject.project.entity.Project;
 import jakarta.persistence.*;
@@ -16,6 +19,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "media_files")
+@TableName("media_files")  // MyBatis-Plus annotation
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -23,6 +27,7 @@ public class MediaFile {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId  // MyBatis-Plus annotation
     private Long id;
     
     @Column(nullable = false, unique = true, length = 32)

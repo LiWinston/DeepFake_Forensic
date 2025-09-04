@@ -46,6 +46,9 @@ public class UploadService {
     @Autowired
     private ChunkInfoRepository chunkInfoRepository;
       @Autowired
+    private FileSearchService fileSearchService;
+
+    @Autowired
     private ProjectRepository projectRepository;
     
     @Autowired
@@ -580,55 +583,45 @@ public class UploadService {
         return response;
     }    /**
      * Get files list with pagination and filtering for current user
-     * Uses short-term caching to prevent duplicate requests within seconds
+     * Uses MyBatis-Plus for dynamic queries
      */
-    @Cacheable(value = "filesList", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + (#status ?: 'null') + '-' + (#type ?: 'null') + '-' + (#projectId ?: 'null') + '-' + T(com.itproject.auth.security.SecurityUtils).getCurrentUser().id")
-    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type, Long projectId) {
+    @Cacheable(value = "filesList", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + (#status ?: 'null') + '-' + (#type ?: 'null') + '-' + (#projectId ?: 'null') + '-' + (#search ?: 'null') + '-' + T(com.itproject.auth.security.SecurityUtils).getCurrentUser().id")
+    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type, Long projectId, String search) {
         try {
             User currentUser = SecurityUtils.getCurrentUser();
             if (currentUser == null) {
                 throw new RuntimeException("User not logged in");
             }
             
-            log.debug("Getting files list for user {}: pageable={}, status={}, type={}, projectId={}", 
-                    currentUser.getUsername(), pageable, status, type, projectId);
+            log.debug("Getting files list for user {}: pageable={}, status={}, type={}, projectId={}, search={}", 
+                    currentUser.getUsername(), pageable, status, type, projectId, search);
             
-            // Apply filters if provided
+            // Get project (if specified)
+            Project project = null;
             if (projectId != null) {
-                // Query by project
-                Project project = projectRepository.findById(projectId)
+                project = projectRepository.findById(projectId)
                     .filter(p -> p.getUser().getId().equals(currentUser.getId()))
                     .orElseThrow(() -> new RuntimeException("Project not found or access denied"));
-                
-                if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
-                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                    return mediaFileRepository.findByProjectAndUploadStatusAndMediaType(project, uploadStatus, mediaType, pageable);
-                } else if (StringUtils.hasText(status)) {
-                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                    return mediaFileRepository.findByProjectAndUploadStatus(project, uploadStatus, pageable);
-                } else if (StringUtils.hasText(type)) {
-                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                    return mediaFileRepository.findByProjectAndMediaType(project, mediaType, pageable);
-                } else {
-                    return mediaFileRepository.findByProject(project, pageable);
-                }            } else {
-                // Query all files for current user only - ensure security
-                // Always filter by current user to prevent seeing other users' files
-                if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
-                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                    return mediaFileRepository.findByUploadStatusAndMediaTypeAndUser(uploadStatus, mediaType, currentUser, pageable);
-                } else if (StringUtils.hasText(status)) {
-                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                    return mediaFileRepository.findByUploadStatusAndUser(uploadStatus, currentUser, pageable);
-                } else if (StringUtils.hasText(type)) {
-                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                    return mediaFileRepository.findByMediaTypeAndUser(mediaType, currentUser, pageable);
-                } else {
-                    return mediaFileRepository.findByUser(currentUser, pageable);
-                }
             }
+            
+            // Use MyBatis-Plus for dynamic queries
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<MediaFile> mpPage = 
+                fileSearchService.searchFiles(
+                    pageable.getPageNumber() + 1, // MyBatis-Plus starts from 1
+                    pageable.getPageSize(),
+                    status,
+                    type,
+                    search,
+                    currentUser,
+                    project
+                );
+            
+            // Convert to Spring Data Page object
+            return new org.springframework.data.domain.PageImpl<>(
+                mpPage.getRecords(),
+                pageable,
+                mpPage.getTotal()
+            );
             
         } catch (Exception e) {
             log.error("Error getting files list", e);
@@ -640,7 +633,11 @@ public class UploadService {
      * Get files list with pagination and filtering for current user (backward compatibility)
      */
     public Page<MediaFile> getFilesList(Pageable pageable, String status, String type) {
-        return getFilesList(pageable, status, type, null);
+        return getFilesList(pageable, status, type, null, null);
+    }
+    
+    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type, Long projectId) {
+        return getFilesList(pageable, status, type, projectId, null);
     }
     
     /**
