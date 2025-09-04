@@ -1,11 +1,10 @@
 package com.itproject.upload.entity;
 
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import com.itproject.auth.entity.User;
 import com.itproject.project.entity.Project;
 import jakarta.persistence.*;
+import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -16,18 +15,19 @@ import java.time.LocalDateTime;
 
 /**
  * Media file entity for storing uploaded media information
+ * Compatible with both JPA and MyBatis-Plus
  */
-@Entity
-@Table(name = "media_files")
+@Entity  // JPA annotation
+@Table(name = "media_files")  // JPA annotation
 @TableName("media_files")  // MyBatis-Plus annotation
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class MediaFile {
     
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @TableId  // MyBatis-Plus annotation
+    @Id  // JPA annotation
+    @GeneratedValue(strategy = GenerationType.IDENTITY)  // JPA annotation
+    @TableId(type = IdType.AUTO)  // MyBatis-Plus annotation
     private Long id;
     
     @Column(nullable = false, unique = true, length = 32)
@@ -80,14 +80,25 @@ public class MediaFile {
     private String uploadedBy;
     
     // User relationship
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)  // JPA annotation
+    @JoinColumn(name = "user_id", nullable = false)  // JPA annotation
+    @TableField(exist = false)  // MyBatis-Plus annotation - exclude from MP operations
     private User user;
 
     // Project relationship
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)  // JPA annotation
+    @JoinColumn(name = "project_id", nullable = false)  // JPA annotation
+    @TableField(exist = false)  // MyBatis-Plus annotation - exclude from MP operations
     private Project project;
+    
+    // Foreign key fields for MyBatis-Plus queries
+    @Column(name = "user_id", insertable = false, updatable = false)  // JPA read-only
+    @TableField("user_id")  // MyBatis-Plus annotation
+    private Long userId;
+    
+    @Column(name = "project_id", insertable = false, updatable = false)  // JPA read-only
+    @TableField("project_id")  // MyBatis-Plus annotation  
+    private Long projectId;
     
     public enum UploadStatus {
         UPLOADING,

@@ -46,11 +46,11 @@ public class FileSearchService {
         LambdaQueryWrapper<MediaFile> queryWrapper = new LambdaQueryWrapper<>();
         
         // Basic condition: can only view current user's files
-        queryWrapper.eq(MediaFile::getUser, user);
+        queryWrapper.eq(MediaFile::getUserId, user.getId());
         
         // Project filter
         if (project != null) {
-            queryWrapper.eq(MediaFile::getProject, project);
+            queryWrapper.eq(MediaFile::getProjectId, project.getId());
         }
         
         // Status filter

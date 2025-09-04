@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * MyBatis-Plus Configuration
+ * Compatible with JPA - use separate mapper package
  */
 @Configuration
 @MapperScan("com.itproject.upload.mapper")
@@ -21,7 +22,10 @@ public class MybatisPlusConfig {
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+        PaginationInnerInterceptor paginationInterceptor = new PaginationInnerInterceptor(DbType.MYSQL);
+        // Set max page size to prevent large queries
+        paginationInterceptor.setMaxLimit(1000L);
+        interceptor.addInnerInterceptor(paginationInterceptor);
         return interceptor;
     }
     
