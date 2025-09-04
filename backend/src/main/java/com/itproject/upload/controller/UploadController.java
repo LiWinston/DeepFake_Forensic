@@ -211,15 +211,16 @@ public class UploadController {
             @RequestParam(value = "size", defaultValue = "20") int size,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "type", required = false) String type,
-            @RequestParam(value = "projectId", required = false) Long projectId) {
+            @RequestParam(value = "projectId", required = false) Long projectId,
+            @RequestParam(value = "search", required = false) String search) {
           try {
             // Add request tracking for debugging duplicate requests
-            String requestSignature = String.format("page=%d,size=%d,status=%s,type=%s,projectId=%s", 
-                page, size, status, type, projectId);
+            String requestSignature = String.format("page=%d,size=%d,status=%s,type=%s,projectId=%s,search=%s", 
+                page, size, status, type, projectId, search);
             log.info("Received files list request: {} at {}", requestSignature, System.currentTimeMillis());
             
             Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-            Page<MediaFile> filesPage = uploadService.getFilesList(pageable, status, type, projectId);
+            Page<MediaFile> filesPage = uploadService.getFilesList(pageable, status, type, projectId, search);
             
             // Convert to DTO format
             List<FileResponseDTO> fileList = filesPage.getContent().stream()

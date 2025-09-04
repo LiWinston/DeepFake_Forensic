@@ -12,6 +12,21 @@ import com.itproject.upload.entity.ChunkInfo;
 import com.itproject.upload.entity.MediaFile;
 import com.itproject.upload.repository.ChunkInfoRepository;
 import com.itproject.upload.repository.MediaFileRepository;
+import com.itproject.upload.specification.MediaFileSpecification;
+import io.minio.*;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 import io.minio.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -582,53 +597,32 @@ public class UploadService {
      * Get files list with pagination and filtering for current user
      * Uses short-term caching to prevent duplicate requests within seconds
      */
-    @Cacheable(value = "filesList", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + (#status ?: 'null') + '-' + (#type ?: 'null') + '-' + (#projectId ?: 'null') + '-' + T(com.itproject.auth.security.SecurityUtils).getCurrentUser().id")
-    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type, Long projectId) {
+    @Cacheable(value = "filesList", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + (#status ?: 'null') + '-' + (#type ?: 'null') + '-' + (#projectId ?: 'null') + '-' + (#search ?: 'null') + '-' + T(com.itproject.auth.security.SecurityUtils).getCurrentUser().id")
+    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type, Long projectId, String search) {
         try {
             User currentUser = SecurityUtils.getCurrentUser();
             if (currentUser == null) {
                 throw new RuntimeException("User not logged in");
             }
             
-            log.debug("Getting files list for user {}: pageable={}, status={}, type={}, projectId={}", 
-                    currentUser.getUsername(), pageable, status, type, projectId);
+            log.debug("Getting files list for user {}: pageable={}, status={}, type={}, projectId={}, search={}", 
+                    currentUser.getUsername(), pageable, status, type, projectId, search);
             
-            // Apply filters if provided
+            Specification<MediaFile> specification;
+            
             if (projectId != null) {
                 // Query by project
                 Project project = projectRepository.findById(projectId)
                     .filter(p -> p.getUser().getId().equals(currentUser.getId()))
                     .orElseThrow(() -> new RuntimeException("Project not found or access denied"));
                 
-                if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
-                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                    return mediaFileRepository.findByProjectAndUploadStatusAndMediaType(project, uploadStatus, mediaType, pageable);
-                } else if (StringUtils.hasText(status)) {
-                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                    return mediaFileRepository.findByProjectAndUploadStatus(project, uploadStatus, pageable);
-                } else if (StringUtils.hasText(type)) {
-                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                    return mediaFileRepository.findByProjectAndMediaType(project, mediaType, pageable);
-                } else {
-                    return mediaFileRepository.findByProject(project, pageable);
-                }            } else {
-                // Query all files for current user only - ensure security
-                // Always filter by current user to prevent seeing other users' files
-                if (StringUtils.hasText(status) && StringUtils.hasText(type)) {
-                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                    return mediaFileRepository.findByUploadStatusAndMediaTypeAndUser(uploadStatus, mediaType, currentUser, pageable);
-                } else if (StringUtils.hasText(status)) {
-                    MediaFile.UploadStatus uploadStatus = MediaFile.UploadStatus.valueOf(status.toUpperCase());
-                    return mediaFileRepository.findByUploadStatusAndUser(uploadStatus, currentUser, pageable);
-                } else if (StringUtils.hasText(type)) {
-                    MediaFile.MediaType mediaType = MediaFile.MediaType.valueOf(type.toUpperCase());
-                    return mediaFileRepository.findByMediaTypeAndUser(mediaType, currentUser, pageable);
-                } else {
-                    return mediaFileRepository.findByUser(currentUser, pageable);
-                }
+                specification = MediaFileSpecification.forProject(project, status, type, search);
+            } else {
+                // Query all files for current user
+                specification = MediaFileSpecification.forUser(currentUser, status, type, search);
             }
+            
+            return mediaFileRepository.findAll(specification, pageable);
             
         } catch (Exception e) {
             log.error("Error getting files list", e);
@@ -640,7 +634,11 @@ public class UploadService {
      * Get files list with pagination and filtering for current user (backward compatibility)
      */
     public Page<MediaFile> getFilesList(Pageable pageable, String status, String type) {
-        return getFilesList(pageable, status, type, null);
+        return getFilesList(pageable, status, type, null, null);
+    }
+    
+    public Page<MediaFile> getFilesList(Pageable pageable, String status, String type, Long projectId) {
+        return getFilesList(pageable, status, type, projectId, null);
     }
     
     /**
