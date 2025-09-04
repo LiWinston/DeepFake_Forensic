@@ -32,6 +32,7 @@ import {
   RobotOutlined,
   ScanOutlined,
   WarningOutlined,
+  RedoOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useMetadataAnalysis } from '../hooks';
@@ -55,7 +56,7 @@ interface AnalysisOverviewProps {
 interface AnalysisRecord {
   id: string;
   type: 'METADATA' | 'TRADITIONAL' | 'AI';
-  status: string;
+  status: 'PENDING' | 'PROCESSING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'NOT_STARTED' | 'NOT_AVAILABLE';
   riskScore?: number;
   createdTime: string;
   completedTime?: string;
@@ -129,22 +130,41 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
 
   // Convert all analyses to AnalysisRecord format
   useEffect(() => {
+    if (!file?.md5Hash) {
+      setAllAnalyses([]);
+      return;
+    }
+
     const analyses: AnalysisRecord[] = [];
 
-    // Add metadata analyses
-    const metadataRecords: AnalysisRecord[] = metadataAnalyses.map(analysis => ({
-      id: `metadata-${analysis.id}`,
-      type: 'METADATA' as const,
-      status: analysis.status,
-      riskScore: analysis.result?.suspicious?.riskScore,
-      createdTime: analysis.createdTime,
-      completedTime: analysis.completedTime,
-      errorMessage: analysis.errorMessage,
-      data: analysis
-    }));
-    analyses.push(...metadataRecords);
+    // Always show metadata analysis (even if not available)
+    if (metadataAnalyses.length > 0) {
+      const metadataRecords: AnalysisRecord[] = metadataAnalyses.map(analysis => ({
+        id: `metadata-${analysis.id}`,
+        type: 'METADATA' as const,
+        status: analysis.status,
+        riskScore: analysis.result?.suspicious?.riskScore,
+        createdTime: analysis.createdTime,
+        completedTime: analysis.completedTime,
+        errorMessage: analysis.errorMessage,
+        data: analysis
+      }));
+      analyses.push(...metadataRecords);
+    } else {
+      // Show metadata analysis as not started
+      analyses.push({
+        id: 'metadata-placeholder',
+        type: 'METADATA' as const,
+        status: 'NOT_STARTED',
+        riskScore: undefined,
+        createdTime: '',
+        completedTime: undefined,
+        errorMessage: undefined,
+        data: undefined
+      });
+    }
 
-    // Add traditional analysis
+    // Always show traditional analysis (even if not available)
     if (traditionalAnalysis) {
       analyses.push({
         id: `traditional-${traditionalAnalysis.id}`,
@@ -156,10 +176,34 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
         errorMessage: traditionalAnalysis.errorMessage,
         data: traditionalAnalysis
       });
+    } else {
+      // Show traditional analysis as not started
+      analyses.push({
+        id: 'traditional-placeholder',
+        type: 'TRADITIONAL',
+        status: 'NOT_STARTED',
+        riskScore: undefined,
+        createdTime: '',
+        completedTime: undefined,
+        errorMessage: undefined,
+        data: undefined
+      });
     }
 
+    // TODO: Add AI analysis here when implemented
+    analyses.push({
+      id: 'ai-placeholder',
+      type: 'AI',
+      status: 'NOT_AVAILABLE',
+      riskScore: undefined,
+      createdTime: '',
+      completedTime: undefined,
+      errorMessage: undefined,
+      data: undefined
+    });
+
     setAllAnalyses(analyses);
-  }, [metadataAnalyses, traditionalAnalysis]);
+  }, [metadataAnalyses, traditionalAnalysis, file?.md5Hash]);
 
   // Load analyses when file changes
   useEffect(() => {
@@ -181,6 +225,10 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
         return <LoadingOutlined style={{ color: '#1890ff' }} />;
       case 'PENDING':
         return <InfoCircleOutlined style={{ color: '#faad14' }} />;
+      case 'NOT_STARTED':
+        return <InfoCircleOutlined style={{ color: '#d9d9d9' }} />;
+      case 'NOT_AVAILABLE':
+        return <InfoCircleOutlined style={{ color: '#bfbfbf' }} />;
       default:
         return null;
     }
@@ -193,6 +241,8 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       IN_PROGRESS: { color: 'blue', text: 'Processing' },
       COMPLETED: { color: 'green', text: 'Completed' },
       FAILED: { color: 'red', text: 'Failed' },
+      NOT_STARTED: { color: 'default', text: 'Not Started' },
+      NOT_AVAILABLE: { color: 'default', text: 'Not Available' },
     };
     
     const config = statusConfig[status as keyof typeof statusConfig] || 
@@ -263,63 +313,74 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
   };
 
-  // Handle triggering traditional analysis with confirmation
-  const handleTriggerTraditionalAnalysis = async (force: boolean = false) => {
+  // Handle starting analysis (for NOT_STARTED status)
+  const handleStartAnalysisAction = async (record: AnalysisRecord) => {
     if (!file?.md5Hash) {
       message.error('No file selected');
       return;
     }
 
-    setTriggeringAnalysis(true);
-    try {
-      const result = await traditionalAnalysisAPI.triggerAnalysis(file.md5Hash, force);
-      
-      if (result.success) {
-        message.success(result.message);
-        // Refresh the analysis list after a short delay
-        setTimeout(() => {
-          loadAllAnalyses(file.md5Hash);
-        }, 2000);
-      } else {
-        if (result.message.includes('already exists')) {
-          // Show confirmation dialog for re-analysis
-          Modal.confirm({
-            title: 'Confirm Re-analysis',
-            icon: <ExclamationCircleOutlined />,
-            content: (
-              <div>
-                <p>Traditional analysis results already exist for this file.</p>
-                <p><strong>Note:</strong> Traditional analysis has high computational cost and will take approximately <strong>2-5 minutes</strong> to complete.</p>
-                <p>Are you sure you want to re-analyze?</p>
-              </div>
-            ),
-            okText: 'Yes, Re-analyze',
-            cancelText: 'Cancel',
-            onOk: () => handleTriggerTraditionalAnalysis(true),
-          });
+    if (record.type === 'METADATA') {
+      startMetadataAnalysis(file.md5Hash);
+    } else if (record.type === 'TRADITIONAL') {
+      setTriggeringAnalysis(true);
+      try {
+        const result = await traditionalAnalysisAPI.triggerAnalysis(file.md5Hash, false);
+        if (result.success) {
+          message.success(result.message);
+          // Refresh analysis list after delay
+          setTimeout(() => loadAllAnalyses(file.md5Hash), 2000);
         } else {
           message.error(result.message);
         }
+      } catch (error) {
+        message.error('Failed to start traditional analysis');
+      } finally {
+        setTriggeringAnalysis(false);
       }
-    } catch (error) {
-      message.error('Failed to trigger traditional analysis');
-    } finally {
-      setTriggeringAnalysis(false);
     }
   };
 
-  const handleStartAnalysis = (type: string) => {
+  // Handle re-analysis (for existing records)
+  const handleReAnalysis = async (record: AnalysisRecord) => {
     if (!file?.md5Hash) {
       message.error('No file selected');
       return;
     }
 
-    if (type === 'METADATA') {
+    if (record.type === 'METADATA') {
       startMetadataAnalysis(file.md5Hash);
-    } else if (type === 'TRADITIONAL') {
-      handleTriggerTraditionalAnalysis();
-    } else {
-      message.info(`${type} analysis will be triggered automatically when available`);
+    } else if (record.type === 'TRADITIONAL') {
+      Modal.confirm({
+        title: 'Confirm Re-analysis',
+        icon: <ExclamationCircleOutlined />,
+        content: (
+          <div>
+            <p>Are you sure you want to re-run the traditional analysis?</p>
+            <p><strong>Note:</strong> Traditional analysis has high computational cost and will take approximately <strong>2-5 minutes</strong> to complete.</p>
+          </div>
+        ),
+        okText: 'Yes, Re-analyze',
+        cancelText: 'Cancel',
+        onOk: async () => {
+          if (!file?.md5Hash) return;
+          setTriggeringAnalysis(true);
+          try {
+            const result = await traditionalAnalysisAPI.triggerAnalysis(file.md5Hash, true);
+            if (result.success) {
+              message.success(result.message);
+              // Refresh analysis list after delay
+              setTimeout(() => loadAllAnalyses(file.md5Hash), 2000);
+            } else {
+              message.error(result.message);
+            }
+          } catch (error) {
+            message.error('Failed to re-run traditional analysis');
+          } finally {
+            setTriggeringAnalysis(false);
+          }
+        },
+      });
     }
   };
 
@@ -370,30 +431,85 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     {
       title: 'Actions',
       key: 'actions',
-      render: (_, record: AnalysisRecord) => (
-        <Space>
-          <Button
-            type="text"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetails(record)}
-            disabled={record.status !== 'COMPLETED'}
-          >
-            Details
-          </Button>
-          {record.type === 'METADATA' && (
+      render: (_, record: AnalysisRecord) => {
+        const isNotStarted = record.status === 'NOT_STARTED';
+        const isNotAvailable = record.status === 'NOT_AVAILABLE';
+        const isCompleted = record.status === 'COMPLETED';
+        const isFailed = record.status === 'FAILED';
+        const isProcessing = record.status === 'IN_PROGRESS' || record.status === 'PROCESSING' || record.status === 'PENDING';
+
+        return (
+          <Space>
+            {/* Start Analysis Button - only for NOT_STARTED */}
+            {isNotStarted && (
+              <Button
+                type="primary"
+                size="small"
+                icon={record.type === 'METADATA' ? <ScanOutlined /> : <ExperimentOutlined />}
+                onClick={() => handleStartAnalysisAction(record)}
+                loading={record.type === 'METADATA' ? metadataLoading : triggeringAnalysis}
+                style={record.type === 'TRADITIONAL' ? 
+                  { background: '#722ed1', borderColor: '#722ed1' } : {}
+                }
+              >
+                Start
+              </Button>
+            )}
+
+            {/* Re-analyze Button - for completed/failed analyses */}
+            {(isCompleted || isFailed) && (
+              <Button
+                type="text"
+                size="small"
+                icon={<RedoOutlined />}
+                onClick={() => handleReAnalysis(record)}
+                loading={record.type === 'METADATA' ? metadataLoading : triggeringAnalysis}
+                title="Re-analyze"
+              >
+                Re-run
+              </Button>
+            )}
+
+            {/* Details Button - only for completed analyses */}
             <Button
               type="text"
               size="small"
-              icon={<DeleteOutlined />}
-              danger
-              onClick={() => handleDeleteAnalysis(record.id)}
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDetails(record)}
+              disabled={!isCompleted}
             >
-              Delete
+              Details
             </Button>
-          )}
-        </Space>
-      ),
+
+            {/* Delete Button - only for metadata analyses */}
+            {record.type === 'METADATA' && isCompleted && (
+              <Button
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                danger
+                onClick={() => handleDeleteAnalysis(record.id)}
+              >
+                Delete
+              </Button>
+            )}
+
+            {/* Not Available Label - for AI analysis */}
+            {isNotAvailable && (
+              <Text type="secondary" style={{ fontStyle: 'italic' }}>
+                Coming Soon
+              </Text>
+            )}
+
+            {/* Processing Indicator */}
+            {isProcessing && (
+              <Text type="secondary" style={{ fontStyle: 'italic' }}>
+                Processing...
+              </Text>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 
@@ -762,33 +878,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
         title={
           <Space>
             <BarChartOutlined />
-            {/*<Title level={4} style={{ margin: 0 }}>*/}
-            {/*  Forensic Analysis Results*/}
-            {/*</Title>*/}
           </Space>
-        }
-        extra={
-          file && (
-            <Space>
-              <Button 
-                type="primary"
-                icon={<ScanOutlined />}
-                onClick={() => handleStartAnalysis('METADATA')}
-                loading={metadataLoading}
-              >
-                Metadata Analysis
-              </Button>
-              <Button 
-                type="primary"
-                icon={<ExperimentOutlined />}
-                onClick={() => handleStartAnalysis('TRADITIONAL')}
-                loading={triggeringAnalysis}
-                style={{ background: '#722ed1', borderColor: '#722ed1' }}
-              >
-                Traditional Analysis
-              </Button>
-            </Space>
-          )
         }
       >
         {showFileInfo && file && (
