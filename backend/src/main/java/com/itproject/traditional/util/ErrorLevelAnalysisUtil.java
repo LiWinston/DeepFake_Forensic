@@ -203,22 +203,50 @@ public class ErrorLevelAnalysisUtil {
     }
     
     /**
-     * Flood fill algorithm to mark connected suspicious pixels
+     * Flood fill algorithm to mark connected suspicious pixels (iterative implementation)
      */
     private void floodFill(BufferedImage image, boolean[][] visited, int startX, int startY, int threshold) {
-        if (startX < 0 || startX >= image.getWidth() || startY < 0 || startY >= image.getHeight() ||
-            visited[startX][startY] || !isSuspiciousPixel(image, startX, startY, threshold)) {
-            return;
-        }
+        // Use iterative implementation to avoid stack overflow for large connected regions
+        java.util.Stack<int[]> stack = new java.util.Stack<>();
+        stack.push(new int[]{startX, startY});
         
-        visited[startX][startY] = true;
-        
-        // Check 8-connected neighbors
         int[] dx = {-1, -1, -1, 0, 0, 1, 1, 1};
         int[] dy = {-1, 0, 1, -1, 1, -1, 0, 1};
         
-        for (int i = 0; i < 8; i++) {
-            floodFill(image, visited, startX + dx[i], startY + dy[i], threshold);
+        int maxRegionSize = 50000; // Limit region size to prevent excessive processing
+        int processedPixels = 0;
+        
+        while (!stack.isEmpty() && processedPixels < maxRegionSize) {
+            int[] current = stack.pop();
+            int x = current[0];
+            int y = current[1];
+            
+            // Check bounds and if already visited or not suspicious
+            if (x < 0 || x >= image.getWidth() || y < 0 || y >= image.getHeight() ||
+                visited[x][y] || !isSuspiciousPixel(image, x, y, threshold)) {
+                continue;
+            }
+            
+            visited[x][y] = true;
+            processedPixels++;
+            
+            // Add 8-connected neighbors to stack
+            for (int i = 0; i < 8; i++) {
+                int newX = x + dx[i];
+                int newY = y + dy[i];
+                
+                // Only add to stack if it's within bounds, hasn't been visited, and is suspicious
+                if (newX >= 0 && newX < image.getWidth() && 
+                    newY >= 0 && newY < image.getHeight() && 
+                    !visited[newX][newY] && 
+                    isSuspiciousPixel(image, newX, newY, threshold)) {
+                    stack.push(new int[]{newX, newY});
+                }
+            }
+        }
+        
+        if (processedPixels >= maxRegionSize) {
+            log.debug("Flood fill reached maximum region size limit: {}", maxRegionSize);
         }
     }
     

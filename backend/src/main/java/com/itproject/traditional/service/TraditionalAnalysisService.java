@@ -79,22 +79,25 @@ public class TraditionalAnalysisService {
     @KafkaListener(topics = "traditional-analysis-tasks", groupId = "traditional-analysis-group")
     @Transactional
     public void processTraditionalAnalysisTask(String message) {
+        String fileMd5 = null;
         try {
             log.info("Received traditional analysis task: {}", message);
             
             // Parse message (expecting fileMd5)
-            String fileMd5 = message.trim();
+            fileMd5 = message.trim();
             
             // Find media file
             Optional<MediaFile> mediaFileOpt = mediaFileRepository.findByFileMd5(fileMd5);
             if (mediaFileOpt.isEmpty()) {
                 log.error("Media file not found for MD5: {}", fileMd5);
+                // Create a failed record to prevent reprocessing
+                createFailedAnalysisRecord(fileMd5, "Media file not found");
                 return;
             }
             
             MediaFile mediaFile = mediaFileOpt.get();
             
-            // Check if analysis already exists
+            // Check if analysis already exists (including failed ones)
             if (analysisRepository.existsByFileMd5(fileMd5)) {
                 log.info("Traditional analysis already exists for file: {}", fileMd5);
                 return;
@@ -105,6 +108,14 @@ public class TraditionalAnalysisService {
             
         } catch (Exception e) {
             log.error("Error processing traditional analysis task: {}", message, e);
+            // Create failed record to prevent infinite retries
+            if (fileMd5 != null) {
+                try {
+                    createFailedAnalysisRecord(fileMd5, "Processing error: " + e.getMessage());
+                } catch (Exception saveException) {
+                    log.error("Failed to save error record for file: {}", fileMd5, saveException);
+                }
+            }
         }
     }
     
@@ -495,6 +506,45 @@ public class TraditionalAnalysisService {
         } catch (Exception e) {
             log.error("Failed to generate presigned URL for: {}", objectPath, e);
             return null;
+        }
+    }
+    
+    /**
+     * Create a failed analysis record to prevent infinite retries
+     */
+    private void createFailedAnalysisRecord(String fileMd5, String errorMessage) {
+        try {
+            // Try to get media file info for context
+            Optional<MediaFile> mediaFileOpt = mediaFileRepository.findByFileMd5(fileMd5);
+            
+            TraditionalAnalysisResult result = new TraditionalAnalysisResult();
+            result.setFileMd5(fileMd5);
+            result.setAnalysisStatus(TraditionalAnalysisResult.AnalysisStatus.FAILED);
+            result.setErrorMessage(errorMessage);
+            result.setProcessingTimeMs(0L);
+            result.setOverallConfidenceScore(0.0);
+            
+            if (mediaFileOpt.isPresent()) {
+                MediaFile mediaFile = mediaFileOpt.get();
+                result.setOriginalFilePath(mediaFile.getFilePath());
+                result.setUser(mediaFile.getUser());
+                result.setProject(mediaFile.getProject());
+                result.setFileSizeBytes(mediaFile.getFileSize());
+                result.setImageWidth(0);
+                result.setImageHeight(0);
+            } else {
+                // Minimal record for unknown files
+                result.setOriginalFilePath("Unknown");
+                result.setFileSizeBytes(0L);
+                result.setImageWidth(0);
+                result.setImageHeight(0);
+            }
+            
+            analysisRepository.save(result);
+            log.info("Created failed analysis record for file: {} with error: {}", fileMd5, errorMessage);
+            
+        } catch (Exception e) {
+            log.error("Failed to create failed analysis record for file: {}", fileMd5, e);
         }
     }
 }
