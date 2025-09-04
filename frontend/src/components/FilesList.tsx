@@ -40,6 +40,7 @@ interface FilesListProps {
   selectable?: boolean;
   showActions?: boolean;
   defaultProjectId?: number;
+  selectedFile?: UploadFile | null;
 }
 
 const FilesList: React.FC<FilesListProps> = ({
@@ -47,6 +48,7 @@ const FilesList: React.FC<FilesListProps> = ({
   selectable = false,
   showActions = true,
   defaultProjectId,
+  selectedFile,
 }) => {
   const { files, loading, pagination, loadFiles, deleteFile, refreshFiles } = useFilesList();
   const { analyzeFile } = useMetadataAnalysis();
@@ -64,7 +66,24 @@ const FilesList: React.FC<FilesListProps> = ({
   const searchDebounceRef = useRef<number | null>(null);
   
   // Search state: indicates user is typing but search hasn't been triggered yet
-  const isSearchPending = searchText !== debouncedSearchText;  // Auto-select first project if no default is set
+  const isSearchPending = searchText !== debouncedSearchText;
+
+  // Update selectedRowKeys when selectedFile prop changes
+  useEffect(() => {
+    if (selectedFile) {
+      setSelectedRowKeys([selectedFile.id]);
+    } else {
+      setSelectedRowKeys([]);
+    }
+  }, [selectedFile]);
+
+  // Handle file selection by clicking on thumbnail or filename
+  const handleFileRowClick = useCallback((file: UploadFile) => {
+    if (onFileSelect) {
+      setSelectedRowKeys([file.id]);
+      onFileSelect(file);
+    }
+  }, [onFileSelect]);  // Auto-select first project if no default is set
   useEffect(() => {
     if (!defaultProjectId && projects.length > 0 && !showAllFiles && !selectedProjectId) {
       setSelectedProjectId(projects[0].id);
@@ -443,6 +462,13 @@ const FilesList: React.FC<FilesListProps> = ({
         }}
         onChange={handleTableChange}
         rowSelection={rowSelection}
+        onRow={(record) => ({
+          onClick: () => handleFileRowClick(record),
+          style: { 
+            cursor: 'pointer',
+            backgroundColor: selectedRowKeys.includes(record.id) ? '#e6f7ff' : undefined
+          },
+        })}
         scroll={{ x: 800 }}
       />
 
