@@ -9,7 +9,6 @@ import {
   Space,
   Button,
   Modal,
-  Tabs,
   Alert,
   Divider,
   Breadcrumb,
@@ -32,7 +31,6 @@ import { projectApi } from '../services/project';
 
 const { Content } = Layout;
 const { Title, Paragraph } = Typography;
-const { TabPane } = Tabs;
 
 const FilesPage: React.FC = () => {
   const { projectId } = useParams<{ projectId?: string }>();
@@ -184,6 +182,7 @@ const FilesPage: React.FC = () => {
             selectable={true}
             showActions={true}
             defaultProjectId={projectId ? Number(projectId) : undefined}
+            selectedFile={selectedFile}
             key={`${refreshTrigger}-${projectId}`} // Force refresh when upload succeeds or project changes
           />
         </Col>
@@ -198,70 +197,65 @@ const FilesPage: React.FC = () => {
               </Space>
             }
             size="small"
+            style={{ height: 'fit-content' }}
           >
             {selectedFile ? (
               <div>
-                <Tabs defaultActiveKey="details" size="small">
-                  <TabPane tab="Details" key="details">
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                      <div>
-                        <strong>File Name:</strong>
-                        <br />
-                        <span>{selectedFile.originalName}</span>
-                      </div>
-                      <div>
-                        <strong>File Size:</strong>
-                        <br />
-                        <span>{(selectedFile.fileSize / 1024 / 1024).toFixed(2)} MB</span>
-                      </div>
-                      <div>
-                        <strong>File Type:</strong>
-                        <br />
-                        <span>{selectedFile.fileType || 'Unknown'}</span>
-                      </div>
-                      <div>
-                        <strong>Status:</strong>
-                        <br />
-                        <span>{selectedFile.status}</span>
-                      </div>
-                      <div>
-                        <strong>Upload Time:</strong>
-                        <br />
-                        <span>{new Date(selectedFile.uploadTime).toLocaleString()}</span>
-                      </div>
-                      {selectedFile.md5Hash && (
-                        <div>
-                          <strong>MD5 Hash:</strong>
-                          <br />
-                          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-                            {selectedFile.md5Hash}
-                          </span>
-                        </div>
-                      )}
-                    </Space>
-                  </TabPane>
-                  <TabPane tab="Path" key="path">
-                    <div>
-                      <strong>File Path:</strong>
-                      <br />
-                      <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-                        {selectedFile.filePath}
-                      </span>
-                    </div>
-                  </TabPane>
-                </Tabs>
+                <Space direction="vertical" style={{ width: '100%' }} size="small">
+                  <Row gutter={8}>
+                    <Col span={8}><strong>Name:</strong></Col>
+                    <Col span={16} style={{ wordBreak: 'break-all' }}>
+                      {selectedFile.originalName}
+                    </Col>
+                  </Row>
+                  <Row gutter={8}>
+                    <Col span={8}><strong>Size:</strong></Col>
+                    <Col span={16}>
+                      {(selectedFile.fileSize / 1024 / 1024).toFixed(2)} MB
+                    </Col>
+                  </Row>
+                  <Row gutter={8}>
+                    <Col span={8}><strong>Type:</strong></Col>
+                    <Col span={16}>
+                      {selectedFile.fileType || 'Unknown'}
+                    </Col>
+                  </Row>
+                  <Row gutter={8}>
+                    <Col span={8}><strong>Status:</strong></Col>
+                    <Col span={16}>
+                      <Tag color={
+                        selectedFile.status === 'COMPLETED' ? 'green' :
+                        selectedFile.status === 'UPLOADING' ? 'processing' :
+                        selectedFile.status === 'FAILED' ? 'error' : 'default'
+                      }>
+                        {selectedFile.status}
+                      </Tag>
+                    </Col>
+                  </Row>
+                  <Row gutter={8}>
+                    <Col span={8}><strong>Upload:</strong></Col>
+                    <Col span={16}>
+                      {new Date(selectedFile.uploadTime).toLocaleString()}
+                    </Col>
+                  </Row>
+                  {selectedFile.md5Hash && (
+                    <Row gutter={8}>
+                      <Col span={8}><strong>MD5:</strong></Col>
+                      <Col span={16} style={{ wordBreak: 'break-all', fontSize: '11px', fontFamily: 'monospace' }}>
+                        {selectedFile.md5Hash}
+                      </Col>
+                    </Row>
+                  )}
+                  <Row gutter={8}>
+                    <Col span={8}><strong>Path:</strong></Col>
+                    <Col span={16} style={{ wordBreak: 'break-all', fontSize: '11px', fontFamily: 'monospace' }}>
+                      {selectedFile.filePath}
+                    </Col>
+                  </Row>
+                </Space>
 
                 <div style={{ marginTop: 16 }}>
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    <Button
-                      type="primary"
-                      icon={<BarChartOutlined />}
-                      onClick={handleAnalyzeFile}
-                      disabled={selectedFile.status !== 'COMPLETED' || !selectedFile.md5Hash}
-                      block
-                    >
-                      Analyze Metadata
-                    </Button>
+                  <Space direction="vertical" style={{ width: '100%' }} size="small">
                     <Button
                       icon={<EyeOutlined />}
                       onClick={handlePreviewFile}
@@ -270,13 +264,22 @@ const FilesPage: React.FC = () => {
                     >
                       Preview File
                     </Button>
+                    <Button
+                      type="primary"
+                      icon={<BarChartOutlined />}
+                      onClick={handleAnalyzeFile}
+                      disabled={selectedFile.status !== 'COMPLETED' || !selectedFile.md5Hash}
+                      block
+                    >
+                      Load Results
+                    </Button>
                   </Space>
                 </div>
 
                 {selectedFile.status !== 'COMPLETED' && (
                   <Alert
                     message="File not ready"
-                    description="File analysis and preview are only available for completed uploads."
+                    description="Analysis and preview are only available for completed uploads."
                     type="warning"
                     showIcon
                     style={{ marginTop: 16 }}
