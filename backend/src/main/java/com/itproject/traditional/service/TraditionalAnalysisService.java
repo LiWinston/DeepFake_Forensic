@@ -233,22 +233,38 @@ public class TraditionalAnalysisService {
             final TraditionalAnalysisResult finalResult = result;
             final MediaFile finalMediaFile = mediaFile;
             
-            // Execute all four analyses in parallel using CompletableFuture
+            // Execute all four analyses in parallel using CompletableFuture with proper exception handling
             CompletableFuture<Void> elaFuture = CompletableFuture.runAsync(() -> {
                 performELAAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
-            }, traditionalAnalysisExecutor);
+            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                log.error("Error in ELA analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                finalResult.setElaConfidenceScore(0.0);
+                return null;
+            });
             
             CompletableFuture<Void> cfaFuture = CompletableFuture.runAsync(() -> {
                 performCFAAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
-            }, traditionalAnalysisExecutor);
+            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                log.error("Error in CFA analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                finalResult.setCfaConfidenceScore(0.0);
+                return null;
+            });
             
             CompletableFuture<Void> copyMoveFuture = CompletableFuture.runAsync(() -> {
                 performCopyMoveAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
-            }, traditionalAnalysisExecutor);
+            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                log.error("Error in Copy-Move analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                finalResult.setCopyMoveConfidenceScore(0.0);
+                return null;
+            });
             
             CompletableFuture<Void> lightingFuture = CompletableFuture.runAsync(() -> {
                 performLightingAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
-            }, traditionalAnalysisExecutor);
+            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                log.error("Error in Lighting analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                finalResult.setLightingConfidenceScore(0.0);
+                return null;
+            });
             
             // Wait for all analyses to complete
             CompletableFuture<Void> allAnalyses = CompletableFuture.allOf(
