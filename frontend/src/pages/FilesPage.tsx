@@ -8,6 +8,7 @@ import {
   Card,
   Space,
   Button,
+  Drawer,
   Modal,
   Alert,
   Divider,
@@ -24,10 +25,12 @@ import {
 } from '@ant-design/icons';
 import FilesList from '../components/FilesList';
 import FileUpload from '../components/FileUpload';
-import AnalysisOverview from '../components/AnalysisOverview';
+import AnalysisOverview, { AnalysisDetails } from '../components/AnalysisOverview';
+import type { AnalysisRecord } from '../components/AnalysisOverview';
 import type { UploadFile, Project } from '../types';
 import uploadService from '../services/upload';
 import { projectApi } from '../services/project';
+import '../styles/pages/FilesPage.css';
 
 const { Content } = Layout;
 const { Title, Paragraph } = Typography;
@@ -36,8 +39,12 @@ const FilesPage: React.FC = () => {
   const { projectId } = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState<UploadFile | null>(null);
-  const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
-  const [previewModalVisible, setPreviewModalVisible] = useState(false);  const [refreshTrigger, setRefreshTrigger] = useState(0);  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [resultsOpen, setResultsOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<AnalysisRecord | null>(null);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
 
   // Load project info if projectId is provided
   useEffect(() => {
@@ -61,7 +68,7 @@ const FilesPage: React.FC = () => {
 
   const handleAnalyzeFile = () => {
     if (selectedFile) {
-      setAnalysisModalVisible(true);
+      setResultsOpen(true);
     }
   };
 
@@ -71,9 +78,8 @@ const FilesPage: React.FC = () => {
     }
   };
 
-  const handleCloseAnalysisModal = () => {
-    setAnalysisModalVisible(false);
-  };
+  const handleCloseResults = () => setResultsOpen(false);
+  const handleCloseDetail = () => setDetailOpen(false);
 
   const handleClosePreviewModal = () => {
     setPreviewModalVisible(false);
@@ -88,8 +94,24 @@ const FilesPage: React.FC = () => {
   const handleUploadError = (error: string) => {
     console.error('Upload error:', error);
   };
+  const shiftLevel = detailOpen ? 2 : resultsOpen ? 1 : 0;
+
+  const handleBackdropClick = () => {
+    if (detailOpen) setDetailOpen(false);
+    else if (resultsOpen) setResultsOpen(false);
+  };
+
   return (
-    <Content style={{ padding: '24px' }}>
+    <Content style={{ padding: '24px', position: 'relative', overflow: 'hidden' }}>
+      {/* Backdrop overlay for push effect */}
+      {(resultsOpen || detailOpen) && (
+        <div
+          className={`shift-overlay ${detailOpen ? 'level-2' : 'level-1'}`}
+          onClick={handleBackdropClick}
+        />
+      )}
+
+      <div className={`push-container ${shiftLevel === 1 ? 'shift-1' : ''} ${shiftLevel === 2 ? 'shift-2' : ''}`}>
       {/* Breadcrumb Navigation */}
       <Breadcrumb style={{ marginBottom: 16 }}>
         <Breadcrumb.Item>
@@ -175,7 +197,7 @@ const FilesPage: React.FC = () => {
 
       <Divider />
 
-      <Row gutter={[24, 24]}>        {/* Files List Section */}
+  <Row gutter={[24, 24]}>        {/* Files List Section */}
         <Col xs={24} lg={16}>
           <FilesList
             onFileSelect={handleFileSelect}
@@ -296,23 +318,59 @@ const FilesPage: React.FC = () => {
           </Card>
         </Col>
       </Row>
+  </div>
 
-      {/* Analysis Modal */}
-      <Modal
-        title={`Forensic Analysis Results For : ‘${selectedFile?.originalName}’`}
-        open={analysisModalVisible}
-        onCancel={handleCloseAnalysisModal}
-        footer={null}
-        width={1200}
-        centered
+      {/* Results Drawer (Level 1) */}
+      <Drawer
+        title={
+          <Space>
+            <BarChartOutlined />
+            <span>Analysis Results - {selectedFile?.originalName}</span>
+          </Space>
+        }
+        placement="right"
+        open={resultsOpen}
+        onClose={handleCloseResults}
+        push={{ distance: 240 }}
+        width={Math.min(window.innerWidth * 0.74, 1280)}
+  styles={{ body: { paddingBottom: 24, overflow: 'visible' } }}
+        zIndex={1060}
+        mask={false}
+        rootClassName={`drawer-level-1 ${detailOpen ? 'drawer-pushed' : ''}`}
       >
         {selectedFile && (
           <AnalysisOverview
             file={selectedFile}
             showFileInfo={false}
+            onSelectAnalysis={(record) => {
+              setSelectedRecord(record);
+              setDetailOpen(true);
+            }}
           />
         )}
-      </Modal>
+
+        {/* Detail Drawer (Level 2 - nested) */}
+  <Drawer
+          title={
+            <Space>
+              <EyeOutlined />
+              <span>Analysis Detail - {selectedFile?.originalName}</span>
+            </Space>
+          }
+          placement="right"
+          open={detailOpen}
+          onClose={handleCloseDetail}
+          push={{ distance: 180 }}
+          width={Math.min(window.innerWidth * 0.56, 980)}
+          mask={false}
+          destroyOnClose
+          styles={{ body: { overflow: 'auto' } }}
+        >
+          {selectedRecord && (
+            <AnalysisDetails file={selectedFile || undefined} record={selectedRecord} />
+          )}
+        </Drawer>
+      </Drawer>
 
       {/* Preview Modal */}
       <Modal

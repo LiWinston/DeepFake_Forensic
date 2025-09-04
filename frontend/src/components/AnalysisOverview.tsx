@@ -48,12 +48,14 @@ const { Text, Title } = Typography;
 const { TabPane } = Tabs;
 const { Panel } = Collapse;
 
-interface AnalysisOverviewProps {
+export interface AnalysisOverviewProps {
   file?: UploadFile;
   showFileInfo?: boolean;
+  // When provided, clicking "Details" will call this instead of opening internal modal
+  onSelectAnalysis?: (record: AnalysisRecord) => void;
 }
 
-interface AnalysisRecord {
+export interface AnalysisRecord {
   id: string;
   type: 'METADATA' | 'TRADITIONAL' | 'AI';
   status: 'PENDING' | 'PROCESSING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'NOT_STARTED' | 'NOT_AVAILABLE';
@@ -64,9 +66,290 @@ interface AnalysisRecord {
   data?: MetadataAnalysis | TraditionalAnalysisResult | any;
 }
 
+// ---------- Helper functions (module scope) ----------
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'COMPLETED':
+      return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
+    case 'FAILED':
+      return <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />;
+    case 'PROCESSING':
+    case 'IN_PROGRESS':
+      return <LoadingOutlined style={{ color: '#1890ff' }} />;
+    case 'PENDING':
+      return <InfoCircleOutlined style={{ color: '#faad14' }} />;
+    case 'NOT_STARTED':
+      return <InfoCircleOutlined style={{ color: '#d9d9d9' }} />;
+    case 'NOT_AVAILABLE':
+      return <InfoCircleOutlined style={{ color: '#bfbfbf' }} />;
+    default:
+      return null;
+  }
+};
+
+const getStatusTag = (status: string) => {
+  const statusConfig = {
+    PENDING: { color: 'orange', text: 'Pending' },
+    PROCESSING: { color: 'blue', text: 'Processing' },
+    IN_PROGRESS: { color: 'blue', text: 'Processing' },
+    COMPLETED: { color: 'green', text: 'Completed' },
+    FAILED: { color: 'red', text: 'Failed' },
+    NOT_STARTED: { color: 'default', text: 'Not Started' },
+    NOT_AVAILABLE: { color: 'default', text: 'Not Available' },
+  } as const;
+  const config = (statusConfig as any)[status] || { color: 'default', text: status };
+  return <Tag color={config.color}>{config.text}</Tag>;
+};
+
+const getAnalysisTypeInfo = (type: string) => {
+  const typeConfig = {
+    METADATA: { color: 'blue', text: 'Metadata Analysis', icon: <ScanOutlined /> },
+    TRADITIONAL: { color: 'purple', text: 'Traditional Forensics', icon: <ExperimentOutlined /> },
+    AI: { color: 'green', text: 'AI Detection', icon: <RobotOutlined /> },
+  } as const;
+  return (typeConfig as any)[type] || { color: 'default', text: type, icon: <InfoCircleOutlined /> };
+};
+
+const getAnalysisTypeTag = (type: string) => {
+  const info = getAnalysisTypeInfo(type);
+  return (
+    <Tag color={info.color} icon={info.icon}>
+      {info.text}
+    </Tag>
+  );
+};
+
+const getRiskLevelTag = (riskScore?: number) => {
+  if (riskScore === undefined || riskScore === null) return <Tag>N/A</Tag>;
+  if (riskScore <= 30) return <Tag color="green">Low Risk</Tag>;
+  if (riskScore <= 70) return <Tag color="orange">Medium Risk</Tag>;
+  return <Tag color="red">High Risk</Tag>;
+};
+
+// Reusable renderers for details
+const renderTraditionalAnalysisDetails = (analysis: TraditionalAnalysisResult) => {
+  return (
+  <Tabs defaultActiveKey="summary" destroyInactiveTabPane>
+      <TabPane tab="Analysis Summary" key="summary">
+        <Row gutter={[16, 16]}>
+          <Col span={6}>
+            <Statistic title="Overall Confidence Score" value={analysis.overallConfidenceScore} suffix="%" valueStyle={{ color: analysis.overallConfidenceScore > 50 ? '#cf1322' : '#3f8600' }} />
+          </Col>
+          <Col span={6}>
+            <Statistic title="Authenticity Assessment" value={analysis.authenticityAssessment.replace('_', ' ')} valueStyle={{ color: ['MANIPULATED', 'LIKELY_MANIPULATED'].includes(analysis.authenticityAssessment) ? '#cf1322' : '#3f8600' }} />
+          </Col>
+          <Col span={6}>
+            <Statistic title="Processing Time" value={analysis.processingTimeMs} suffix="ms" />
+          </Col>
+          <Col span={6}>
+            <Statistic title="Image Dimensions" value={`${analysis.imageWidth}×${analysis.imageHeight}`} />
+          </Col>
+        </Row>
+        <Divider />
+        <div style={{ marginBottom: 16 }}>
+          <Title level={5}>Analysis Summary</Title>
+          <Text style={{ whiteSpace: 'pre-line' }}>{analysis.analysisSummary}</Text>
+        </div>
+        <div>
+          <Title level={5}>Detailed Findings</Title>
+          <Text style={{ whiteSpace: 'pre-line' }}>{analysis.detailedFindings}</Text>
+        </div>
+      </TabPane>
+      {analysis.elaAnalysis && (
+        <TabPane tab="Error Level Analysis" key="ela">
+          <Row gutter={[16, 16]} wrap>
+            <Col xs={24} lg={12}>
+              <Card title="ELA Results" size="small">
+                <Statistic title="Confidence Score" value={analysis.elaAnalysis.confidenceScore} suffix="%" style={{ marginBottom: 16 }} />
+                <Statistic title="Suspicious Regions" value={analysis.elaAnalysis.suspiciousRegions} style={{ marginBottom: 16 }} />
+                <Text>{analysis.elaAnalysis.analysis}</Text>
+              </Card>
+            </Col>
+            {analysis.elaAnalysis.resultImageUrl && (
+              <Col xs={24} lg={12}>
+                <Card title="ELA Visualization" size="small" bodyStyle={{ overflow: 'hidden' }}>
+                  <Image src={analysis.elaAnalysis.resultImageUrl} alt="ELA Result" style={{ width: '100%' }} />
+                </Card>
+              </Col>
+            )}
+          </Row>
+        </TabPane>
+      )}
+      {analysis.cfaAnalysis && (
+        <TabPane tab="CFA Analysis" key="cfa">
+          <Row gutter={[16, 16]} wrap>
+            <Col xs={24} lg={12}>
+              <Card title="CFA Results" size="small">
+                <Statistic title="Confidence Score" value={analysis.cfaAnalysis.confidenceScore} suffix="%" style={{ marginBottom: 16 }} />
+                <Statistic title="Interpolation Anomalies" value={analysis.cfaAnalysis.interpolationAnomalies} style={{ marginBottom: 16 }} />
+                <Text>{analysis.cfaAnalysis.analysis}</Text>
+              </Card>
+            </Col>
+            {analysis.cfaAnalysis.heatmapImageUrl && (
+              <Col xs={24} lg={12}>
+                <Card title="CFA Heatmap" size="small" bodyStyle={{ overflow: 'hidden' }}>
+                  <Image src={analysis.cfaAnalysis.heatmapImageUrl} alt="CFA Heatmap" style={{ width: '100%' }} />
+                </Card>
+              </Col>
+            )}
+          </Row>
+        </TabPane>
+      )}
+      {analysis.copyMoveAnalysis && (
+        <TabPane tab="Copy-Move Detection" key="copymove">
+          <Row gutter={[16, 16]} wrap>
+            <Col xs={24} lg={12}>
+              <Card title="Copy-Move Results" size="small">
+                <Statistic title="Confidence Score" value={analysis.copyMoveAnalysis.confidenceScore} suffix="%" style={{ marginBottom: 16 }} />
+                <Statistic title="Suspicious Blocks" value={analysis.copyMoveAnalysis.suspiciousBlocks} style={{ marginBottom: 16 }} />
+                <Text>{analysis.copyMoveAnalysis.analysis}</Text>
+              </Card>
+            </Col>
+            {analysis.copyMoveAnalysis.resultImageUrl && (
+              <Col xs={24} lg={12}>
+                <Card title="Copy-Move Visualization" size="small" bodyStyle={{ overflow: 'hidden' }}>
+                  <Image src={analysis.copyMoveAnalysis.resultImageUrl} alt="Copy-Move Result" style={{ width: '100%' }} />
+                </Card>
+              </Col>
+            )}
+          </Row>
+        </TabPane>
+      )}
+      {analysis.lightingAnalysis && (
+        <TabPane tab="Lighting Analysis" key="lighting">
+          <Row gutter={[16, 16]} wrap>
+            <Col xs={24} lg={12}>
+              <Card title="Lighting Results" size="small">
+                <Statistic title="Confidence Score" value={analysis.lightingAnalysis.confidenceScore} suffix="%" style={{ marginBottom: 16 }} />
+                <Statistic title="Inconsistencies" value={analysis.lightingAnalysis.inconsistencies} style={{ marginBottom: 16 }} />
+                <Text>{analysis.lightingAnalysis.analysis}</Text>
+              </Card>
+            </Col>
+            {analysis.lightingAnalysis.analysisImageUrl && (
+              <Col xs={24} lg={12}>
+                <Card title="Lighting Analysis" size="small" bodyStyle={{ overflow: 'hidden' }}>
+                  <Image src={analysis.lightingAnalysis.analysisImageUrl} alt="Lighting Analysis" style={{ width: '100%' }} />
+                </Card>
+              </Col>
+            )}
+          </Row>
+        </TabPane>
+      )}
+    </Tabs>
+  );
+};
+
+const renderMetadataTree = (data: Record<string, any>, prefix = ''): any[] => {
+  return Object.entries(data).map(([key, value]) => {
+    const nodeKey = prefix ? `${prefix}.${key}` : key;
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      return { title: <Text strong>{key}</Text>, key: nodeKey, children: renderMetadataTree(value, nodeKey) };
+    } else {
+      return { title: (<Space><Text>{key}:</Text><Text copyable type="secondary">{Array.isArray(value) ? value.join(', ') : String(value)}</Text></Space>), key: nodeKey, isLeaf: true };
+    }
+  });
+};
+
+const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
+  if (!analysis.result) return <div>No analysis result available</div>;
+  const result = analysis.result;
+  const panels: React.ReactNode[] = [];
+  if (result.exifData) {
+    panels.push(
+      <Panel header="EXIF Data" key="exif">
+        <Tree defaultExpandAll treeData={renderMetadataTree(result.exifData)} />
+      </Panel>
+    );
+  }
+  if (result.fileHeaders) {
+    panels.push(
+      <Panel header="File Headers" key="headers">
+        <Tree defaultExpandAll treeData={renderMetadataTree(result.fileHeaders)} />
+      </Panel>
+    );
+  }
+  if (result.hashData) {
+    panels.push(
+      <Panel header="Hash Data" key="hash">
+        <Descriptions bordered size="small">
+          {result.hashData.md5 && (
+            <Descriptions.Item label="MD5" span={3}><Text copyable code>{result.hashData.md5}</Text></Descriptions.Item>
+          )}
+          {result.hashData.sha256 && (
+            <Descriptions.Item label="SHA256" span={3}><Text copyable code>{result.hashData.sha256}</Text></Descriptions.Item>
+          )}
+        </Descriptions>
+      </Panel>
+    );
+  }
+  if (result.technicalData) {
+    panels.push(
+      <Panel header="Technical Data" key="technical">
+        <Descriptions bordered size="small">
+          {Object.entries(result.technicalData).map(([key, value]) => (
+            <Descriptions.Item label={key} key={key}>{String(value)}</Descriptions.Item>
+          ))}
+        </Descriptions>
+      </Panel>
+    );
+  }
+  if ((result as any).parsedMetadata && Object.keys((result as any).parsedMetadata).length > 0) {
+    panels.push(
+      <Panel header="Full Analysis" key="parsed">
+        <Tree defaultExpandAll treeData={renderMetadataTree((result as any).parsedMetadata)} />
+      </Panel>
+    );
+  }
+  if (result.suspicious) {
+    panels.push(
+      <Panel key="suspicious" header={(<Space><WarningOutlined /><Text>Suspicious Analysis</Text>{getRiskLevelTag(result.suspicious.riskScore)}</Space>)}>
+        <Row gutter={16}>
+          <Col span={8}><Statistic title="Risk Score" value={result.suspicious.riskScore} suffix="%" valueStyle={{ color: result.suspicious.riskScore <= 30 ? '#3f8600' : '#cf1322' }} /></Col>
+          <Col span={8}><Statistic title="Has Anomalies" value={result.suspicious.hasAnomalies ? 'Yes' : 'No'} valueStyle={{ color: result.suspicious.hasAnomalies ? '#cf1322' : '#3f8600' }} /></Col>
+          <Col span={8}><Statistic title="Anomalies Found" value={result.suspicious.anomalies.length} /></Col>
+        </Row>
+        {result.suspicious.anomalies.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <Title level={5}>Detected Anomalies:</Title>
+            <Timeline>
+              {result.suspicious.anomalies.map((anomaly, index) => (
+                <Timeline.Item key={index} dot={<WarningOutlined style={{ color: '#ff4d4f' }} />}>
+                  <Text>{anomaly}</Text>
+                </Timeline.Item>
+              ))}
+            </Timeline>
+          </div>
+        )}
+      </Panel>
+    );
+  }
+  return <Collapse defaultActiveKey={['suspicious']} ghost>{panels}</Collapse>;
+};
+
+export const AnalysisDetails: React.FC<{ file?: UploadFile; record: AnalysisRecord }> = ({ record }) => {
+  return (
+    <div>
+      <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
+        <Descriptions.Item label="Analysis Type" span={2}>{getAnalysisTypeTag(record.type)}</Descriptions.Item>
+        <Descriptions.Item label="Status">{getStatusTag(record.status)}</Descriptions.Item>
+        <Descriptions.Item label="Risk Score" span={3}><Space><Text>{record.riskScore !== undefined ? `${Math.round(record.riskScore)}%` : 'N/A'}</Text>{getRiskLevelTag(record.riskScore)}</Space></Descriptions.Item>
+        <Descriptions.Item label="Created Time" span={3}>{formatDateTime(record.createdTime)}</Descriptions.Item>
+        {record.completedTime && (<Descriptions.Item label="Completed Time" span={3}>{formatDateTime(record.completedTime)}</Descriptions.Item>)}
+        {record.errorMessage && (<Descriptions.Item label="Error Message" span={3}><Text type="danger">{record.errorMessage}</Text></Descriptions.Item>)}
+      </Descriptions>
+      {record.type === 'TRADITIONAL' && record.data && renderTraditionalAnalysisDetails(record.data as TraditionalAnalysisResult)}
+      {record.type === 'METADATA' && record.data && renderMetadataAnalysisDetails(record.data as MetadataAnalysis)}
+      {record.type === 'AI' && (
+        <Alert message="AI Analysis" description="AI-based deepfake detection is not yet implemented." type="info" />
+      )}
+    </div>
+  );
+};
+
 const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
   file,
   showFileInfo = true,
+  onSelectAnalysis,
 }) => {
   const { 
     analyses: metadataAnalyses, 
@@ -214,90 +497,12 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
   }, [file, loadAllAnalyses]);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'COMPLETED':
-        return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
-      case 'FAILED':
-        return <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />;
-      case 'PROCESSING':
-      case 'IN_PROGRESS':
-        return <LoadingOutlined style={{ color: '#1890ff' }} />;
-      case 'PENDING':
-        return <InfoCircleOutlined style={{ color: '#faad14' }} />;
-      case 'NOT_STARTED':
-        return <InfoCircleOutlined style={{ color: '#d9d9d9' }} />;
-      case 'NOT_AVAILABLE':
-        return <InfoCircleOutlined style={{ color: '#bfbfbf' }} />;
-      default:
-        return null;
-    }
-  };
-
-  const getStatusTag = (status: string) => {
-    const statusConfig = {
-      PENDING: { color: 'orange', text: 'Pending' },
-      PROCESSING: { color: 'blue', text: 'Processing' },
-      IN_PROGRESS: { color: 'blue', text: 'Processing' },
-      COMPLETED: { color: 'green', text: 'Completed' },
-      FAILED: { color: 'red', text: 'Failed' },
-      NOT_STARTED: { color: 'default', text: 'Not Started' },
-      NOT_AVAILABLE: { color: 'default', text: 'Not Available' },
-    };
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || 
-                  { color: 'default', text: status };
-    
-    return <Tag color={config.color}>{config.text}</Tag>;
-  };
-
-  const getAnalysisTypeInfo = (type: string) => {
-    const typeConfig = {
-      METADATA: { 
-        color: 'blue', 
-        text: 'Metadata Analysis',
-        icon: <ScanOutlined />
-      },
-      TRADITIONAL: { 
-        color: 'purple', 
-        text: 'Traditional Forensics',
-        icon: <ExperimentOutlined />
-      },
-      AI: { 
-        color: 'green', 
-        text: 'AI Detection',
-        icon: <RobotOutlined />
-      },
-    };
-    
-    return typeConfig[type as keyof typeof typeConfig] || 
-           { color: 'default', text: type, icon: <InfoCircleOutlined /> };
-  };
-
-  const getAnalysisTypeTag = (type: string) => {
-    const info = getAnalysisTypeInfo(type);
-    return (
-      <Tag color={info.color} icon={info.icon}>
-        {info.text}
-      </Tag>
-    );
-  };
-
-  const getRiskLevelTag = (riskScore?: number) => {
-    if (riskScore === undefined || riskScore === null) {
-      return <Tag>N/A</Tag>;
-    }
-    
-    if (riskScore <= 30) {
-      return <Tag color="green">Low Risk</Tag>;
-    } else if (riskScore <= 70) {
-      return <Tag color="orange">Medium Risk</Tag>;
-    } else {
-      return <Tag color="red">High Risk</Tag>;
-    }
-  };
 
   const handleViewDetails = (record: AnalysisRecord) => {
+    if (onSelectAnalysis) {
+      onSelectAnalysis(record);
+      return;
+    }
     setSelectedAnalysis(record);
     setDetailModalVisible(true);
   };
@@ -517,363 +722,8 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
   ];
 
   // Render traditional analysis details
-  const renderTraditionalAnalysisDetails = (analysis: TraditionalAnalysisResult) => {
-    return (
-      <Tabs defaultActiveKey="summary">
-        <TabPane tab="Analysis Summary" key="summary">
-          <Row gutter={[16, 16]}>
-            <Col span={6}>
-              <Statistic
-                title="Overall Confidence Score"
-                value={analysis.overallConfidenceScore}
-                suffix="%"
-                valueStyle={{ 
-                  color: analysis.overallConfidenceScore > 50 ? '#cf1322' : '#3f8600'
-                }}
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title="Authenticity Assessment"
-                value={analysis.authenticityAssessment.replace('_', ' ')}
-                valueStyle={{
-                  color: ['MANIPULATED', 'LIKELY_MANIPULATED'].includes(analysis.authenticityAssessment) ? '#cf1322' : '#3f8600'
-                }}
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title="Processing Time"
-                value={analysis.processingTimeMs}
-                suffix="ms"
-              />
-            </Col>
-            <Col span={6}>
-              <Statistic
-                title="Image Dimensions"
-                value={`${analysis.imageWidth}×${analysis.imageHeight}`}
-              />
-            </Col>
-          </Row>
-          
-          <Divider />
-          
-          <div style={{ marginBottom: 16 }}>
-            <Title level={5}>Analysis Summary</Title>
-            <Text style={{ whiteSpace: 'pre-line' }}>{analysis.analysisSummary}</Text>
-          </div>
-          
-          <div>
-            <Title level={5}>Detailed Findings</Title>
-            <Text style={{ whiteSpace: 'pre-line' }}>{analysis.detailedFindings}</Text>
-          </div>
-        </TabPane>
-
-        {analysis.elaAnalysis && (
-          <TabPane tab="Error Level Analysis" key="ela">
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Card title="ELA Results" size="small">
-                  <Statistic
-                    title="Confidence Score"
-                    value={analysis.elaAnalysis.confidenceScore}
-                    suffix="%"
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Statistic
-                    title="Suspicious Regions"
-                    value={analysis.elaAnalysis.suspiciousRegions}
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Text>{analysis.elaAnalysis.analysis}</Text>
-                </Card>
-              </Col>
-              {analysis.elaAnalysis.resultImageUrl && (
-                <Col span={12}>
-                  <Card title="ELA Visualization" size="small">
-                    <Image
-                      src={analysis.elaAnalysis.resultImageUrl}
-                      alt="ELA Result"
-                      style={{ maxWidth: '100%' }}
-                    />
-                  </Card>
-                </Col>
-              )}
-            </Row>
-          </TabPane>
-        )}
-
-        {analysis.cfaAnalysis && (
-          <TabPane tab="CFA Analysis" key="cfa">
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Card title="CFA Results" size="small">
-                  <Statistic
-                    title="Confidence Score"
-                    value={analysis.cfaAnalysis.confidenceScore}
-                    suffix="%"
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Statistic
-                    title="Interpolation Anomalies"
-                    value={analysis.cfaAnalysis.interpolationAnomalies}
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Text>{analysis.cfaAnalysis.analysis}</Text>
-                </Card>
-              </Col>
-              {analysis.cfaAnalysis.heatmapImageUrl && (
-                <Col span={12}>
-                  <Card title="CFA Heatmap" size="small">
-                    <Image
-                      src={analysis.cfaAnalysis.heatmapImageUrl}
-                      alt="CFA Heatmap"
-                      style={{ maxWidth: '100%' }}
-                    />
-                  </Card>
-                </Col>
-              )}
-            </Row>
-          </TabPane>
-        )}
-
-        {analysis.copyMoveAnalysis && (
-          <TabPane tab="Copy-Move Detection" key="copymove">
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Card title="Copy-Move Results" size="small">
-                  <Statistic
-                    title="Confidence Score"
-                    value={analysis.copyMoveAnalysis.confidenceScore}
-                    suffix="%"
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Statistic
-                    title="Suspicious Blocks"
-                    value={analysis.copyMoveAnalysis.suspiciousBlocks}
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Text>{analysis.copyMoveAnalysis.analysis}</Text>
-                </Card>
-              </Col>
-              {analysis.copyMoveAnalysis.resultImageUrl && (
-                <Col span={12}>
-                  <Card title="Copy-Move Visualization" size="small">
-                    <Image
-                      src={analysis.copyMoveAnalysis.resultImageUrl}
-                      alt="Copy-Move Result"
-                      style={{ maxWidth: '100%' }}
-                    />
-                  </Card>
-                </Col>
-              )}
-            </Row>
-          </TabPane>
-        )}
-
-        {analysis.lightingAnalysis && (
-          <TabPane tab="Lighting Analysis" key="lighting">
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Card title="Lighting Results" size="small">
-                  <Statistic
-                    title="Confidence Score"
-                    value={analysis.lightingAnalysis.confidenceScore}
-                    suffix="%"
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Statistic
-                    title="Inconsistencies"
-                    value={analysis.lightingAnalysis.inconsistencies}
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Text>{analysis.lightingAnalysis.analysis}</Text>
-                </Card>
-              </Col>
-              {analysis.lightingAnalysis.analysisImageUrl && (
-                <Col span={12}>
-                  <Card title="Lighting Analysis" size="small">
-                    <Image
-                      src={analysis.lightingAnalysis.analysisImageUrl}
-                      alt="Lighting Analysis"
-                      style={{ maxWidth: '100%' }}
-                    />
-                  </Card>
-                </Col>
-              )}
-            </Row>
-          </TabPane>
-        )}
-      </Tabs>
-    );
-  };
 
   // Render metadata analysis details (complete implementation from original)
-  const renderMetadataTree = (data: Record<string, any>, prefix = ''): any[] => {
-    return Object.entries(data).map(([key, value]) => {
-      const nodeKey = prefix ? `${prefix}.${key}` : key;
-      
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        return {
-          title: <Text strong>{key}</Text>,
-          key: nodeKey,
-          children: renderMetadataTree(value, nodeKey),
-        };
-      } else {
-        return {
-          title: (
-            <Space>
-              <Text>{key}:</Text>
-              <Text copyable type="secondary">
-                {Array.isArray(value) ? value.join(', ') : String(value)}
-              </Text>
-            </Space>
-          ),
-          key: nodeKey,
-          isLeaf: true,
-        };
-      }
-    });
-  };
-
-  const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
-    if (!analysis.result) {
-      return <div>No analysis result available</div>;
-    }
-
-    const result = analysis.result;
-    const panels = [];
-
-    if (result.exifData) {
-      panels.push(
-        <Panel header="EXIF Data" key="exif">
-          <Tree
-            defaultExpandAll
-            treeData={renderMetadataTree(result.exifData)}
-          />
-        </Panel>
-      );
-    }
-
-    if (result.fileHeaders) {
-      panels.push(
-        <Panel header="File Headers" key="headers">
-          <Tree
-            defaultExpandAll
-            treeData={renderMetadataTree(result.fileHeaders)}
-          />
-        </Panel>
-      );
-    }
-
-    if (result.hashData) {
-      panels.push(
-        <Panel header="Hash Data" key="hash">
-          <Descriptions bordered size="small">
-            {result.hashData.md5 && (
-              <Descriptions.Item label="MD5" span={3}>
-                <Text copyable code>{result.hashData.md5}</Text>
-              </Descriptions.Item>
-            )}
-            {result.hashData.sha256 && (
-              <Descriptions.Item label="SHA256" span={3}>
-                <Text copyable code>{result.hashData.sha256}</Text>
-              </Descriptions.Item>
-            )}
-          </Descriptions>
-        </Panel>
-      );
-    }
-
-    if (result.technicalData) {
-      panels.push(
-        <Panel header="Technical Data" key="technical">
-          <Descriptions bordered size="small">
-            {Object.entries(result.technicalData).map(([key, value]) => (
-              <Descriptions.Item label={key} key={key}>
-                {String(value)}
-              </Descriptions.Item>
-            ))}
-          </Descriptions>
-        </Panel>
-      );
-    }
-
-    // Parsed raw metadata tree
-    if ((result as any).parsedMetadata && Object.keys((result as any).parsedMetadata).length > 0) {
-      panels.push(
-        <Panel header="Full Analysis" key="parsed">
-          <Tree defaultExpandAll treeData={renderMetadataTree((result as any).parsedMetadata)} />
-        </Panel>
-      );
-    }
-
-    if (result.suspicious) {
-      panels.push(
-        <Panel 
-          header={
-            <Space>
-              <WarningOutlined />
-              <Text>Suspicious Analysis</Text>
-              {getRiskLevelTag(result.suspicious.riskScore)}
-            </Space>
-          } 
-          key="suspicious"
-        >
-          <Row gutter={16}>
-            <Col span={8}>
-              <Statistic
-                title="Risk Score"
-                value={result.suspicious.riskScore}
-                suffix="%"
-                valueStyle={{
-                  color: result.suspicious.riskScore <= 30 ? '#3f8600' :
-                         result.suspicious.riskScore <= 70 ? '#cf1322' : '#cf1322'
-                }}
-              />
-            </Col>
-            <Col span={8}>
-              <Statistic
-                title="Has Anomalies"
-                value={result.suspicious.hasAnomalies ? 'Yes' : 'No'}
-                valueStyle={{
-                  color: result.suspicious.hasAnomalies ? '#cf1322' : '#3f8600'
-                }}
-              />
-            </Col>
-            <Col span={8}>
-              <Statistic
-                title="Anomalies Found"
-                value={result.suspicious.anomalies.length}
-              />
-            </Col>
-          </Row>
-          
-          {result.suspicious.anomalies.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <Title level={5}>Detected Anomalies:</Title>
-              <Timeline>
-                {result.suspicious.anomalies.map((anomaly, index) => (
-                  <Timeline.Item
-                    key={index}
-                    dot={<WarningOutlined style={{ color: '#ff4d4f' }} />}
-                  >
-                    <Text>{anomaly}</Text>
-                  </Timeline.Item>
-                ))}
-              </Timeline>
-            </div>
-          )}
-        </Panel>
-      );
-    }
-
-    return (
-      <Collapse defaultActiveKey={['suspicious']} ghost>
-        {panels}
-      </Collapse>
-    );
-  };
 
   return (
     <div>

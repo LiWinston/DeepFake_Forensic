@@ -1,0 +1,56 @@
+/* Layered push animation and overlay */
+.push-container {
+  transition: transform 280ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+
+.push-container.shift-1 {
+  transform: translateX(-220px);
+}
+
+.push-container.shift-2 {
+  transform: translateX(-420px);
+}
+
+.shift-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 18, 28, 0.35);
+  backdrop-filter: blur(2px);
+  z-index: 999;
+  opacity: 1;
+  transition: opacity 200ms ease;
+}
+
+.shift-overlay.level-2 {
+  background: rgba(15, 18, 28, 0.45);
+}
+
+/* Ensure Drawers stay above overlay */
+.ant-drawer { z-index: 1060; }
+.ant-drawer.drawer-level-1 { z-index: 1060; }
+.ant-drawer .ant-drawer { z-index: 1070; }
+
+/* When detail drawer is open, push the level-1 drawer slightly left to let top drawer hug the right edge */
+.drawer-level-1.drawer-pushed .ant-drawer-content-wrapper {
+  transform: translateX(-180px);
+}
+
+/* Avoid content clipping on wide screens inside nested drawers */
+.ant-drawer-body {
+  overflow: auto;
+}
+
+/* Traditional analysis right-side media should never overflow its card */
+.ant-card .ant-image img,
+.ant-card .ant-image-img,
+.ant-card .ant-image-picture {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+@media (min-width: 1600px) {
+  .push-container.shift-1 { transform: translateX(-260px); }
+  .push-container.shift-2 { transform: translateX(-480px); }
+}
