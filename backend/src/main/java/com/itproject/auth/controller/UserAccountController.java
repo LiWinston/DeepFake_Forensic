@@ -4,6 +4,7 @@ import com.itproject.auth.dto.*;
 import com.itproject.auth.entity.User;
 import com.itproject.auth.security.SecurityUtils;
 import com.itproject.auth.service.UserAccountService;
+import com.itproject.auth.service.UserPreferencesService;
 import com.itproject.common.dto.Result;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserAccountController {
     
     private final UserAccountService userAccountService;
+    private final UserPreferencesService userPreferencesService;
       /**
      * Request password reset
      */
@@ -194,6 +196,49 @@ public class UserAccountController {
         } catch (Exception e) {
             log.error("Error getting profile", e);
             return Result.error("Internal server error");
+        }
+    }
+    
+    /**
+     * Get user email notification preferences
+     */
+    @GetMapping("/preferences/email-notifications")
+    public Result<EmailNotificationPreferenceDTO> getEmailNotificationPreference() {
+        try {
+            User currentUser = SecurityUtils.getCurrentUser();
+            if (currentUser == null) {
+                return Result.error("User not authenticated");
+            }
+            
+            boolean enabled = userPreferencesService.isEmailNotificationsEnabled(currentUser.getId());
+            return Result.success(new EmailNotificationPreferenceDTO(enabled));
+        } catch (Exception e) {
+            log.error("Error getting email notification preference", e);
+            return Result.error("Internal server error");
+        }
+    }
+    
+    /**
+     * Update user email notification preferences
+     */
+    @PutMapping("/preferences/email-notifications")
+    public Result<Void> updateEmailNotificationPreference(@Valid @RequestBody EmailNotificationPreferenceDTO request) {
+        try {
+            User currentUser = SecurityUtils.getCurrentUser();
+            if (currentUser == null) {
+                return Result.error("User not authenticated");
+            }
+            
+            userPreferencesService.setEmailNotificationsEnabled(currentUser.getId(), request.isEnabled());
+            
+            // Also cache by username for quick lookup during email sending
+            userPreferencesService.setEmailNotificationsEnabledByUsername(currentUser.getUsername(), request.isEnabled());
+            
+            String message = request.isEnabled() ? "Email notifications enabled" : "Email notifications disabled";
+            return Result.success(null, message);
+        } catch (Exception e) {
+            log.error("Error updating email notification preference", e);
+            return Result.error("Failed to update email notification preference");
         }
     }
 }

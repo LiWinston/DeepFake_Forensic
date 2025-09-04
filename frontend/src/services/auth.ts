@@ -39,6 +39,10 @@ export interface UserProfileUpdate {
   lastName?: string;
 }
 
+export interface EmailNotificationPreference {
+  enabled: boolean;
+}
+
 export interface AuthResponse {
   token: string;
   refreshToken: string;
@@ -220,6 +224,17 @@ class AuthService {
     } catch {
       return true;
     }
+  }
+
+  // Get email notification preference
+  async getEmailNotificationPreference(): Promise<EmailNotificationPreference> {
+    const response = await http.get('/account/preferences/email-notifications');
+    return response.data.data || response.data;
+  }
+
+  // Update email notification preference
+  async updateEmailNotificationPreference(preference: EmailNotificationPreference): Promise<void> {
+    await http.put('/account/preferences/email-notifications', preference);
   }
 }
 

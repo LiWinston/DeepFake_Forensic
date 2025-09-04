@@ -1,5 +1,6 @@
 package com.itproject.common.service;
 
+import com.itproject.auth.service.UserPreferencesService;
 import com.itproject.common.config.MailProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
     private final MailProperties mailProperties;
+    private final UserPreferencesService userPreferencesService;
     
     /**
      * Send password reset email
@@ -97,9 +99,15 @@ public class EmailService {
     /**
      * Send traditional analysis completion notification email
      */
-    public CompletableFuture<Boolean> sendTraditionalAnalysisCompleteEmail(String to, Map<String, Object> variables) {
+    public CompletableFuture<Boolean> sendTraditionalAnalysisCompleteEmail(String to, String username, Map<String, Object> variables) {
         return CompletableFuture.supplyAsync(() -> {
             try {
+                // Check if user has email notifications enabled
+                if (!userPreferencesService.isEmailNotificationsEnabledByUsername(username)) {
+                    log.info("Email notifications disabled for user: {}, skipping traditional analysis email", username);
+                    return true; // Return true to indicate "success" (email was intentionally not sent)
+                }
+                
                 Context context = new Context();
                 variables.forEach(context::setVariable);
                 

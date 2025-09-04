@@ -716,7 +716,10 @@ public class TraditionalAnalysisService {
             }
             
             // Send email asynchronously
-            emailService.sendTraditionalAnalysisCompleteEmail(mediaFile.getUser().getEmail(), emailVariables)
+            emailService.sendTraditionalAnalysisCompleteEmail(
+                    mediaFile.getUser().getEmail(), 
+                    mediaFile.getUser().getUsername(), 
+                    emailVariables)
                 .thenAccept(success -> {
                     if (success) {
                         log.info("Analysis completion email sent successfully for file: {}", result.getFileMd5());

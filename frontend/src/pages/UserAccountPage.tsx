@@ -12,6 +12,7 @@ import {
   Modal,
   Row,
   Col,
+  Switch,
 } from 'antd';
 import {
   UserOutlined,
@@ -21,6 +22,8 @@ import {
   EditOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
+  SettingOutlined,
+  NotificationOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import authService from '../services/auth';
@@ -34,6 +37,7 @@ const { TabPane } = Tabs;
 const UserAccountPage: React.FC = () => {
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
   const [profileForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
 
@@ -48,6 +52,23 @@ const UserAccountPage: React.FC = () => {
       });
     }
   }, [user, profileForm]);
+
+  // Load email notification preference
+  useEffect(() => {
+    const loadEmailPreference = async () => {
+      try {
+        const preference = await authService.getEmailNotificationPreference();
+        setEmailNotificationsEnabled(preference.enabled);
+      } catch (error) {
+        console.error('Failed to load email notification preference:', error);
+        // Keep default value (true) if loading fails
+      }
+    };
+
+    if (user) {
+      loadEmailPreference();
+    }
+  }, [user]);
 
   const handleUpdateProfile = async (values: UserProfileUpdate) => {
     setLoading(true);
@@ -86,6 +107,21 @@ const UserAccountPage: React.FC = () => {
       message.success('Verification email sent successfully!');
     } catch (error: any) {
       message.error(error.response?.data?.message || 'Failed to send verification email');
+    }
+  };
+
+  const handleEmailNotificationChange = async (enabled: boolean) => {
+    try {
+      setLoading(true);
+      await authService.updateEmailNotificationPreference({ enabled });
+      setEmailNotificationsEnabled(enabled);
+      message.success(`Email notifications ${enabled ? 'enabled' : 'disabled'} successfully!`);
+    } catch (error: any) {
+      message.error(error.response?.data?.message || 'Failed to update email notification preference');
+      // Revert the switch state if update failed
+      setEmailNotificationsEnabled(!enabled);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -302,7 +338,57 @@ const UserAccountPage: React.FC = () => {
                 </Form.Item>
               </Form>
             </Card>
-          </TabPane>          <TabPane 
+          </TabPane>
+
+          <TabPane 
+            tab={
+              <span style={{ color: '#ffffff', textShadow: '0 0 10px rgba(255, 255, 255, 0.5)' }}>
+                <SettingOutlined />
+                Preferences
+              </span>
+            } 
+            key="preferences"
+          >
+            <Card title="Notification Preferences" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
+              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                <div>
+                  <Row align="middle" justify="space-between">
+                    <Col>
+                      <Space direction="vertical" size="small">
+                        <Text strong style={{ fontSize: '16px' }}>
+                          <NotificationOutlined /> Email Notifications
+                        </Text>
+                        <Text type="secondary">
+                          Receive email notifications when your analysis tasks are completed
+                        </Text>
+                      </Space>
+                    </Col>
+                    <Col>
+                      <Switch
+                        checked={emailNotificationsEnabled}
+                        onChange={handleEmailNotificationChange}
+                        loading={loading}
+                        checkedChildren="ON"
+                        unCheckedChildren="OFF"
+                        size="default"
+                      />
+                    </Col>
+                  </Row>
+                </div>
+
+                <Divider />
+
+                <div>
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    <strong>Note:</strong> System-critical emails (like password resets and account verification) 
+                    will always be sent regardless of this setting.
+                  </Text>
+                </div>
+              </Space>
+            </Card>
+          </TabPane>
+
+          <TabPane 
             tab={
               <span style={{ color: '#ffffff', textShadow: '0 0 10px rgba(255, 255, 255, 0.5)' }}>
                 <MailOutlined />
