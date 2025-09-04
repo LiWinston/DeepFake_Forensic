@@ -1,0 +1,494 @@
+package com.itproject.traditional.service;
+
+import com.itproject.auth.entity.User;
+import com.itproject.auth.repository.UserRepository;
+import com.itproject.auth.security.SecurityUtils;
+import com.itproject.project.entity.Project;
+import com.itproject.project.repository.ProjectRepository;
+import com.itproject.upload.entity.MediaFile;
+import com.itproject.upload.repository.MediaFileRepository;
+import com.itproject.traditional.dto.TraditionalAnalysisResponse;
+import com.itproject.traditional.entity.TraditionalAnalysisResult;
+import com.itproject.traditional.repository.TraditionalAnalysisResultRepository;
+import com.itproject.traditional.util.CFAAnalysisUtil;
+import com.itproject.traditional.util.CopyMoveDetectionUtil;
+import com.itproject.traditional.util.ErrorLevelAnalysisUtil;
+import com.itproject.traditional.util.LightingAnalysisUtil;
+import io.minio.GetObjectArgs;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+/**
+ * Service for traditional forensic analysis
+ */
+@Slf4j
+@Service
+public class TraditionalAnalysisService {
+    
+    @Autowired
+    private TraditionalAnalysisResultRepository analysisRepository;
+    
+    @Autowired
+    private MediaFileRepository mediaFileRepository;
+    
+    @Autowired
+    private ProjectRepository projectRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private MinioClient minioClient;
+    
+    @Autowired
+    private ErrorLevelAnalysisUtil elaUtil;
+    
+    @Autowired
+    private CFAAnalysisUtil cfaUtil;
+    
+    @Autowired
+    private CopyMoveDetectionUtil copyMoveUtil;
+    
+    @Autowired
+    private LightingAnalysisUtil lightingUtil;
+    
+    @Value("${minio.bucket-name}")
+    private String bucketName;
+    
+    @Value("${minio.traditional-analysis-folder:traditional-analysis}")
+    private String traditionalAnalysisFolder;
+    
+    /**
+     * Kafka listener for traditional analysis tasks
+     */
+    @KafkaListener(topics = "traditional-analysis-tasks", groupId = "traditional-analysis-group")
+    @Transactional
+    public void processTraditionalAnalysisTask(String message) {
+        try {
+            log.info("Received traditional analysis task: {}", message);
+            
+            // Parse message (expecting fileMd5)
+            String fileMd5 = message.trim();
+            
+            // Find media file
+            Optional<MediaFile> mediaFileOpt = mediaFileRepository.findByFileMd5(fileMd5);
+            if (mediaFileOpt.isEmpty()) {
+                log.error("Media file not found for MD5: {}", fileMd5);
+                return;
+            }
+            
+            MediaFile mediaFile = mediaFileOpt.get();
+            
+            // Check if analysis already exists
+            if (analysisRepository.existsByFileMd5(fileMd5)) {
+                log.info("Traditional analysis already exists for file: {}", fileMd5);
+                return;
+            }
+            
+            // Perform analysis
+            performTraditionalAnalysis(mediaFile);
+            
+        } catch (Exception e) {
+            log.error("Error processing traditional analysis task: {}", message, e);
+        }
+    }
+    
+    /**
+     * Perform comprehensive traditional analysis
+     */
+    @Transactional
+    public void performTraditionalAnalysis(MediaFile mediaFile) {
+        long startTime = System.currentTimeMillis();
+        
+        TraditionalAnalysisResult result = new TraditionalAnalysisResult();
+        result.setFileMd5(mediaFile.getFileMd5());
+        result.setOriginalFilePath(mediaFile.getFilePath());
+        result.setAnalysisStatus(TraditionalAnalysisResult.AnalysisStatus.IN_PROGRESS);
+        result.setUser(mediaFile.getUser());
+        result.setProject(mediaFile.getProject());
+        result.setImageWidth(mediaFile.getWidth());
+        result.setImageHeight(mediaFile.getHeight());
+        result.setFileSizeBytes(mediaFile.getFileSize());
+        
+        try {
+            // Save initial record
+            result = analysisRepository.save(result);
+            
+            // Download image from MinIO
+            InputStream imageStream = downloadImageFromMinio(mediaFile.getFilePath());
+            
+            // Perform ELA Analysis
+            performELAAnalysis(result, imageStream);
+            
+            // Reset stream for next analysis
+            imageStream = downloadImageFromMinio(mediaFile.getFilePath());
+            
+            // Perform CFA Analysis
+            performCFAAnalysis(result, imageStream);
+            
+            // Reset stream for next analysis
+            imageStream = downloadImageFromMinio(mediaFile.getFilePath());
+            
+            // Perform Copy-Move Detection
+            performCopyMoveAnalysis(result, imageStream);
+            
+            // Reset stream for next analysis
+            imageStream = downloadImageFromMinio(mediaFile.getFilePath());
+            
+            // Perform Lighting Analysis
+            performLightingAnalysis(result, imageStream);
+            
+            // Calculate overall results
+            calculateOverallResults(result);
+            
+            // Update processing time and status
+            result.setProcessingTimeMs(System.currentTimeMillis() - startTime);
+            result.setAnalysisStatus(TraditionalAnalysisResult.AnalysisStatus.COMPLETED);
+            
+            log.info("Traditional analysis completed for file: {} in {}ms", 
+                    mediaFile.getFileMd5(), result.getProcessingTimeMs());
+            
+        } catch (Exception e) {
+            log.error("Error during traditional analysis for file: {}", mediaFile.getFileMd5(), e);
+            result.setAnalysisStatus(TraditionalAnalysisResult.AnalysisStatus.FAILED);
+            result.setErrorMessage(e.getMessage());
+            result.setProcessingTimeMs(System.currentTimeMillis() - startTime);
+        } finally {
+            analysisRepository.save(result);
+        }
+    }
+    
+    /**
+     * Perform Error Level Analysis
+     */
+    private void performELAAnalysis(TraditionalAnalysisResult result, InputStream imageStream) {
+        try {
+            ErrorLevelAnalysisUtil.ElaResult elaResult = elaUtil.performELA(imageStream, 95, 20);
+            
+            // Upload result image to MinIO
+            String elaImagePath = uploadAnalysisResult(
+                result.getFileMd5(), "ela", "png", elaResult.getResultImageData());
+            
+            result.setElaResultPath(elaImagePath);
+            result.setElaConfidenceScore(elaResult.getConfidenceScore());
+            result.setElaSuspiciousRegions(elaResult.getSuspiciousRegions());
+            
+            log.debug("ELA analysis completed for file: {}, confidence: {}", 
+                    result.getFileMd5(), elaResult.getConfidenceScore());
+            
+        } catch (Exception e) {
+            log.error("Error in ELA analysis for file: {}", result.getFileMd5(), e);
+            result.setElaConfidenceScore(0.0);
+        }
+    }
+    
+    /**
+     * Perform CFA Analysis
+     */
+    private void performCFAAnalysis(TraditionalAnalysisResult result, InputStream imageStream) {
+        try {
+            CFAAnalysisUtil.CfaResult cfaResult = cfaUtil.performCFA(imageStream, "LAPLACIAN");
+            
+            // Upload heatmap image to MinIO
+            String cfaImagePath = uploadAnalysisResult(
+                result.getFileMd5(), "cfa", "png", cfaResult.getHeatmapData());
+            
+            result.setCfaHeatmapPath(cfaImagePath);
+            result.setCfaConfidenceScore(cfaResult.getConfidenceScore());
+            result.setCfaInterpolationAnomalies(cfaResult.getInterpolationAnomalies());
+            
+            log.debug("CFA analysis completed for file: {}, confidence: {}", 
+                    result.getFileMd5(), cfaResult.getConfidenceScore());
+            
+        } catch (Exception e) {
+            log.error("Error in CFA analysis for file: {}", result.getFileMd5(), e);
+            result.setCfaConfidenceScore(0.0);
+        }
+    }
+    
+    /**
+     * Perform Copy-Move Detection
+     */
+    private void performCopyMoveAnalysis(TraditionalAnalysisResult result, InputStream imageStream) {
+        try {
+            CopyMoveDetectionUtil.CopyMoveResult copyMoveResult = copyMoveUtil.performCopyMoveDetection(
+                imageStream, 8, 10.0);
+            
+            // Upload result image to MinIO
+            String copyMoveImagePath = uploadAnalysisResult(
+                result.getFileMd5(), "copymove", "png", copyMoveResult.getResultImageData());
+            
+            result.setCopyMoveResultPath(copyMoveImagePath);
+            result.setCopyMoveConfidenceScore(copyMoveResult.getConfidenceScore());
+            result.setCopyMoveSuspiciousBlocks(copyMoveResult.getSuspiciousBlocks());
+            
+            log.debug("Copy-Move analysis completed for file: {}, confidence: {}", 
+                    result.getFileMd5(), copyMoveResult.getConfidenceScore());
+            
+        } catch (Exception e) {
+            log.error("Error in Copy-Move analysis for file: {}", result.getFileMd5(), e);
+            result.setCopyMoveConfidenceScore(0.0);
+        }
+    }
+    
+    /**
+     * Perform Lighting Analysis
+     */
+    private void performLightingAnalysis(TraditionalAnalysisResult result, InputStream imageStream) {
+        try {
+            LightingAnalysisUtil.LightingResult lightingResult = lightingUtil.performLightingAnalysis(
+                imageStream, 5);
+            
+            // Upload analysis image to MinIO
+            String lightingImagePath = uploadAnalysisResult(
+                result.getFileMd5(), "lighting", "png", lightingResult.getAnalysisImageData());
+            
+            result.setLightingAnalysisPath(lightingImagePath);
+            result.setLightingConfidenceScore(lightingResult.getConfidenceScore());
+            result.setLightingInconsistencies(lightingResult.getInconsistencies());
+            
+            log.debug("Lighting analysis completed for file: {}, confidence: {}", 
+                    result.getFileMd5(), lightingResult.getConfidenceScore());
+            
+        } catch (Exception e) {
+            log.error("Error in Lighting analysis for file: {}", result.getFileMd5(), e);
+            result.setLightingConfidenceScore(0.0);
+        }
+    }
+    
+    /**
+     * Calculate overall analysis results
+     */
+    private void calculateOverallResults(TraditionalAnalysisResult result) {
+        // Calculate weighted average confidence score
+        double elaScore = result.getElaConfidenceScore() != null ? result.getElaConfidenceScore() : 0.0;
+        double cfaScore = result.getCfaConfidenceScore() != null ? result.getCfaConfidenceScore() : 0.0;
+        double copyMoveScore = result.getCopyMoveConfidenceScore() != null ? result.getCopyMoveConfidenceScore() : 0.0;
+        double lightingScore = result.getLightingConfidenceScore() != null ? result.getLightingConfidenceScore() : 0.0;
+        
+        // Weighted average (ELA and Copy-Move are more reliable indicators)
+        double overallScore = (elaScore * 0.35 + cfaScore * 0.25 + copyMoveScore * 0.30 + lightingScore * 0.10);
+        result.setOverallConfidenceScore(overallScore);
+        
+        // Determine authenticity assessment
+        TraditionalAnalysisResult.AuthenticityAssessment assessment;
+        if (overallScore < 15) {
+            assessment = TraditionalAnalysisResult.AuthenticityAssessment.AUTHENTIC;
+        } else if (overallScore < 30) {
+            assessment = TraditionalAnalysisResult.AuthenticityAssessment.LIKELY_AUTHENTIC;
+        } else if (overallScore < 50) {
+            assessment = TraditionalAnalysisResult.AuthenticityAssessment.SUSPICIOUS;
+        } else if (overallScore < 75) {
+            assessment = TraditionalAnalysisResult.AuthenticityAssessment.LIKELY_MANIPULATED;
+        } else {
+            assessment = TraditionalAnalysisResult.AuthenticityAssessment.MANIPULATED;
+        }
+        
+        result.setAuthenticityAssessment(assessment);
+        
+        // Generate analysis summary
+        StringBuilder summary = new StringBuilder();
+        summary.append("Traditional Forensic Analysis Summary:\n");
+        summary.append(String.format("Overall Confidence Score: %.2f/100\n", overallScore));
+        summary.append(String.format("Authenticity Assessment: %s\n\n", assessment));
+        summary.append(String.format("Individual Analysis Scores:\n"));
+        summary.append(String.format("- Error Level Analysis: %.2f/100\n", elaScore));
+        summary.append(String.format("- CFA Pattern Analysis: %.2f/100\n", cfaScore));
+        summary.append(String.format("- Copy-Move Detection: %.2f/100\n", copyMoveScore));
+        summary.append(String.format("- Lighting Consistency: %.2f/100\n", lightingScore));
+        
+        result.setAnalysisSummary(summary.toString());
+        
+        // Generate detailed findings
+        StringBuilder findings = new StringBuilder();
+        findings.append("Detailed Analysis Findings:\n\n");
+        
+        if (result.getElaSuspiciousRegions() != null && result.getElaSuspiciousRegions() > 0) {
+            findings.append(String.format("ELA: %d suspicious regions detected with compression artifacts\n", 
+                          result.getElaSuspiciousRegions()));
+        }
+        
+        if (result.getCfaInterpolationAnomalies() != null && result.getCfaInterpolationAnomalies() > 0) {
+            findings.append(String.format("CFA: %d interpolation anomalies detected\n", 
+                          result.getCfaInterpolationAnomalies()));
+        }
+        
+        if (result.getCopyMoveSuspiciousBlocks() != null && result.getCopyMoveSuspiciousBlocks() > 0) {
+            findings.append(String.format("Copy-Move: %d suspicious duplicate regions detected\n", 
+                          result.getCopyMoveSuspiciousBlocks()));
+        }
+        
+        if (result.getLightingInconsistencies() != null && result.getLightingInconsistencies() > 0) {
+            findings.append(String.format("Lighting: %d lighting inconsistencies detected\n", 
+                          result.getLightingInconsistencies()));
+        }
+        
+        result.setDetailedFindings(findings.toString());
+    }
+    
+    /**
+     * Download image from MinIO
+     */
+    private InputStream downloadImageFromMinio(String filePath) {
+        try {
+            return minioClient.getObject(
+                GetObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(filePath)
+                    .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to download image from MinIO: " + filePath, e);
+        }
+    }
+    
+    /**
+     * Upload analysis result image to MinIO
+     */
+    private String uploadAnalysisResult(String fileMd5, String analysisType, String extension, byte[] data) {
+        try {
+            String fileName = String.format("%s_%s_%s.%s", 
+                fileMd5, analysisType, System.currentTimeMillis(), extension);
+            String objectPath = traditionalAnalysisFolder + "/" + fileName;
+            
+            minioClient.putObject(
+                PutObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectPath)
+                    .stream(new ByteArrayInputStream(data), data.length, -1)
+                    .contentType("image/" + extension)
+                    .build()
+            );
+            
+            return objectPath;
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload analysis result to MinIO", e);
+        }
+    }
+    
+    /**
+     * Get analysis result by file MD5
+     */
+    public Optional<TraditionalAnalysisResponse> getAnalysisResult(String fileMd5) {
+        return analysisRepository.findByFileMd5(fileMd5)
+            .map(this::convertToResponse);
+    }
+    
+    /**
+     * Get analysis results for a project
+     */
+    public Page<TraditionalAnalysisResponse> getProjectAnalysisResults(Long projectId, Pageable pageable) {
+        String currentUsername = SecurityUtils.getCurrentUsername();
+        Optional<User> currentUser = userRepository.findByUsername(currentUsername);
+        
+        if (currentUser.isEmpty()) {
+            throw new RuntimeException("User not found: " + currentUsername);
+        }
+        
+        return analysisRepository.findByProjectIdAndUserIdOrderByCreatedAtDesc(
+            projectId, currentUser.get().getId(), pageable)
+            .map(this::convertToResponse);
+    }
+    
+    /**
+     * Convert entity to response DTO
+     */
+    private TraditionalAnalysisResponse convertToResponse(TraditionalAnalysisResult result) {
+        TraditionalAnalysisResponse response = new TraditionalAnalysisResponse();
+        
+        response.setId(result.getId());
+        response.setFileMd5(result.getFileMd5());
+        response.setOriginalFilePath(result.getOriginalFilePath());
+        response.setAnalysisStatus(result.getAnalysisStatus());
+        response.setOverallConfidenceScore(result.getOverallConfidenceScore());
+        response.setAuthenticityAssessment(result.getAuthenticityAssessment());
+        response.setAnalysisSummary(result.getAnalysisSummary());
+        response.setDetailedFindings(result.getDetailedFindings());
+        response.setErrorMessage(result.getErrorMessage());
+        response.setProcessingTimeMs(result.getProcessingTimeMs());
+        response.setImageWidth(result.getImageWidth());
+        response.setImageHeight(result.getImageHeight());
+        response.setFileSizeBytes(result.getFileSizeBytes());
+        response.setCreatedAt(result.getCreatedAt());
+        response.setUpdatedAt(result.getUpdatedAt());
+        
+        // ELA Analysis
+        if (result.getElaConfidenceScore() != null) {
+            response.setElaAnalysis(new TraditionalAnalysisResponse.ElaAnalysisResult(
+                result.getElaConfidenceScore(),
+                generatePresignedUrl(result.getElaResultPath()),
+                result.getElaSuspiciousRegions(),
+                "ELA analysis completed successfully"
+            ));
+        }
+        
+        // CFA Analysis
+        if (result.getCfaConfidenceScore() != null) {
+            response.setCfaAnalysis(new TraditionalAnalysisResponse.CfaAnalysisResult(
+                result.getCfaConfidenceScore(),
+                generatePresignedUrl(result.getCfaHeatmapPath()),
+                result.getCfaInterpolationAnomalies(),
+                "CFA analysis completed successfully"
+            ));
+        }
+        
+        // Copy-Move Analysis
+        if (result.getCopyMoveConfidenceScore() != null) {
+            response.setCopyMoveAnalysis(new TraditionalAnalysisResponse.CopyMoveAnalysisResult(
+                result.getCopyMoveConfidenceScore(),
+                generatePresignedUrl(result.getCopyMoveResultPath()),
+                result.getCopyMoveSuspiciousBlocks(),
+                "Copy-Move detection completed successfully"
+            ));
+        }
+        
+        // Lighting Analysis
+        if (result.getLightingConfidenceScore() != null) {
+            response.setLightingAnalysis(new TraditionalAnalysisResponse.LightingAnalysisResult(
+                result.getLightingConfidenceScore(),
+                generatePresignedUrl(result.getLightingAnalysisPath()),
+                result.getLightingInconsistencies(),
+                "Lighting analysis completed successfully"
+            ));
+        }
+        
+        return response;
+    }
+    
+    /**
+     * Generate presigned URL for MinIO objects
+     */
+    private String generatePresignedUrl(String objectPath) {
+        if (objectPath == null || objectPath.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            return minioClient.getPresignedObjectUrl(
+                io.minio.GetPresignedObjectUrlArgs.builder()
+                    .method(io.minio.http.Method.GET)
+                    .bucket(bucketName)
+                    .object(objectPath)
+                    .expiry(60 * 60) // 1 hour
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Failed to generate presigned URL for: {}", objectPath, e);
+            return null;
+        }
+    }
+}

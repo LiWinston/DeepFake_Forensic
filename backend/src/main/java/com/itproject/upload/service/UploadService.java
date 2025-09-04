@@ -69,6 +69,9 @@ public class UploadService {
     private String metadataAnalysisTopic;
     
     @Autowired
+    private String traditionalAnalysisTopic;
+    
+    @Autowired
     private FileTypeValidationService fileTypeValidationService;
     
     private static final String CHUNK_CACHE_PREFIX = "chunk:";
@@ -334,6 +337,22 @@ public class UploadService {
             analysisMessage.put("forceReAnalysis", false); // Default: not force re-analysis on first completion
             
             kafkaTemplate.send(metadataAnalysisTopic, analysisMessage);
+            
+            // Send message for traditional analysis (for images only)
+            // Use consistent image type checking with FileTypeValidationService
+            if (MediaFile.MediaType.IMAGE.equals(mediaFile.getMediaType()) && "IMAGE".equals(mediaFile.getFileType())) {
+                try {
+                    kafkaTemplate.send(traditionalAnalysisTopic, mediaFile.getFileMd5());
+                    log.info("Traditional analysis task sent for file: {} (MD5: {})", 
+                            mediaFile.getFileName(), mediaFile.getFileMd5());
+                } catch (Exception e) {
+                    log.warn("Failed to send traditional analysis task for file: {} (MD5: {})", 
+                            mediaFile.getFileName(), mediaFile.getFileMd5(), e);
+                }
+            } else {
+                log.debug("Skipping traditional analysis for non-image file: {} (MediaType: {}, FileType: {})", 
+                         mediaFile.getFileName(), mediaFile.getMediaType(), mediaFile.getFileType());
+            }
             
             log.info("Upload completed for file: {} (MD5: {})", mediaFile.getFileName(), mediaFile.getFileMd5());
             

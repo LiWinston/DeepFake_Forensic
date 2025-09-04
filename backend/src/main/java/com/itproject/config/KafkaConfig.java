@@ -78,4 +78,9 @@ public class KafkaConfig {
     public String fileProcessingTopic() {
         return "file-processing";
     }
+    
+    @Bean("traditionalAnalysisTopic")
+    public String traditionalAnalysisTopic() {
+        return "traditional-analysis-tasks";
+    }
 }
