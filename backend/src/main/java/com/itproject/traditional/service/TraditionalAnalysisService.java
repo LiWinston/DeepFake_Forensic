@@ -8,6 +8,7 @@ import com.itproject.project.repository.ProjectRepository;
 import com.itproject.upload.entity.MediaFile;
 import com.itproject.upload.repository.MediaFileRepository;
 import com.itproject.traditional.dto.TraditionalAnalysisResponse;
+import com.itproject.traditional.dto.TraditionalAnalysisTaskDto;
 import com.itproject.traditional.entity.TraditionalAnalysisResult;
 import com.itproject.traditional.repository.TraditionalAnalysisResultRepository;
 import com.itproject.traditional.util.CFAAnalysisUtil;
@@ -84,6 +85,13 @@ public class TraditionalAnalysisService {
      * Manually trigger traditional analysis for a file
      */
     public boolean triggerTraditionalAnalysis(String fileMd5) {
+        return triggerTraditionalAnalysis(fileMd5, false);
+    }
+    
+    /**
+     * Manually trigger traditional analysis for a file with force option
+     */
+    public boolean triggerTraditionalAnalysis(String fileMd5, boolean force) {
         try {
             // Check if file exists
             Optional<MediaFile> mediaFileOpt = mediaFileRepository.findByFileMd5(fileMd5);
@@ -92,9 +100,12 @@ public class TraditionalAnalysisService {
                 return false;
             }
             
+            // Create task DTO
+            TraditionalAnalysisTaskDto task = new TraditionalAnalysisTaskDto(fileMd5, force);
+            
             // Send Kafka message to trigger analysis
-            kafkaTemplate.send(traditionalAnalysisTopic, fileMd5);
-            log.info("Traditional analysis task triggered for file: {}", fileMd5);
+            kafkaTemplate.send(traditionalAnalysisTopic, task);
+            log.info("Traditional analysis task triggered for file: {} (force: {})", fileMd5, force);
             return true;
             
         } catch (Exception e) {
@@ -108,13 +119,16 @@ public class TraditionalAnalysisService {
      */
     @KafkaListener(topics = "traditional-analysis-tasks", groupId = "traditional-analysis-group")
     @Transactional
-    public void processTraditionalAnalysisTask(String message) {
+    public void processTraditionalAnalysisTask(TraditionalAnalysisTaskDto task) {
         String fileMd5 = null;
         try {
-            log.info("Received traditional analysis task: {}", message);
+            log.info("Received traditional analysis task: {} (force: {})", task.getFileMd5(), task.isForce());
             
-            // Parse message (expecting fileMd5)
-            fileMd5 = message.trim();
+            fileMd5 = task.getFileMd5();
+            if (fileMd5 == null || fileMd5.trim().isEmpty()) {
+                log.error("Invalid task: fileMd5 is null or empty");
+                return;
+            }
             
             // Find media file
             Optional<MediaFile> mediaFileOpt = mediaFileRepository.findByFileMd5(fileMd5);
@@ -127,17 +141,26 @@ public class TraditionalAnalysisService {
             
             MediaFile mediaFile = mediaFileOpt.get();
             
-            // Check if analysis already exists (including failed ones)
-            if (analysisRepository.existsByFileMd5(fileMd5)) {
-                log.info("Traditional analysis already exists for file: {}", fileMd5);
+            // Check if analysis already exists (skip check if force is true)
+            if (!task.isForce() && analysisRepository.existsByFileMd5(fileMd5)) {
+                log.info("Traditional analysis already exists for file: {} (use force=true to re-analyze)", fileMd5);
                 return;
+            }
+            
+            // If force is true, delete existing analysis
+            if (task.isForce()) {
+                Optional<TraditionalAnalysisResult> existingAnalysis = analysisRepository.findByFileMd5(fileMd5);
+                if (existingAnalysis.isPresent()) {
+                    analysisRepository.delete(existingAnalysis.get());
+                    log.info("Deleted existing analysis for file: {} due to force re-analysis", fileMd5);
+                }
             }
             
             // Perform analysis
             performTraditionalAnalysis(mediaFile);
             
         } catch (Exception e) {
-            log.error("Error processing traditional analysis task: {}", message, e);
+            log.error("Error processing traditional analysis task: {}", task, e);
             // Create failed record to prevent infinite retries
             if (fileMd5 != null) {
                 try {

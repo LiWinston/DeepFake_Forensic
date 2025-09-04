@@ -105,7 +105,7 @@ public class TraditionalAnalysisController {
             @RequestParam(defaultValue = "false") boolean force) {
         
         try {
-            // Check if analysis already exists
+            // Check if analysis already exists (only if not forcing)
             if (!force) {
                 Optional<TraditionalAnalysisResponse> existing = traditionalAnalysisService.getAnalysisResult(fileMd5);
                 if (existing.isPresent()) {
@@ -113,11 +113,14 @@ public class TraditionalAnalysisController {
                 }
             }
             
-            // Trigger the analysis
-            boolean triggered = traditionalAnalysisService.triggerTraditionalAnalysis(fileMd5);
+            // Trigger the analysis with force parameter
+            boolean triggered = traditionalAnalysisService.triggerTraditionalAnalysis(fileMd5, force);
             
             if (triggered) {
-                return ResponseEntity.ok(Result.success("Traditional analysis triggered successfully. Please wait 2-5 minutes for completion."));
+                String message = force ? 
+                    "Traditional analysis re-triggered successfully. Please wait 2-5 minutes for completion." :
+                    "Traditional analysis triggered successfully. Please wait 2-5 minutes for completion.";
+                return ResponseEntity.ok(Result.success(message));
             } else {
                 return ResponseEntity.ok(Result.error("Failed to trigger traditional analysis. File may not exist."));
             }

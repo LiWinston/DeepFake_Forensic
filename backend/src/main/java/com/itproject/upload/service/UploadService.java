@@ -5,6 +5,7 @@ import com.itproject.auth.security.SecurityUtils;
 import com.itproject.project.entity.Project;
 import com.itproject.project.repository.ProjectRepository;
 import com.itproject.project.service.ProjectPermissionService;
+import com.itproject.traditional.dto.TraditionalAnalysisTaskDto;
 import com.itproject.upload.dto.ChunkUploadRequest;
 import com.itproject.upload.dto.UploadResponse;
 import com.itproject.upload.entity.ChunkInfo;
@@ -342,7 +343,9 @@ public class UploadService {
             // Use consistent image type checking with FileTypeValidationService
             if (MediaFile.MediaType.IMAGE.equals(mediaFile.getMediaType()) && "IMAGE".equals(mediaFile.getFileType())) {
                 try {
-                    kafkaTemplate.send(traditionalAnalysisTopic, mediaFile.getFileMd5());
+                    // Create task DTO for automatic analysis (force=false)
+                    TraditionalAnalysisTaskDto task = new TraditionalAnalysisTaskDto(mediaFile.getFileMd5(), false);
+                    kafkaTemplate.send(traditionalAnalysisTopic, task);
                     log.info("Traditional analysis task sent for file: {} (MD5: {})", 
                             mediaFile.getFileName(), mediaFile.getFileMd5());
                 } catch (Exception e) {
