@@ -30,6 +30,8 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 
 /**
  * Service for traditional forensic analysis
@@ -119,37 +121,41 @@ public class TraditionalAnalysisService {
         result.setAnalysisStatus(TraditionalAnalysisResult.AnalysisStatus.IN_PROGRESS);
         result.setUser(mediaFile.getUser());
         result.setProject(mediaFile.getProject());
-        result.setImageWidth(mediaFile.getWidth());
-        result.setImageHeight(mediaFile.getHeight());
         result.setFileSizeBytes(mediaFile.getFileSize());
         
         try {
+            // Download image data once and store in memory
+            InputStream imageStream = downloadImageFromMinio(mediaFile.getFilePath());
+            byte[] imageData = imageStream.readAllBytes();
+            imageStream.close();
+            
+            // Detect image dimensions from the data
+            BufferedImage image = ImageIO.read(new ByteArrayInputStream(imageData));
+            if (image != null) {
+                result.setImageWidth(image.getWidth());
+                result.setImageHeight(image.getHeight());
+                log.debug("Detected image dimensions: {}x{} for file: {}", 
+                         image.getWidth(), image.getHeight(), mediaFile.getFileMd5());
+            } else {
+                log.warn("Could not read image dimensions for file: {}", mediaFile.getFileMd5());
+                result.setImageWidth(0);
+                result.setImageHeight(0);
+            }
+            
             // Save initial record
             result = analysisRepository.save(result);
             
-            // Download image from MinIO
-            InputStream imageStream = downloadImageFromMinio(mediaFile.getFilePath());
-            
             // Perform ELA Analysis
-            performELAAnalysis(result, imageStream);
-            
-            // Reset stream for next analysis
-            imageStream = downloadImageFromMinio(mediaFile.getFilePath());
+            performELAAnalysis(result, new ByteArrayInputStream(imageData));
             
             // Perform CFA Analysis
-            performCFAAnalysis(result, imageStream);
-            
-            // Reset stream for next analysis
-            imageStream = downloadImageFromMinio(mediaFile.getFilePath());
+            performCFAAnalysis(result, new ByteArrayInputStream(imageData));
             
             // Perform Copy-Move Detection
-            performCopyMoveAnalysis(result, imageStream);
-            
-            // Reset stream for next analysis
-            imageStream = downloadImageFromMinio(mediaFile.getFilePath());
+            performCopyMoveAnalysis(result, new ByteArrayInputStream(imageData));
             
             // Perform Lighting Analysis
-            performLightingAnalysis(result, imageStream);
+            performLightingAnalysis(result, new ByteArrayInputStream(imageData));
             
             // Calculate overall results
             calculateOverallResults(result);
