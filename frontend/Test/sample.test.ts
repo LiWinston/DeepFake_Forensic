@@ -5,5 +5,3 @@ describe('sample', () => {
     expect(true).toBe(true)
   })
 })
-
-
