@@ -143,3 +143,42 @@ npm run dev
 ```
 
 The frontend should now be available at: http://localhost:3000/
+
+## Testing
+
+### Backend unit tests (Maven + JUnit 5)
+
+Location:
+- Place tests under `backend/src/test/java` following the same package structure as the code. A dummy test exists at `backend/src/test/java/com/itproject/DummySmokeTest.java`.
+
+Run tests locally:
+```bash
+# from repo root
+cd backend
+mvn -U -q test
+```
+
+Tips:
+- By default, unit tests should be plain JUnit 5 without Spring context (no DB required).
+- If you need DB-backed or context tests, create separate classes using `@SpringBootTest` or `@DataJpaTest`, and consider using a dedicated test profile or Testcontainers to avoid relying on local MySQL.
+
+### Frontend unit tests (Vitest + jsdom)
+
+Location:
+- Place tests under `frontend/Test` with filenames like `*.test.ts` or `*.test.tsx`. A sample test exists at `frontend/Test/sample.test.ts`.
+
+Install once (if not already):
+```bash
+cd frontend
+npm install
+```
+
+Run tests locally:
+```bash
+cd frontend
+npm test
+```
+
+Notes:
+- The test environment is `jsdom` and configured in `frontend/vite.config.ts` under the `test` section.
+- Update the include pattern there if you prefer a different test folder layout.

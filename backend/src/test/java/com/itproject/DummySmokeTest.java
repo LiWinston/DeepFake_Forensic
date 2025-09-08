@@ -3,11 +3,12 @@ package com.itproject;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class BackendApplicationTests {
+class DummySmokeTest {
 
     @Test
-    void simpleUnitTest() {
+    void alwaysPasses() {
         assertTrue(true);
     }
-
 }
+
+

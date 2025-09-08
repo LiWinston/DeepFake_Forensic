@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "build:dev": "vite build --mode development",
-    "serve": "vite preview --port 3000"
+    "serve": "vite preview --port 3000",
+    "test": "vitest --run"
   },
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
@@ -30,7 +31,9 @@
     "eslint": "^8.54.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",
+    "jsdom": "^24.1.0",
     "typescript": "^5.3.2",
-    "vite": "^5.0.5"
+    "vite": "^5.0.5",
+    "vitest": "^1.6.0"
   }
 }
