@@ -352,7 +352,7 @@ public class UploadService {
             analysisMessage.put("projectId", mediaFile.getProject().getId()); // Add project ID
             analysisMessage.put("forceReAnalysis", false); // Default: not force re-analysis on first completion
             
-            kafkaTemplate.send(metadataAnalysisTopic, analysisMessage);
+            kafkaTemplate.send(metadataAnalysisTopic, mediaFile.getFileMd5(), analysisMessage);
             
             // Send message for traditional analysis (for images only)
             // Use consistent image type checking with FileTypeValidationService
@@ -360,7 +360,7 @@ public class UploadService {
                 try {
                     // Create task DTO for automatic analysis (force=false)
                     TraditionalAnalysisTaskDto task = new TraditionalAnalysisTaskDto(mediaFile.getFileMd5(), false);
-                    kafkaTemplate.send(traditionalAnalysisTopic, task);
+                    kafkaTemplate.send(traditionalAnalysisTopic, mediaFile.getFileMd5(), task);
                     log.info("Traditional analysis task sent for file: {} (MD5: {})", 
                             mediaFile.getFileName(), mediaFile.getFileMd5());
                 } catch (Exception e) {

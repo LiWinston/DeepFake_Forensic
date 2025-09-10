@@ -122,8 +122,8 @@ public class TraditionalAnalysisService {
             // Create task DTO
             TraditionalAnalysisTaskDto task = new TraditionalAnalysisTaskDto(fileMd5, force);
             
-            // Send Kafka message to trigger analysis
-            kafkaTemplate.send(traditionalAnalysisTopic, task);
+            // Send Kafka message to trigger analysis with fileMd5 as key for compacted topic
+            kafkaTemplate.send(traditionalAnalysisTopic, fileMd5, task);
             log.info("Traditional analysis task triggered for file: {} (force: {})", fileMd5, force);
             return true;
             

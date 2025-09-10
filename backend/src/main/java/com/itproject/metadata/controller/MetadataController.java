@@ -231,7 +231,7 @@ public class MetadataController {
             analysisMessage.put("projectId", mediaFile.getProject().getId()); // 添加项目ID
             analysisMessage.put("forceReAnalysis", true); // 强制重新分析
             
-            kafkaTemplate.send(metadataAnalysisTopic, analysisMessage);
+            kafkaTemplate.send(metadataAnalysisTopic, mediaFile.getFileMd5(), analysisMessage);
             
             log.info("Metadata analysis task sent to Kafka for file: {}", fileMd5);
             
