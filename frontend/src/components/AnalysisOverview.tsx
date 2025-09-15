@@ -319,7 +319,7 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
         header={
           <Space>
             {getRiskIcon(headerData.riskLevel)}
-            <Text>文件头签名分析</Text>
+            <Text>File Header Signature Analysis</Text>
             <Tag color={
               headerData.riskLevel === 'HIGH' ? 'red' :
               headerData.riskLevel === 'MEDIUM' ? 'orange' :
@@ -345,21 +345,21 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
         )}
         
         <Descriptions bordered size="small">
-          <Descriptions.Item label="检测格式" span={2}>
+          <Descriptions.Item label="Detected Format" span={2}>
             <Text code>{headerData.detectedFormat || 'Unknown'}</Text>
           </Descriptions.Item>
-          <Descriptions.Item label="期望格式">
+          <Descriptions.Item label="Expected Format">
             <Text code>{headerData.expectedFormat || 'Unknown'}</Text>
           </Descriptions.Item>
           
-          <Descriptions.Item label="格式匹配" span={2}>
+          <Descriptions.Item label="Format Match" span={2}>
             {headerData.formatMatch ? (
-              <Tag color="green">匹配</Tag>
+              <Tag color="green">Match</Tag>
             ) : (
-              <Tag color="red">不匹配</Tag>
+              <Tag color="red">Mismatch</Tag>
             )}
           </Descriptions.Item>
-          <Descriptions.Item label="完整性状态">
+          <Descriptions.Item label="Integrity Status">
             <Tag color={
               headerData.integrityStatus === 'INTACT' ? 'green' :
               headerData.integrityStatus === 'FORMAT_MISMATCH' ? 'red' :
@@ -370,7 +370,7 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
           </Descriptions.Item>
           
           {headerData.signatureHex && (
-            <Descriptions.Item label="文件签名" span={3}>
+            <Descriptions.Item label="File Signature" span={3}>
               <Text copyable code style={{ fontSize: '12px' }}>
                 {headerData.signatureHex}
               </Text>
@@ -388,9 +388,9 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
         header={
           <Space>
             <InfoCircleOutlined />
-            <Text>容器完整性分析</Text>
+            <Text>Container Integrity Analysis</Text>
             {result.containerAnalysis.status === 'PENDING_IMPLEMENTATION' && (
-              <Tag color="orange">开发中</Tag>
+              <Tag color="orange">In Development</Tag>
             )}
           </Space>
         } 
@@ -406,23 +406,23 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
         )}
         
         <Descriptions bordered size="small">
-          <Descriptions.Item label="完整性验证" span={2}>
+          <Descriptions.Item label="Integrity Verification" span={2}>
             {result.containerAnalysis.integrityVerified !== undefined ? (
               <Tag color={result.containerAnalysis.integrityVerified ? 'green' : 'red'}>
-                {result.containerAnalysis.integrityVerified ? '已验证' : '未验证'}
+                {result.containerAnalysis.integrityVerified ? 'Verified' : 'Not Verified'}
               </Tag>
             ) : (
-              <Tag color="default">未检查</Tag>
+              <Tag color="default">Not Checked</Tag>
             )}
           </Descriptions.Item>
-          <Descriptions.Item label="分析状态">
+          <Descriptions.Item label="Analysis Status">
             <Tag color={result.containerAnalysis.status === 'PENDING_IMPLEMENTATION' ? 'orange' : 'blue'}>
               {result.containerAnalysis.status || 'UNKNOWN'}
             </Tag>
           </Descriptions.Item>
           
           {result.containerAnalysis.analysisResults && (
-            <Descriptions.Item label="分析结果" span={3}>
+            <Descriptions.Item label="Analysis Results" span={3}>
               <Text type="secondary" style={{ fontSize: '12px', whiteSpace: 'pre-wrap' }}>
                 {result.containerAnalysis.analysisResults}
               </Text>
@@ -436,7 +436,7 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
   // NEW: Analysis Notes Panel (dedicated display)
   if (result.suspicious?.analysisNotes) {
     panels.push(
-      <Panel header="详细分析备注" key="analysisNotes">
+      <Panel header="Detailed Analysis Notes" key="analysisNotes">
         <div style={{ 
           padding: '12px', 
           backgroundColor: '#f5f5f5', 
@@ -459,15 +459,15 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
         header={
           <Space>
             <BarChartOutlined />
-            <Text>原始元数据</Text>
-            <Tag color="blue">完整技术数据</Tag>
+            <Text>Raw Metadata</Text>
+            <Tag color="blue">Complete Technical Data</Tag>
           </Space>
         } 
         key="rawMetadata"
       >
         <div style={{ marginBottom: 16 }}>
           <Text type="secondary">
-            以下是从文件中提取的完整原始元数据，包含所有技术细节。这些数据对法证分析非常重要。
+            The following is the complete raw metadata extracted from the file, containing all technical details. This data is very important for forensic analysis.
           </Text>
         </div>
         
@@ -499,7 +499,7 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
               URL.revokeObjectURL(url);
             }}
           >
-            下载原始数据
+            Download Raw Data
           </Button>
         </div>
       </Panel>
@@ -509,10 +509,10 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
   // Parsed Metadata Tree Panel
   if ((result as any).parsedMetadata && Object.keys((result as any).parsedMetadata).length > 0) {
     panels.push(
-      <Panel header="结构化分析数据" key="parsed">
+      <Panel header="Structured Analysis Data" key="parsed">
         <div style={{ marginBottom: 16 }}>
           <Text type="secondary">
-            解析后的结构化元数据，便于查看和分析各项技术参数。
+            Parsed structured metadata for easy viewing and analysis of technical parameters.
           </Text>
         </div>
         <Tree defaultExpandAll treeData={renderMetadataTree((result as any).parsedMetadata)} />
@@ -532,7 +532,7 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
         
         {result.suspicious.assessmentConclusion && (
           <div style={{ marginTop: 16 }}>
-            <Title level={5}>法证评估结论:</Title>
+            <Title level={5}>Forensic Assessment Conclusion:</Title>
             <Alert
               message={result.suspicious.assessmentConclusion}
               type={
@@ -548,7 +548,7 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
         
         {result.suspicious.anomalies.length > 0 && (
           <div style={{ marginTop: 16 }}>
-            <Title level={5}>检测到的异常指标:</Title>
+            <Title level={5}>Detected Anomalies:</Title>
             <Timeline>
               {result.suspicious.anomalies.map((anomaly, index) => (
                 <Timeline.Item key={index} dot={<WarningOutlined style={{ color: '#ff4d4f' }} />}>

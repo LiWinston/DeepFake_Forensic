@@ -1,79 +1,79 @@
 # DeepFake Forensic Docker Environment
 
-这个项目提供了完整的 Docker 环境管理脚本，类似于 Kafka KRaft 模式的启动脚本，但专门为 DeepFake Forensic 项目设计。
+This project provides complete Docker environment management scripts, similar to Kafka KRaft mode startup scripts, but specifically designed for the DeepFake Forensic project.
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 启动环境
+### Start Environment
 ```powershell
-# 普通启动
+# Normal Start
 .\start-docker.ps1
 
-# 清理后启动
+# Start After Cleanup
 .\start-docker.ps1 -Clean
 
-# 启动但不显示日志
+# Start Without Showing Logs
 .\start-docker.ps1 -Clean -NoLogs
 ```
 
-### 查看状态
+### Check Status
 ```powershell
-# 基本状态
+# Basic Status
 .\status-docker.ps1
 
-# 查看详细健康信息
+# View Detailed Health Information
 .\status-docker.ps1 -Health
 
-# 查看状态和日志
+# View Status and Logs
 .\status-docker.ps1 -Logs
 ```
 
-### 停止环境
+### Stop Environment
 ```powershell
-# 停止容器（保留数据）
+# Stop Containers (Keep Data)
 .\stop-docker.ps1
 
-# 停止并删除容器（保留数据）
+# Stop and Remove Containers (Keep Data)
 .\stop-docker.ps1 -Clean
 
-# 停止并删除所有（包括数据，谨慎使用！）
+# Stop and Remove All (Including Data, Use with Caution!)
 .\stop-docker.ps1 -Volumes
 ```
 
-## 📋 服务列表
+## 📋 Service List
 
-| 服务 | 端口 | 用途 | 默认凭据 |
+| Service | Port | Purpose | Default Credentials |
 |------|------|------|----------|
-| MySQL | 3306 | 主数据库 | root / lyc980820 |
-| Redis | 6379 | 缓存 | 无密码 |
-| Kafka | 9092 | 消息队列 | 无需认证 |
-| MinIO | 9000 | 对象存储 | minioadmin / minioadmin |
-| MinIO Console | 9001 | 管理界面 | minioadmin / minioadmin |
+| MySQL | 3306 | Main Database | root / lyc980820 |
+| Redis | 6379 | Cache | No Password |
+| Kafka | 9092 | Message Queue | No Authentication Required |
+| MinIO | 9000 | Object Storage | minioadmin / minioadmin |
+| MinIO Console | 9001 | Management Interface | minioadmin / minioadmin |
 
-## 🔧 功能特性
+## 🔧 Features
 
-### 自动化管理
-- ✅ 自动检查 Docker 状态
-- ✅ 智能容器清理和冲突处理
-- ✅ 健康检查和服务等待
-- ✅ 自动初始化 Kafka Topics 和 MinIO Buckets
-- ✅ 彩色日志输出和状态显示
+### Automated Management
+- ✅ Automatically check Docker status
+- ✅ Smart container cleanup and conflict handling
+- ✅ Health checks and service waiting
+- ✅ Auto-initialize Kafka Topics and MinIO Buckets
+- ✅ Colorful log output and status display
 
-### 智能初始化
-- ✅ 自动创建必要目录结构
-- ✅ 生成 MySQL 配置文件
-- ✅ 创建 Kafka Topics: `metadata-analysis`, `file-processing`
-- ✅ 创建 MinIO Bucket: `forensic-media`
+### Smart Initialization
+- ✅ Automatically create necessary directory structure
+- ✅ Generate MySQL configuration files
+- ✅ Create Kafka Topics: `metadata-analysis`, `file-processing`
+- ✅ Create MinIO Bucket: `forensic-media`
 
-### 健康监控
-- ✅ 实时容器状态检查
-- ✅ 端口连通性测试
-- ✅ 服务健康状态监控
-- ✅ 日志查看和跟踪
+### Health Monitoring
+- ✅ Real-time container status checking
+- ✅ Port connectivity testing
+- ✅ Service health status monitoring
+- ✅ Log viewing and tracking
 
-## 📁 目录结构
+## 📁 Directory Structure
 
-启动后会自动创建以下目录：
+The following directories will be automatically created after startup:
 ```
 DeepFake_Forensic/
 ├── docker/
@@ -88,32 +88,32 @@ DeepFake_Forensic/
 └── status-docker.ps1      # 状态检查脚本
 ```
 
-## ⚙️ 配置说明
+## ⚙️ Configuration
 
-### MySQL 配置
-- 数据库名: `forensic_db`
-- 字符集: `utf8mb4`
-- 时区: `UTC`
-- 自动创建表结构
+### MySQL Configuration
+- Database Name: `forensic_db`
+- Character Set: `utf8mb4`
+- Timezone: `UTC`
+- Auto-create table structure
 
-### Kafka 配置
-- KRaft 模式（无需 Zookeeper）
-- 3个分区，1个副本
-- 自动创建必要的 Topics
+### Kafka Configuration
+- KRaft mode (no Zookeeper required)
+- 3 partitions, 1 replica
+- Auto-create necessary Topics
 
-### MinIO 配置
-- 对象存储服务
-- 自动创建 `forensic-media` bucket
-- 公共读取权限
+### MinIO Configuration
+- Object storage service
+- Auto-create `forensic-media` bucket
+- Public read permissions
 
-## 🐛 故障排除
+## 🐛 Troubleshooting
 
-### 常见问题
-1. **端口冲突**: 检查是否有其他服务占用相同端口
-2. **权限问题**: 确保有 Docker 管理权限
-3. **磁盘空间**: 确保有足够的磁盘空间
+### Common Issues
+1. **Port Conflicts**: Check if other services are using the same ports
+2. **Permission Issues**: Ensure you have Docker management permissions
+3. **Disk Space**: Ensure sufficient disk space is available
 
-### 日志查看
+### Log Viewing
 ```powershell
 # 查看特定服务日志
 docker-compose logs -f forensic_mysql
@@ -123,7 +123,7 @@ docker-compose logs -f forensic_kafka
 docker-compose logs -f
 ```
 
-### 重置环境
+### Reset Environment
 ```powershell
 # 完全重置（删除所有数据）
 .\stop-docker.ps1 -Volumes

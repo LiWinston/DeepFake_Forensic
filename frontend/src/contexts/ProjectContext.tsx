@@ -168,7 +168,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       setLastUpdated(null);
       setError(null);
     }
-  }, [isLoggedIn]); // 只依赖 isLoggedIn
+  }, [isLoggedIn]); // Only depend on isLoggedIn
 
   const contextValue: ProjectContextType = {
     projects,

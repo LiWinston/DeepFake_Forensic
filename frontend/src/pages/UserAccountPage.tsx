@@ -28,8 +28,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import authService from '../services/auth';
 import type { User, UserProfileUpdate, PasswordChange } from '../services/auth';
-import './AuthPage.css'; // 复用认证页面的样式
-import '../styles/pages/UserAccountPage.css'; // 用户账户页面专用样式
+import './AuthPage.css'; // Reuse authentication page styles
+import '../styles/pages/UserAccountPage.css'; // User account page specific styles
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;

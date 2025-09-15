@@ -1,12 +1,12 @@
-/* App.css - 主应用样式 */
+/* App.css - Main Application Styles */
 
-/* 全局背景和主题 */
+/* Global Background and Theme */
 .app-layout {
   background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 50%, #16213e 100%);
   min-height: 100vh;
 }
 
-/* 侧边栏样式 */
+/* Sidebar Styles */
 .app-sider {
   background: linear-gradient(180deg, #0f1419 0%, #1a1a2e 100%) !important;
   border-right: 1px solid rgba(0, 212, 255, 0.1);
@@ -25,7 +25,7 @@
   opacity: 0.3;
 }
 
-/* Logo区域 */
+/* Logo Area */
 .app-logo {
   height: 64px;
   margin: 16px;
@@ -79,7 +79,7 @@
   font-weight: 900;
 }
 
-/* 菜单样式 */
+/* Menu Styles */
 .app-menu {
   background: transparent !important;
   border: none !important;
@@ -132,7 +132,7 @@
   color: inherit;
 }
 
-/* 头部样式 */
+/* Header Styles */
 .app-header {
   background: rgba(255, 255, 255, 0.95) !important;
   backdrop-filter: blur(10px) !important;
@@ -186,7 +186,7 @@
   font-size: 1.3rem;
 }
 
-/* 用户菜单 */
+/* User Menu */
 .app-user-menu {
   display: flex;
   align-items: center;
@@ -214,7 +214,7 @@
   color: #434343;
 }
 
-/* 内容区域 */
+/* Content Area */
 .app-content {
   margin: 0 !important;
   background: transparent !important;
@@ -230,7 +230,7 @@
   overflow: hidden;
 }
 
-/* 响应式设计 */
+/* Responsive Design */
 @media (max-width: 768px) {
   .app-title {
     display: none;
@@ -250,7 +250,7 @@
   }
 }
 
-/* 暗色主题适配 */
+/* Dark Theme Adaptation */
 @media (prefers-color-scheme: dark) {
   .app-header {
     background: rgba(20, 20, 30, 0.95) !important;

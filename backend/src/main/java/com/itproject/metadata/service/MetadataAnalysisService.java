@@ -411,7 +411,7 @@ public class MetadataAnalysisService {
         try {
             User currentUser = SecurityUtils.getCurrentUser();
             if (currentUser == null) {
-                return MetadataAnalysisResponse.error("用户未登录");
+                return MetadataAnalysisResponse.error("User not logged in");
             }
             
             Optional<MediaMetadata> metadataOpt = metadataRepository.findByFileMd5AndUser(fileMd5, currentUser);
@@ -503,7 +503,7 @@ public class MetadataAnalysisService {
                 
                 // Also append summary to analysis notes for human readability
                 String headerSummary = buildHeaderAnalysisString(headerResult);
-                appendToAnalysisNotes(metadata, "文件头分析: " + headerSummary);
+                appendToAnalysisNotes(metadata, "File header analysis: " + headerSummary);
                 
                 // Update raw metadata with detailed header information (for full transparency)
                 String headerInfo = "\n\nFile Header Analysis:\n" +
@@ -520,14 +520,14 @@ public class MetadataAnalysisService {
                     metadata.setRawMetadata(headerInfo);
                 }
                 
-                log.info("文件头分析完成 - 文件: {}, 检测格式: {}, 格式匹配: {}, 完整性: {}", 
+                log.info("File header analysis completed - File: {}, Detected format: {}, Format match: {}, Integrity: {}", 
                         metadata.getFileMd5(), headerResult.getDetectedFormat(), 
                         headerResult.isFormatMatch(), headerResult.getIntegrityStatus());
             }
         } catch (Exception e) {
-            log.error("文件头分析失败: {}", metadata.getFileMd5(), e);
+            log.error("File header analysis failed: {}", metadata.getFileMd5(), e);
             metadata.setFileIntegrityStatus("ANALYSIS_FAILED");
-            appendToAnalysisNotes(metadata, "文件头分析失败: " + e.getMessage());
+            appendToAnalysisNotes(metadata, "File header analysis failed: " + e.getMessage());
         }
     }
     
@@ -667,18 +667,18 @@ public class MetadataAnalysisService {
         StringBuilder sb = new StringBuilder();
         
         if (!result.isFormatMatch()) {
-            sb.append("格式不匹配警告 - 检测到").append(result.getDetectedFormat())
-              .append("格式，但文件扩展名显示为").append(result.getExpectedFormat());
+            sb.append("Format mismatch warning - Detected ").append(result.getDetectedFormat())
+              .append(" format, but file extension shows ").append(result.getExpectedFormat());
         } else {
-            sb.append("文件格式验证正常 - ").append(result.getDetectedFormat()).append("格式");
+            sb.append("File format verification normal - ").append(result.getDetectedFormat()).append(" format");
         }
         
         if (result.getIntegrityStatus().equals("FORMAT_MISMATCH")) {
-            sb.append(" [可能存在文件伪装或格式篡改]");
+            sb.append(" [Possible file spoofing or format tampering]");
         } else if (result.getIntegrityStatus().equals("UNKNOWN_FORMAT")) {
-            sb.append(" [未知格式或损坏文件]");
+            sb.append(" [Unknown format or corrupted file]");
         } else {
-            sb.append(" [文件头完整]");
+            sb.append(" [File header intact]");
         }
         
         return sb.toString();
@@ -1098,30 +1098,30 @@ public class MetadataAnalysisService {
         if (integrityStatus != null) {
             switch (integrityStatus) {
                 case "FORMAT_MISMATCH":
-                    indicators.add("文件头签名异常：检测到文件格式伪装或篡改");
-                    notes.append(String.format("文件头分析显示格式不匹配（检测到%s但期望%s），可能存在恶意篡改; ", 
+                    indicators.add("File header signature anomaly: Detected file format spoofing or tampering");
+                    notes.append(String.format("File header analysis shows format mismatch (detected %s but expected %s), possible malicious tampering; ", 
                                detectedFormat, expectedFormat));
-                    log.warn("严重警告：文件 {} 的文件头签名与扩展名不匹配 - 检测格式: {}, 期望格式: {}", 
+                    log.warn("Critical warning: File {} header signature does not match extension - Detected format: {}, Expected format: {}", 
                             metadata.getFileMd5(), detectedFormat, expectedFormat);
                     break;
                     
                 case "UNKNOWN_FORMAT":
-                    indicators.add("未知文件格式：可能是损坏文件或隐藏真实格式");
-                    notes.append("无法识别文件格式，文件可能已损坏或被特意混淆; ");
+                    indicators.add("Unknown file format: May be corrupted file or hidden real format");
+                    notes.append("Unable to identify file format, file may be corrupted or intentionally obfuscated; ");
                     break;
                     
                 case "ANALYSIS_FAILED":
-                    indicators.add("文件头分析失败：无法验证文件完整性");
-                    notes.append("文件头分析过程失败; ");
+                    indicators.add("File header analysis failed: Unable to verify file integrity");
+                    notes.append("File header analysis process failed; ");
                     break;
                     
                 case "INTACT":
                     // Format is intact, but still perform advanced pattern analysis
-                    notes.append(String.format("文件头验证正常（%s格式）; ", detectedFormat));
+                    notes.append(String.format("File header verification normal (%s format); ", detectedFormat));
                     break;
                     
                 default:
-                    notes.append("文件头分析状态未知; ");
+                    notes.append("File header analysis status unknown; ");
             }
             
             // Perform advanced signature pattern analysis if signature is available
@@ -1130,8 +1130,8 @@ public class MetadataAnalysisService {
             }
             
         } else {
-            indicators.add("文件头分析数据缺失：无法验证文件完整性");
-            notes.append("缺少文件头分析数据; ");
+            indicators.add("File header analysis data missing: Unable to verify file integrity");
+            notes.append("Missing file header analysis data; ");
         }
     }
     
@@ -1144,8 +1144,8 @@ public class MetadataAnalysisService {
         
         // Check for truncated or corrupted signatures
         if (signatureHex.length() < 8) {
-            indicators.add("文件签名过短：可能是截断或损坏的文件");
-            notes.append("文件签名长度异常; ");
+            indicators.add("File signature too short: May be truncated or corrupted file");
+            notes.append("File signature length abnormal; ");
         }
         
         // Check for suspicious patterns indicating AI generation tools
@@ -1158,7 +1158,7 @@ public class MetadataAnalysisService {
                 // Normal JPEG markers, but check for unusual patterns
                 if (jpegMarker.equals("E000104A464946") || 
                     jpegMarker.equals("E1001845786966")) {
-                    notes.append("检测到可能的AI生成JPEG标记模式; ");
+                    notes.append("Detected possible AI-generated JPEG marker pattern; ");
                 }
             }
         }
@@ -1167,9 +1167,9 @@ public class MetadataAnalysisService {
         if (signatureHex.startsWith("66747970")) { // 'ftyp' box
             // Check for unusual brand codes that might indicate manipulation
             if (signatureHex.contains("6D703432")) { // 'mp42'
-                notes.append("标准MP4容器; ");
+                notes.append("Standard MP4 container; ");
             } else {
-                notes.append("检测到非标准容器品牌代码; ");
+                notes.append("Detected non-standard container brand code; ");
             }
         }
     }
@@ -1188,28 +1188,28 @@ public class MetadataAnalysisService {
             String indicatorLower = indicator.toLowerCase();
             
             // High risk indicators (25-40 points each)
-            if (indicatorLower.contains("文件头签名异常") || 
-                indicatorLower.contains("格式伪装") || 
-                indicatorLower.contains("篡改")) {
+            if (indicatorLower.contains("File header signature anomaly") || 
+                indicatorLower.contains("file format spoofing") || 
+                indicatorLower.contains("tampering")) {
                 totalRiskScore += 40;
             }
             // AI generation indicators (20-35 points each)
-            else if (indicatorLower.contains("ai生成") || 
-                     indicatorLower.contains("人工智能") ||
-                     indicatorLower.contains("高度疑似ai")) {
+            else if (indicatorLower.contains("ai generated") || 
+                     indicatorLower.contains("artificial intelligence") ||
+                     indicatorLower.contains("high suspicion of ai")) {
                 totalRiskScore += 35;
             }
             // Medium risk indicators (10-20 points each)
-            else if (indicatorLower.contains("缺少相机信息") || 
-                     indicatorLower.contains("格式不匹配") ||
-                     indicatorLower.contains("完全缺少") ||
-                     indicatorLower.contains("ai常见尺寸")) {
+            else if (indicatorLower.contains("missing camera info") || 
+                     indicatorLower.contains("format mismatch") ||
+                     indicatorLower.contains("completely missing") ||
+                     indicatorLower.contains("ai common dimensions")) {
                 totalRiskScore += 15;
             }
             // Low risk indicators (5-10 points each)
-            else if (indicatorLower.contains("压缩质量") || 
-                     indicatorLower.contains("时间异常") ||
-                     indicatorLower.contains("元数据不完整")) {
+            else if (indicatorLower.contains("compression quality") || 
+                     indicatorLower.contains("time anomaly") ||
+                     indicatorLower.contains("incomplete metadata")) {
                 totalRiskScore += 8;
             }
             // Minor indicators (1-5 points each)
@@ -1229,11 +1229,11 @@ public class MetadataAnalysisService {
         metadata.setAssessmentConclusion(probabilityAssessment);
         
         // Also add to indicators and notes for backward compatibility and human readability
-        indicators.add("风险评估结论: " + probabilityAssessment);
-        notes.append("风险评分: ").append(totalRiskScore).append("/100; ");
-        notes.append("评估结论: ").append(probabilityAssessment).append("; ");
+        indicators.add("Risk assessment conclusion: " + probabilityAssessment);
+        notes.append("Risk score: ").append(totalRiskScore).append("/100; ");
+        notes.append("Assessment conclusion: ").append(probabilityAssessment).append("; ");
         
-        log.info("文件 {} 风险评估完成 - 评分: {}/100, 结论: {}", 
+        log.info("File {} risk assessment completed - Score: {}/100, Conclusion: {}", 
                 metadata.getFileMd5(), totalRiskScore, probabilityAssessment);
     }
     
@@ -1242,18 +1242,18 @@ public class MetadataAnalysisService {
      */
     private String generateProbabilityConclusion(int riskScore, MediaMetadata metadata) {
         boolean isVideo = metadata.getVideoDuration() != null || metadata.getVideoCodec() != null;
-        String mediaType = isVideo ? "视频" : "图像";
+        String mediaType = isVideo ? "video" : "image";
         
         if (riskScore >= 70) {
-            return String.format("该%s存在高度篡改或AI生成嫌疑 (置信度: %d%%)", mediaType, riskScore);
+            return String.format("This %s has high suspicion of tampering or AI generation (confidence: %d%%)", mediaType, riskScore);
         } else if (riskScore >= 40) {
-            return String.format("该%s可能经过编辑处理或为AI生成内容 (置信度: %d%%)", mediaType, riskScore);
+            return String.format("This %s may have been edited or is AI-generated content (confidence: %d%%)", mediaType, riskScore);
         } else if (riskScore >= 20) {
-            return String.format("该%s存在轻微异常，建议进一步验证 (置信度: %d%%)", mediaType, riskScore);
+            return String.format("This %s has minor anomalies, further verification recommended (confidence: %d%%)", mediaType, riskScore);
         } else if (riskScore >= 10) {
-            return String.format("该%s基本正常，仅发现少量可疑指标 (置信度: %d%%)", mediaType, riskScore);
+            return String.format("This %s is basically normal, only minor suspicious indicators found (confidence: %d%%)", mediaType, riskScore);
         } else {
-            return String.format("该%s未发现明显异常，可能为原始内容 (置信度: %d%%)", mediaType, Math.max(100 - riskScore, 85));
+            return String.format("This %s shows no obvious anomalies, likely original content (confidence: %d%%)", mediaType, Math.max(100 - riskScore, 85));
         }
     }
     
@@ -1270,13 +1270,13 @@ public class MetadataAnalysisService {
                 // Only flag if ALL technical metadata is missing (which would be very unusual)
                 if (metadata.getDateTaken() == null && metadata.getFileFormat() == null && 
                     metadata.getVideoCodec() == null && metadata.getAudioCodec() == null) {
-                    indicators.add("视频完全缺少技术信息：可能存在异常");
-                    notes.append("视频文件缺少所有技术标识信息; ");
+                    indicators.add("Video completely missing technical information: May have anomalies");
+                    notes.append("Video file missing all technical identification information; ");
                 }
             } else {
                 // For images, missing camera info is more suspicious
-                indicators.add("图像缺少相机信息：可能是截图、编辑或AI生成内容");
-                notes.append("EXIF数据中缺少相机制造商和型号信息; ");
+                indicators.add("Image missing camera information: May be screenshot, edited, or AI-generated content");
+                notes.append("EXIF data missing camera manufacturer and model information; ");
             }
         }
         
@@ -1290,7 +1290,7 @@ public class MetadataAnalysisService {
             if (metadata.getColorSpace() != null) exifFields++;
             
             if (exifFields <= 1 && exifFields > 0) {
-                indicators.add("EXIF数据不完整：可能经过处理或来源可疑");
+                indicators.add("EXIF data incomplete: May have been processed or source suspicious");
             }
         }
     }
@@ -1302,19 +1302,19 @@ public class MetadataAnalysisService {
             
             // Check for common AI generation resolutions
             if (isAICommonResolution(width, height)) {
-                indicators.add("图像尺寸符合AI生成内容的常见分辨率");
-                notes.append(String.format("检测到AI常用分辨率: %dx%d; ", width, height));
+                indicators.add("Image dimensions match common AI-generated content resolutions");
+                notes.append(String.format("Detected AI common resolution: %dx%d; ", width, height));
             }
             
             // Check for unusual aspect ratios
             double aspectRatio = (double) width / height;
             if (aspectRatio == 1.0 && (width >= 256 && width <= 2048)) {
-                indicators.add("完美正方形比例：可能是AI生成或经过裁剪");
+                indicators.add("Perfect square aspect ratio: May be AI-generated or cropped");
             }
             
             // Check for very high resolutions without corresponding quality metadata
             if ((width > 4000 || height > 4000) && metadata.getCameraMake() == null) {
-                indicators.add("高分辨率图像缺少相机信息：可能是放大处理的结果");
+                indicators.add("High resolution image missing camera info: May be result of upscaling");
             }
         }
     }
@@ -1327,8 +1327,8 @@ public class MetadataAnalysisService {
         if (format != null && mimeType != null) {
             boolean consistent = isFormatMimeConsistent(format, mimeType);
             if (!consistent) {
-                indicators.add("文件格式与MIME类型不匹配：可能经过格式转换");
-                notes.append(String.format("格式不一致: %s vs %s; ", format, mimeType));
+                indicators.add("File format does not match MIME type: May have undergone format conversion");
+                notes.append(String.format("Format inconsistency: %s vs %s; ", format, mimeType));
             }
         }
         
@@ -1336,10 +1336,10 @@ public class MetadataAnalysisService {
         Integer compression = metadata.getCompressionLevel();
         if (compression != null && format != null) {
             if ("JPEG".equalsIgnoreCase(format) && compression < 50) {
-                indicators.add("JPEG压缩质量过低：可能多次保存或处理");
+                indicators.add("JPEG compression quality too low: May have been saved multiple times or processed");
             }
             if ("PNG".equalsIgnoreCase(format) && compression > 6) {
-                indicators.add("PNG压缩级别异常：可能经过特殊处理");
+                indicators.add("PNG compression level abnormal: May have undergone special processing");
             }
         }
     }
@@ -1351,19 +1351,19 @@ public class MetadataAnalysisService {
             
             // Check for future dates
             if (dateTaken.isAfter(now)) {
-                indicators.add("拍摄时间显示为未来：EXIF数据可能被篡改");
-                notes.append("检测到未来日期; ");
+                indicators.add("Capture time shows future date: EXIF data may be tampered with");
+                notes.append("Future date detected; ");
             }
             
             // Check for very old dates
             if (dateTaken.isBefore(LocalDateTime.of(1990, 1, 1, 0, 0))) {
-                indicators.add("拍摄时间异常古老：可能是默认或错误的时间戳");
+                indicators.add("Capture time abnormally old: May be default or incorrect timestamp");
             }
             
             // Check for exact round times (suspicious for manual editing)
             if (dateTaken.getSecond() == 0 && dateTaken.getNano() == 0) {
                 if (dateTaken.getMinute() == 0 || dateTaken.getMinute() % 5 == 0) {
-                    notes.append("检测到整点时间，可能经过人工设置; ");
+                    notes.append("Round time detected, may have been manually set; ");
                 }
             }
         }
@@ -1380,12 +1380,12 @@ public class MetadataAnalysisService {
             if ((makeLower.contains("iphone") || makeLower.contains("samsung") || 
                  makeLower.contains("google") || makeLower.contains("huawei")) &&
                 metadata.getGpsLatitude() == null && metadata.getGpsLongitude() == null) {
-                indicators.add("智能手机拍摄但缺少GPS信息：可能关闭定位或经过处理");
+                indicators.add("Smartphone capture but missing GPS info: Location may be disabled or processed");
             }
             
             // Check for unusual camera combinations
             if (model != null && !isValidCameraModelForMake(make, model)) {
-                indicators.add("相机制造商与型号不匹配：可能是伪造的EXIF数据");
+                indicators.add("Camera make does not match model: May be forged EXIF data");
             }
         }
     }
@@ -1401,11 +1401,11 @@ public class MetadataAnalysisService {
             if (!isVideo && metadata.getImageWidth() != null && metadata.getImageHeight() != null) {
                 // Check if it's common AI dimensions before flagging
                 if (isAICommonResolution(metadata.getImageWidth(), metadata.getImageHeight())) {
-                    indicators.add("完全缺少拍摄信息且为AI常见尺寸：高度疑似AI生成内容");
-                    notes.append("无任何拍摄设备信息且符合AI生成尺寸特征; ");
+                    indicators.add("Completely missing capture info and AI common dimensions: High suspicion of AI-generated content");
+                    notes.append("No camera device info and matches AI generation dimension patterns; ");
                 } else {
-                    indicators.add("图像缺少拍摄信息：可能是截图、编辑或AI生成内容");
-                    notes.append("无任何拍摄设备信息; ");
+                    indicators.add("Image missing capture information: May be screenshot, edited, or AI-generated content");
+                    notes.append("No camera device information; ");
                 }
             }
             
@@ -1434,8 +1434,8 @@ public class MetadataAnalysisService {
                 }
                 
                 if (hasVideoSuspiciousPatterns) {
-                    indicators.add("视频缺少设备信息且具有异常技术参数：可能经过生成或大量处理");
-                    notes.append("视频文件无设备信息且技术参数异常; ");
+                    indicators.add("Video missing device info and has abnormal technical parameters: May be generated or heavily processed");
+                    notes.append("Video file has no device info and abnormal technical parameters; ");
                 }
             }
         }
@@ -1447,7 +1447,7 @@ public class MetadataAnalysisService {
             if (rawLower.contains("stable diffusion") || rawLower.contains("midjourney") ||
                 rawLower.contains("dalle") || rawLower.contains("generated") || 
                 rawLower.contains("artificial") || rawLower.contains("synthetic")) {
-                indicators.add("检测到AI生成工具标识：确认为人工智能生成内容");
+                indicators.add("AI generation tool identifier detected: Confirmed as AI-generated content");
             }
         }
     }
@@ -1509,11 +1509,11 @@ public class MetadataAnalysisService {
         if (completeness < threshold) {
             if (isVideo) {
                 // Only flag if video is missing critical technical information
-                indicators.add("视频缺少核心技术参数：文件可能损坏或异常");
-                notes.append(String.format("核心技术参数完整性: %.1f%%; ", completeness * 100));
+                indicators.add("Video missing core technical parameters: File may be corrupted or abnormal");
+                notes.append(String.format("Core technical parameter completeness: %.1f%%; ", completeness * 100));
             } else {
-                indicators.add("图像元数据完整性极低：可能经过清理或来源可疑");
-                notes.append(String.format("图像元数据完整性: %.1f%%; ", completeness * 100));
+                indicators.add("Image metadata completeness extremely low: May have been cleaned or source suspicious");
+                notes.append(String.format("Image metadata completeness: %.1f%%; ", completeness * 100));
             }
         }
     }
@@ -2002,23 +2002,23 @@ public class MetadataAnalysisService {
         if (metadata.getFileIntegrityStatus() != null) {
             switch (metadata.getFileIntegrityStatus()) {
                 case "INTACT":
-                    headerAnalysis.put("summary", "文件头完整，格式验证正常");
+                    headerAnalysis.put("summary", "File header intact, format verification normal");
                     headerAnalysis.put("riskLevel", "LOW");
                     break;
                 case "FORMAT_MISMATCH":
-                    headerAnalysis.put("summary", "文件格式与扩展名不匹配，可能存在伪装或篡改");
+                    headerAnalysis.put("summary", "File format does not match extension, possible spoofing or tampering");
                     headerAnalysis.put("riskLevel", "HIGH");
                     break;
                 case "UNKNOWN_FORMAT":
-                    headerAnalysis.put("summary", "未知文件格式，可能是损坏或特殊文件");
+                    headerAnalysis.put("summary", "Unknown file format, may be corrupted or special file");
                     headerAnalysis.put("riskLevel", "MEDIUM");
                     break;
                 case "ANALYSIS_FAILED":
-                    headerAnalysis.put("summary", "文件头分析失败");
+                    headerAnalysis.put("summary", "File header analysis failed");
                     headerAnalysis.put("riskLevel", "UNKNOWN");
                     break;
                 default:
-                    headerAnalysis.put("summary", "分析状态未知");
+                    headerAnalysis.put("summary", "Analysis status unknown");
                     headerAnalysis.put("riskLevel", "UNKNOWN");
             }
         }
@@ -2036,7 +2036,7 @@ public class MetadataAnalysisService {
         
         // Placeholder for future Week 7 requirements
         containerAnalysis.put("status", "PENDING_IMPLEMENTATION");
-        containerAnalysis.put("message", "容器完整性分析功能即将实现");
+        containerAnalysis.put("message", "Container integrity analysis feature coming soon");
         
         return containerAnalysis;
     }
@@ -2050,8 +2050,8 @@ public class MetadataAnalysisService {
         }
         
         try {
-            // Look for pattern "风险评分: XX/100"
-            String pattern = "风险评分: ";
+            // Look for pattern "Risk Score: XX/100"
+            String pattern = "Risk Score: ";
             int startIndex = analysisNotes.indexOf(pattern);
             if (startIndex >= 0) {
                 int scoreStart = startIndex + pattern.length();
@@ -2077,8 +2077,8 @@ public class MetadataAnalysisService {
         }
         
         try {
-            // Look for pattern "风险评估结论: ..."
-            String pattern = "风险评估结论: ";
+            // Look for pattern "Risk assessment conclusion: ..."
+            String pattern = "Risk assessment conclusion: ";
             int startIndex = suspiciousIndicators.indexOf(pattern);
             if (startIndex >= 0) {
                 int conclusionStart = startIndex + pattern.length();
