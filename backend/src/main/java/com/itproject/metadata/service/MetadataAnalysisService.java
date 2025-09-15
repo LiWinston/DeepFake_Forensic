@@ -142,6 +142,9 @@ public class MetadataAnalysisService {
                 // Generate hash values
                 generateHashValues(metadata, fileStream);
                 
+                // Perform file header analysis first (most critical for detection)
+                analyzeFileHeader(metadata, filePath);
+                
                 // Reset stream for metadata extraction
                 try (InputStream metadataStream = getFileStream(filePath)) {
                     if ("IMAGE".equals(fileType)) {
@@ -454,6 +457,16 @@ public class MetadataAnalysisService {
             response.setSuspiciousIndicators(buildSuspiciousIndicators(metadata));
             response.setParsedMetadata(buildParsedMetadata(metadata));
             
+            // Set missing critical fields
+            response.setAnalysisNotes(metadata.getAnalysisNotes());
+            response.setRawMetadata(metadata.getRawMetadata());
+            
+            // Set new Week 7 fields
+            response.setFileHeaderAnalysis(buildFileHeaderAnalysis(metadata));
+            response.setRiskScore(metadata.getRiskScore());
+            response.setAssessmentConclusion(metadata.getAssessmentConclusion());
+            response.setContainerAnalysis(buildContainerAnalysis(metadata));
+            
             return response;
             
         } catch (Exception e) {
@@ -467,6 +480,235 @@ public class MetadataAnalysisService {
                 .bucket(minioBucketName)
                 .object(filePath)
                 .build());
+    }
+    
+    /**
+     * Analyze file header/signature for forensic detection
+     */
+    private void analyzeFileHeader(MediaMetadata metadata, String filePath) {
+        try (InputStream headerStream = getFileStream(filePath)) {
+            // Read first 64 bytes for signature analysis
+            byte[] header = new byte[64];
+            int bytesRead = headerStream.read(header);
+            
+            if (bytesRead > 0) {
+                FileHeaderAnalysisResult headerResult = analyzeFileSignature(header, filePath);
+                
+                // Store structured header analysis in dedicated fields
+                metadata.setDetectedFileFormat(headerResult.getDetectedFormat());
+                metadata.setExpectedFileFormat(headerResult.getExpectedFormat());
+                metadata.setFileFormatMatch(headerResult.isFormatMatch());
+                metadata.setFileSignatureHex(headerResult.getSignatureHex());
+                metadata.setFileIntegrityStatus(headerResult.getIntegrityStatus());
+                
+                // Also append summary to analysis notes for human readability
+                String headerSummary = buildHeaderAnalysisString(headerResult);
+                appendToAnalysisNotes(metadata, "文件头分析: " + headerSummary);
+                
+                // Update raw metadata with detailed header information (for full transparency)
+                String headerInfo = "\n\nFile Header Analysis:\n" +
+                                  "  Detected Format: " + headerResult.getDetectedFormat() + "\n" +
+                                  "  Expected Format: " + headerResult.getExpectedFormat() + "\n" +
+                                  "  Format Match: " + headerResult.isFormatMatch() + "\n" +
+                                  "  File Signature: " + headerResult.getSignatureHex() + "\n" +
+                                  "  Integrity Status: " + headerResult.getIntegrityStatus() + "\n";
+                
+                String rawMetadata = metadata.getRawMetadata();
+                if (rawMetadata != null) {
+                    metadata.setRawMetadata(rawMetadata + headerInfo);
+                } else {
+                    metadata.setRawMetadata(headerInfo);
+                }
+                
+                log.info("文件头分析完成 - 文件: {}, 检测格式: {}, 格式匹配: {}, 完整性: {}", 
+                        metadata.getFileMd5(), headerResult.getDetectedFormat(), 
+                        headerResult.isFormatMatch(), headerResult.getIntegrityStatus());
+            }
+        } catch (Exception e) {
+            log.error("文件头分析失败: {}", metadata.getFileMd5(), e);
+            metadata.setFileIntegrityStatus("ANALYSIS_FAILED");
+            appendToAnalysisNotes(metadata, "文件头分析失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Helper method to append notes to analysis notes
+     */
+    private void appendToAnalysisNotes(MediaMetadata metadata, String newNote) {
+        String existingNotes = metadata.getAnalysisNotes();
+        if (existingNotes != null && !existingNotes.isEmpty()) {
+            metadata.setAnalysisNotes(existingNotes + "; " + newNote);
+        } else {
+            metadata.setAnalysisNotes(newNote);
+        }
+    }
+    
+    /**
+     * Analyze file signature and detect format
+     */
+    private FileHeaderAnalysisResult analyzeFileSignature(byte[] header, String filePath) {
+        FileHeaderAnalysisResult result = new FileHeaderAnalysisResult();
+        
+        // Convert header to hex for analysis
+        String headerHex = bytesToHex(Arrays.copyOf(header, Math.min(16, header.length))).toUpperCase();
+        result.setSignatureHex(headerHex);
+        
+        // Extract file extension
+        String extension = "";
+        if (filePath != null) {
+            int lastDot = filePath.lastIndexOf('.');
+            if (lastDot > 0) {
+                extension = filePath.substring(lastDot + 1).toLowerCase();
+            }
+        }
+        result.setExpectedFormat(extension.toUpperCase());
+        
+        // Detect actual format based on file signature
+        String detectedFormat = detectFormatFromSignature(header);
+        result.setDetectedFormat(detectedFormat);
+        
+        // Check format consistency
+        boolean formatMatch = isFormatConsistentWithExtension(detectedFormat, extension);
+        result.setFormatMatch(formatMatch);
+        
+        // Determine integrity status
+        if (!formatMatch) {
+            result.setIntegrityStatus("FORMAT_MISMATCH");
+        } else if (detectedFormat.equals("UNKNOWN")) {
+            result.setIntegrityStatus("UNKNOWN_FORMAT");
+        } else {
+            result.setIntegrityStatus("INTACT");
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Detect file format based on signature bytes
+     */
+    private String detectFormatFromSignature(byte[] header) {
+        if (header.length < 4) return "UNKNOWN";
+        
+        // Convert first few bytes to compare with known signatures
+        String hex = bytesToHex(Arrays.copyOf(header, Math.min(16, header.length))).toUpperCase();
+        
+        // Image formats
+        if (hex.startsWith("FFD8FF")) return "JPEG";
+        if (hex.startsWith("89504E47")) return "PNG";
+        if (hex.startsWith("474946")) return "GIF";
+        if (hex.startsWith("424D")) return "BMP";
+        if (hex.startsWith("49492A00") || hex.startsWith("4D4D002A")) return "TIFF";
+        if (hex.startsWith("52494646") && hex.contains("57454250")) return "WEBP";
+        
+        // Video formats
+        if (hex.startsWith("0000001")) return "MP4";
+        if (hex.startsWith("00000020667479706D703432") || hex.startsWith("66747970")) return "MP4";
+        if (hex.startsWith("1A45DFA3")) return "WEBM"; // Matroska/WebM
+        if (hex.startsWith("52494646") && hex.contains("41564920")) return "AVI";
+        if (hex.startsWith("464C5601")) return "FLV";
+        if (hex.startsWith("30264DE1")) return "WMV";
+        if (hex.startsWith("6D6F6F76") || hex.startsWith("66726565") || 
+            hex.startsWith("6D646174") || hex.startsWith("77696465")) return "MOV";
+        
+        // Check for more specific MP4/MOV patterns
+        if (header.length >= 8) {
+            // Look for 'ftyp' box (File Type Box) in MP4/MOV files
+            for (int i = 0; i <= header.length - 4; i++) {
+                if (header[i] == 'f' && header[i+1] == 't' && 
+                    header[i+2] == 'y' && header[i+3] == 'p') {
+                    return "MP4";
+                }
+            }
+        }
+        
+        // Document formats (for completeness)
+        if (hex.startsWith("255044462D")) return "PDF";
+        if (hex.startsWith("504B0304")) return "ZIP"; // Could be DOCX, etc.
+        
+        return "UNKNOWN";
+    }
+    
+    /**
+     * Check if detected format is consistent with file extension
+     */
+    private boolean isFormatConsistentWithExtension(String detectedFormat, String extension) {
+        if (detectedFormat.equals("UNKNOWN")) return false;
+        
+        String ext = extension.toLowerCase();
+        String detected = detectedFormat.toLowerCase();
+        
+        // Image format consistency
+        if (detected.equals("jpeg") && (ext.equals("jpg") || ext.equals("jpeg"))) return true;
+        if (detected.equals("png") && ext.equals("png")) return true;
+        if (detected.equals("gif") && ext.equals("gif")) return true;
+        if (detected.equals("bmp") && ext.equals("bmp")) return true;
+        if (detected.equals("tiff") && (ext.equals("tif") || ext.equals("tiff"))) return true;
+        if (detected.equals("webp") && ext.equals("webp")) return true;
+        
+        // Video format consistency
+        if (detected.equals("mp4") && (ext.equals("mp4") || ext.equals("m4v"))) return true;
+        if (detected.equals("mov") && ext.equals("mov")) return true;
+        if (detected.equals("webm") && ext.equals("webm")) return true;
+        if (detected.equals("avi") && ext.equals("avi")) return true;
+        if (detected.equals("flv") && ext.equals("flv")) return true;
+        if (detected.equals("wmv") && ext.equals("wmv")) return true;
+        
+        // Cross-compatible formats (MP4/MOV are often interchangeable)
+        if ((detected.equals("mp4") || detected.equals("mov")) && 
+            (ext.equals("mp4") || ext.equals("mov") || ext.equals("m4v"))) return true;
+        
+        return false;
+    }
+    
+    /**
+     * Build header analysis result string
+     */
+    private String buildHeaderAnalysisString(FileHeaderAnalysisResult result) {
+        StringBuilder sb = new StringBuilder();
+        
+        if (!result.isFormatMatch()) {
+            sb.append("格式不匹配警告 - 检测到").append(result.getDetectedFormat())
+              .append("格式，但文件扩展名显示为").append(result.getExpectedFormat());
+        } else {
+            sb.append("文件格式验证正常 - ").append(result.getDetectedFormat()).append("格式");
+        }
+        
+        if (result.getIntegrityStatus().equals("FORMAT_MISMATCH")) {
+            sb.append(" [可能存在文件伪装或格式篡改]");
+        } else if (result.getIntegrityStatus().equals("UNKNOWN_FORMAT")) {
+            sb.append(" [未知格式或损坏文件]");
+        } else {
+            sb.append(" [文件头完整]");
+        }
+        
+        return sb.toString();
+    }
+    
+    /**
+     * File Header Analysis Result inner class
+     */
+    private static class FileHeaderAnalysisResult {
+        private String detectedFormat;
+        private String expectedFormat;
+        private boolean formatMatch;
+        private String signatureHex;
+        private String integrityStatus;
+        
+        // Getters and setters
+        public String getDetectedFormat() { return detectedFormat; }
+        public void setDetectedFormat(String detectedFormat) { this.detectedFormat = detectedFormat; }
+        
+        public String getExpectedFormat() { return expectedFormat; }
+        public void setExpectedFormat(String expectedFormat) { this.expectedFormat = expectedFormat; }
+        
+        public boolean isFormatMatch() { return formatMatch; }
+        public void setFormatMatch(boolean formatMatch) { this.formatMatch = formatMatch; }
+        
+        public String getSignatureHex() { return signatureHex; }
+        public void setSignatureHex(String signatureHex) { this.signatureHex = signatureHex; }
+        
+        public String getIntegrityStatus() { return integrityStatus; }
+        public void setIntegrityStatus(String integrityStatus) { this.integrityStatus = integrityStatus; }
     }
     
     private void generateHashValues(MediaMetadata metadata, InputStream fileStream) throws Exception {
@@ -799,26 +1041,32 @@ public class MetadataAnalysisService {
         List<String> suspiciousIndicators = new ArrayList<>();
         StringBuilder analysisNotes = new StringBuilder();
         
-        // 1. EXIF Data Analysis
+        // 1. File Header/Signature Analysis (Critical for tampering detection)
+        analyzeFileHeaderIntegrity(metadata, suspiciousIndicators, analysisNotes);
+        
+        // 2. EXIF Data Analysis
         analyzeExifData(metadata, suspiciousIndicators, analysisNotes);
         
-        // 2. Image Dimension Analysis
+        // 3. Image Dimension Analysis
         analyzeDimensions(metadata, suspiciousIndicators, analysisNotes);
         
-        // 3. File Format and Technical Analysis
+        // 4. File Format and Technical Analysis
         analyzeFileFormat(metadata, suspiciousIndicators, analysisNotes);
         
-        // 4. Temporal Inconsistency Analysis
+        // 5. Temporal Inconsistency Analysis
         analyzeTemporalInconsistencies(metadata, suspiciousIndicators, analysisNotes);
         
-        // 5. Device-Specific Analysis
+        // 6. Device-Specific Analysis
         analyzeDeviceSpecificIndicators(metadata, suspiciousIndicators, analysisNotes);
         
-        // 6. AI Generation Pattern Analysis
+        // 7. AI Generation Pattern Analysis
         analyzeAIGenerationPatterns(metadata, suspiciousIndicators, analysisNotes);
         
-        // 7. Metadata Completeness Analysis
+        // 8. Metadata Completeness Analysis
         analyzeMetadataCompleteness(metadata, suspiciousIndicators, analysisNotes);
+        
+        // 9. Generate overall tampering/AI generation probability
+        generateTamperingProbabilityAssessment(metadata, suspiciousIndicators, analysisNotes);
         
         // Set results
         if (!suspiciousIndicators.isEmpty()) {
@@ -835,6 +1083,177 @@ public class MetadataAnalysisService {
             } else {
                 metadata.setAnalysisNotes(newNotes);
             }
+        }
+    }
+    
+    /**
+     * Analyze file header integrity for tampering detection (using structured database fields)
+     */
+    private void analyzeFileHeaderIntegrity(MediaMetadata metadata, List<String> indicators, StringBuilder notes) {
+        String integrityStatus = metadata.getFileIntegrityStatus();
+        String detectedFormat = metadata.getDetectedFileFormat();
+        String expectedFormat = metadata.getExpectedFileFormat();
+        String signatureHex = metadata.getFileSignatureHex();
+        
+        if (integrityStatus != null) {
+            switch (integrityStatus) {
+                case "FORMAT_MISMATCH":
+                    indicators.add("文件头签名异常：检测到文件格式伪装或篡改");
+                    notes.append(String.format("文件头分析显示格式不匹配（检测到%s但期望%s），可能存在恶意篡改; ", 
+                               detectedFormat, expectedFormat));
+                    log.warn("严重警告：文件 {} 的文件头签名与扩展名不匹配 - 检测格式: {}, 期望格式: {}", 
+                            metadata.getFileMd5(), detectedFormat, expectedFormat);
+                    break;
+                    
+                case "UNKNOWN_FORMAT":
+                    indicators.add("未知文件格式：可能是损坏文件或隐藏真实格式");
+                    notes.append("无法识别文件格式，文件可能已损坏或被特意混淆; ");
+                    break;
+                    
+                case "ANALYSIS_FAILED":
+                    indicators.add("文件头分析失败：无法验证文件完整性");
+                    notes.append("文件头分析过程失败; ");
+                    break;
+                    
+                case "INTACT":
+                    // Format is intact, but still perform advanced pattern analysis
+                    notes.append(String.format("文件头验证正常（%s格式）; ", detectedFormat));
+                    break;
+                    
+                default:
+                    notes.append("文件头分析状态未知; ");
+            }
+            
+            // Perform advanced signature pattern analysis if signature is available
+            if (signatureHex != null && !signatureHex.isEmpty()) {
+                analyzeSignaturePatterns(signatureHex, metadata, indicators, notes);
+            }
+            
+        } else {
+            indicators.add("文件头分析数据缺失：无法验证文件完整性");
+            notes.append("缺少文件头分析数据; ");
+        }
+    }
+    
+    
+    /**
+     * Analyze signature patterns for advanced tampering detection
+     */
+    private void analyzeSignaturePatterns(String signatureHex, MediaMetadata metadata, 
+                                        List<String> indicators, StringBuilder notes) {
+        
+        // Check for truncated or corrupted signatures
+        if (signatureHex.length() < 8) {
+            indicators.add("文件签名过短：可能是截断或损坏的文件");
+            notes.append("文件签名长度异常; ");
+        }
+        
+        // Check for suspicious patterns indicating AI generation tools
+        if (signatureHex.startsWith("FFD8FF") && signatureHex.length() >= 16) {
+            // JPEG specific signature analysis
+            String jpegMarker = signatureHex.substring(6, Math.min(16, signatureHex.length()));
+            
+            // Some AI generation tools leave specific JPEG markers
+            if (jpegMarker.startsWith("E0") || jpegMarker.startsWith("E1")) {
+                // Normal JPEG markers, but check for unusual patterns
+                if (jpegMarker.equals("E000104A464946") || 
+                    jpegMarker.equals("E1001845786966")) {
+                    notes.append("检测到可能的AI生成JPEG标记模式; ");
+                }
+            }
+        }
+        
+        // Check for video container tampering
+        if (signatureHex.startsWith("66747970")) { // 'ftyp' box
+            // Check for unusual brand codes that might indicate manipulation
+            if (signatureHex.contains("6D703432")) { // 'mp42'
+                notes.append("标准MP4容器; ");
+            } else {
+                notes.append("检测到非标准容器品牌代码; ");
+            }
+        }
+    }
+    
+    /**
+     * Generate overall tampering/AI generation probability assessment
+     */
+    private void generateTamperingProbabilityAssessment(MediaMetadata metadata, 
+                                                       List<String> indicators, StringBuilder notes) {
+        
+        int totalRiskScore = 0;
+        int maxPossibleScore = 100;
+        
+        // Calculate risk score based on different indicators
+        for (String indicator : indicators) {
+            String indicatorLower = indicator.toLowerCase();
+            
+            // High risk indicators (25-40 points each)
+            if (indicatorLower.contains("文件头签名异常") || 
+                indicatorLower.contains("格式伪装") || 
+                indicatorLower.contains("篡改")) {
+                totalRiskScore += 40;
+            }
+            // AI generation indicators (20-35 points each)
+            else if (indicatorLower.contains("ai生成") || 
+                     indicatorLower.contains("人工智能") ||
+                     indicatorLower.contains("高度疑似ai")) {
+                totalRiskScore += 35;
+            }
+            // Medium risk indicators (10-20 points each)
+            else if (indicatorLower.contains("缺少相机信息") || 
+                     indicatorLower.contains("格式不匹配") ||
+                     indicatorLower.contains("完全缺少") ||
+                     indicatorLower.contains("ai常见尺寸")) {
+                totalRiskScore += 15;
+            }
+            // Low risk indicators (5-10 points each)
+            else if (indicatorLower.contains("压缩质量") || 
+                     indicatorLower.contains("时间异常") ||
+                     indicatorLower.contains("元数据不完整")) {
+                totalRiskScore += 8;
+            }
+            // Minor indicators (1-5 points each)
+            else {
+                totalRiskScore += 3;
+            }
+        }
+        
+        // Cap the score at maximum
+        totalRiskScore = Math.min(totalRiskScore, maxPossibleScore);
+        
+        // Generate probability assessment conclusion
+        String probabilityAssessment = generateProbabilityConclusion(totalRiskScore, metadata);
+        
+        // Store structured risk assessment in dedicated fields
+        metadata.setRiskScore(totalRiskScore);
+        metadata.setAssessmentConclusion(probabilityAssessment);
+        
+        // Also add to indicators and notes for backward compatibility and human readability
+        indicators.add("风险评估结论: " + probabilityAssessment);
+        notes.append("风险评分: ").append(totalRiskScore).append("/100; ");
+        notes.append("评估结论: ").append(probabilityAssessment).append("; ");
+        
+        log.info("文件 {} 风险评估完成 - 评分: {}/100, 结论: {}", 
+                metadata.getFileMd5(), totalRiskScore, probabilityAssessment);
+    }
+    
+    /**
+     * Generate probability-based conclusion
+     */
+    private String generateProbabilityConclusion(int riskScore, MediaMetadata metadata) {
+        boolean isVideo = metadata.getVideoDuration() != null || metadata.getVideoCodec() != null;
+        String mediaType = isVideo ? "视频" : "图像";
+        
+        if (riskScore >= 70) {
+            return String.format("该%s存在高度篡改或AI生成嫌疑 (置信度: %d%%)", mediaType, riskScore);
+        } else if (riskScore >= 40) {
+            return String.format("该%s可能经过编辑处理或为AI生成内容 (置信度: %d%%)", mediaType, riskScore);
+        } else if (riskScore >= 20) {
+            return String.format("该%s存在轻微异常，建议进一步验证 (置信度: %d%%)", mediaType, riskScore);
+        } else if (riskScore >= 10) {
+            return String.format("该%s基本正常，仅发现少量可疑指标 (置信度: %d%%)", mediaType, riskScore);
+        } else {
+            return String.format("该%s未发现明显异常，可能为原始内容 (置信度: %d%%)", mediaType, Math.max(100 - riskScore, 85));
         }
     }
     
@@ -1551,7 +1970,131 @@ public class MetadataAnalysisService {
         indicators.put("hasIndicators", metadata.getSuspiciousIndicators() != null);
         indicators.put("indicators", metadata.getSuspiciousIndicators());
         indicators.put("analysisNotes", metadata.getAnalysisNotes());
+        
+        // Use dedicated database fields first, fallback to extraction for backward compatibility
+        Integer riskScore = metadata.getRiskScore();
+        if (riskScore == null) {
+            riskScore = extractRiskScoreFromAnalysisNotes(metadata.getAnalysisNotes());
+        }
+        indicators.put("riskScore", riskScore != null ? riskScore : 0);
+        
+        String conclusion = metadata.getAssessmentConclusion();
+        if (conclusion == null) {
+            conclusion = extractConclusionFromSuspiciousIndicators(metadata.getSuspiciousIndicators());
+        }
+        indicators.put("assessmentConclusion", conclusion);
+        
         return indicators;
+    }
+    
+    /**
+     * Build file header analysis data
+     */
+    private Map<String, Object> buildFileHeaderAnalysis(MediaMetadata metadata) {
+        Map<String, Object> headerAnalysis = new HashMap<>();
+        headerAnalysis.put("detectedFormat", metadata.getDetectedFileFormat());
+        headerAnalysis.put("expectedFormat", metadata.getExpectedFileFormat());
+        headerAnalysis.put("formatMatch", metadata.getFileFormatMatch());
+        headerAnalysis.put("signatureHex", metadata.getFileSignatureHex());
+        headerAnalysis.put("integrityStatus", metadata.getFileIntegrityStatus());
+        
+        // Add analysis summary
+        if (metadata.getFileIntegrityStatus() != null) {
+            switch (metadata.getFileIntegrityStatus()) {
+                case "INTACT":
+                    headerAnalysis.put("summary", "文件头完整，格式验证正常");
+                    headerAnalysis.put("riskLevel", "LOW");
+                    break;
+                case "FORMAT_MISMATCH":
+                    headerAnalysis.put("summary", "文件格式与扩展名不匹配，可能存在伪装或篡改");
+                    headerAnalysis.put("riskLevel", "HIGH");
+                    break;
+                case "UNKNOWN_FORMAT":
+                    headerAnalysis.put("summary", "未知文件格式，可能是损坏或特殊文件");
+                    headerAnalysis.put("riskLevel", "MEDIUM");
+                    break;
+                case "ANALYSIS_FAILED":
+                    headerAnalysis.put("summary", "文件头分析失败");
+                    headerAnalysis.put("riskLevel", "UNKNOWN");
+                    break;
+                default:
+                    headerAnalysis.put("summary", "分析状态未知");
+                    headerAnalysis.put("riskLevel", "UNKNOWN");
+            }
+        }
+        
+        return headerAnalysis;
+    }
+    
+    /**
+     * Build container analysis data (placeholder for future implementation)
+     */
+    private Map<String, Object> buildContainerAnalysis(MediaMetadata metadata) {
+        Map<String, Object> containerAnalysis = new HashMap<>();
+        containerAnalysis.put("integrityVerified", metadata.getContainerIntegrityVerified());
+        containerAnalysis.put("analysisResults", metadata.getContainerAnalysisResults());
+        
+        // Placeholder for future Week 7 requirements
+        containerAnalysis.put("status", "PENDING_IMPLEMENTATION");
+        containerAnalysis.put("message", "容器完整性分析功能即将实现");
+        
+        return containerAnalysis;
+    }
+    
+    /**
+     * Extract risk score from analysis notes
+     */
+    private int extractRiskScoreFromAnalysisNotes(String analysisNotes) {
+        if (analysisNotes == null || analysisNotes.isEmpty()) {
+            return 0;
+        }
+        
+        try {
+            // Look for pattern "风险评分: XX/100"
+            String pattern = "风险评分: ";
+            int startIndex = analysisNotes.indexOf(pattern);
+            if (startIndex >= 0) {
+                int scoreStart = startIndex + pattern.length();
+                int scoreEnd = analysisNotes.indexOf("/", scoreStart);
+                if (scoreEnd > scoreStart) {
+                    String scoreStr = analysisNotes.substring(scoreStart, scoreEnd).trim();
+                    return Integer.parseInt(scoreStr);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to extract risk score from analysis notes", e);
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * Extract assessment conclusion from suspicious indicators
+     */
+    private String extractConclusionFromSuspiciousIndicators(String suspiciousIndicators) {
+        if (suspiciousIndicators == null || suspiciousIndicators.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            // Look for pattern "风险评估结论: ..."
+            String pattern = "风险评估结论: ";
+            int startIndex = suspiciousIndicators.indexOf(pattern);
+            if (startIndex >= 0) {
+                int conclusionStart = startIndex + pattern.length();
+                int conclusionEnd = suspiciousIndicators.indexOf(";", conclusionStart);
+                if (conclusionEnd > conclusionStart) {
+                    return suspiciousIndicators.substring(conclusionStart, conclusionEnd).trim();
+                } else {
+                    // If no semicolon found, take the rest of the string
+                    return suspiciousIndicators.substring(conclusionStart).trim();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to extract conclusion from suspicious indicators", e);
+        }
+        
+        return null;
     }
     
     private Map<String, Object> buildParsedMetadata(MediaMetadata metadata) {

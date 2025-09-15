@@ -27,6 +27,20 @@ public class MetadataAnalysisResponse {
     private Map<String, Object> parsedMetadata;
     private LocalDateTime analysisTime;
     
+    // Missing critical fields from entity
+    private String analysisNotes;
+    private String rawMetadata;
+    
+    // New Week 7 file header analysis fields
+    private Map<String, Object> fileHeaderAnalysis;
+    
+    // Risk assessment fields
+    private Integer riskScore;
+    private String assessmentConclusion;
+    
+    // Container analysis fields (for future use)
+    private Map<String, Object> containerAnalysis;
+    
     public static MetadataAnalysisResponse success(String message) {
         MetadataAnalysisResponse response = new MetadataAnalysisResponse();
         response.success = true;

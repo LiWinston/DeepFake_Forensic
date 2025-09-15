@@ -11,7 +11,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Media metadata entity for storing extracted metadata information
@@ -106,6 +105,36 @@ public class MediaMetadata {
     
     @Column(columnDefinition = "TEXT")
     private String suspiciousIndicators;
+    
+    // File Header/Signature Analysis Results (Week 7 requirement)
+    @Column(length = 50)
+    private String detectedFileFormat;
+    
+    @Column(length = 50)
+    private String expectedFileFormat;
+    
+    @Column
+    private Boolean fileFormatMatch;
+    
+    @Column(length = 32)
+    private String fileSignatureHex;
+    
+    @Column(length = 50)
+    private String fileIntegrityStatus; // INTACT, FORMAT_MISMATCH, UNKNOWN_FORMAT
+    
+    // Risk Assessment (Week 7 requirement)
+    @Column
+    private Integer riskScore; // 0-100 score
+    
+    @Column(length = 500)
+    private String assessmentConclusion;
+    
+    // Container/Frame Analysis (Future Week 7 requirements)
+    @Column
+    private Boolean containerIntegrityVerified;
+    
+    @Column(columnDefinition = "TEXT")
+    private String containerAnalysisResults;
     
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

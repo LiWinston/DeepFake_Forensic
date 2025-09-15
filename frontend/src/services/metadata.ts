@@ -15,6 +15,24 @@ export interface MetadataAnalysisResponseDTO {
   suspiciousIndicators?: { hasIndicators?: boolean; indicators?: string | string[]; analysisNotes?: string; riskScore?: number } & Record<string, any>;
   parsedMetadata?: Record<string, any>;
   analysisTime?: string;
+  
+  // Missing critical fields
+  analysisNotes?: string;
+  rawMetadata?: string;
+  
+  // New Week 7 structured fields
+  fileHeaderAnalysis?: {
+    detectedFormat?: string;
+    expectedFormat?: string;
+    formatMatch?: boolean;
+    signatureHex?: string;
+    integrityStatus?: string;
+    summary?: string;
+    riskLevel?: string;
+  };
+  riskScore?: number;
+  assessmentConclusion?: string;
+  containerAnalysis?: Record<string, any>;
 }
 
 const mapToMetadataAnalysis = (dto: MetadataAnalysisResponseDTO): MetadataAnalysis => {
@@ -23,14 +41,21 @@ const mapToMetadataAnalysis = (dto: MetadataAnalysisResponseDTO): MetadataAnalys
     fileHeaders: dto.basicMetadata || undefined,
     hashData: dto.hashValues ? { md5: (dto.hashValues as any).md5, sha256: (dto.hashValues as any).sha256 } : undefined,
     technicalData: dto.videoMetadata || undefined,
-    // Map suspicious to UI model
+    // Map suspicious to UI model (prefer dedicated fields over legacy embedded ones)
     suspicious: dto.suspiciousIndicators ? {
       hasAnomalies: !!dto.suspiciousIndicators.hasIndicators,
       anomalies: Array.isArray(dto.suspiciousIndicators.indicators)
         ? (dto.suspiciousIndicators.indicators as string[])
         : (dto.suspiciousIndicators.indicators ? String(dto.suspiciousIndicators.indicators).split(';').map(s => s.trim()).filter(Boolean) : []),
-      riskScore: dto.suspiciousIndicators.riskScore ?? 0,
+      riskScore: dto.riskScore ?? dto.suspiciousIndicators.riskScore ?? 0,
+      assessmentConclusion: dto.assessmentConclusion || dto.suspiciousIndicators.assessmentConclusion || null,
+      analysisNotes: dto.analysisNotes || dto.suspiciousIndicators.analysisNotes || null,
     } : undefined,
+    
+    // New Week 7 structured fields
+    fileHeaderAnalysis: dto.fileHeaderAnalysis,
+    containerAnalysis: dto.containerAnalysis,
+    rawMetadata: dto.rawMetadata,
   } as any;
   // Attach parsed metadata tree for UI consumption
   (result as any).parsedMetadata = dto.parsedMetadata;

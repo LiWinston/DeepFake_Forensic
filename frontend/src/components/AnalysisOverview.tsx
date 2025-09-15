@@ -254,6 +254,8 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
   if (!analysis.result) return <div>No analysis result available</div>;
   const result = analysis.result;
   const panels: React.ReactNode[] = [];
+  
+  // EXIF Data Panel
   if (result.exifData) {
     panels.push(
       <Panel header="EXIF Data" key="exif">
@@ -261,6 +263,8 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
       </Panel>
     );
   }
+
+  // File Headers Panel
   if (result.fileHeaders) {
     panels.push(
       <Panel header="File Headers" key="headers">
@@ -268,6 +272,8 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
       </Panel>
     );
   }
+
+  // Hash Data Panel
   if (result.hashData) {
     panels.push(
       <Panel header="Hash Data" key="hash">
@@ -282,6 +288,8 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
       </Panel>
     );
   }
+
+  // Technical Data Panel
   if (result.technicalData) {
     panels.push(
       <Panel header="Technical Data" key="technical">
@@ -293,13 +301,226 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
       </Panel>
     );
   }
+
+  // NEW: File Header Analysis Panel (Week 7 requirement)
+  if (result.fileHeaderAnalysis) {
+    const headerData = result.fileHeaderAnalysis;
+    const getRiskIcon = (riskLevel?: string) => {
+      switch (riskLevel) {
+        case 'HIGH': return <WarningOutlined style={{ color: '#ff4d4f' }} />;
+        case 'MEDIUM': return <ExclamationCircleOutlined style={{ color: '#faad14' }} />;
+        case 'LOW': return <CheckCircleOutlined style={{ color: '#52c41a' }} />;
+        default: return <InfoCircleOutlined style={{ color: '#1890ff' }} />;
+      }
+    };
+
+    panels.push(
+      <Panel 
+        header={
+          <Space>
+            {getRiskIcon(headerData.riskLevel)}
+            <Text>文件头签名分析</Text>
+            <Tag color={
+              headerData.riskLevel === 'HIGH' ? 'red' :
+              headerData.riskLevel === 'MEDIUM' ? 'orange' :
+              headerData.riskLevel === 'LOW' ? 'green' : 'blue'
+            }>
+              {headerData.riskLevel || 'UNKNOWN'}
+            </Tag>
+          </Space>
+        } 
+        key="fileHeader"
+      >
+        {headerData.summary && (
+          <Alert
+            message={headerData.summary}
+            type={
+              headerData.riskLevel === 'HIGH' ? 'error' :
+              headerData.riskLevel === 'MEDIUM' ? 'warning' :
+              headerData.riskLevel === 'LOW' ? 'success' : 'info'
+            }
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        
+        <Descriptions bordered size="small">
+          <Descriptions.Item label="检测格式" span={2}>
+            <Text code>{headerData.detectedFormat || 'Unknown'}</Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="期望格式">
+            <Text code>{headerData.expectedFormat || 'Unknown'}</Text>
+          </Descriptions.Item>
+          
+          <Descriptions.Item label="格式匹配" span={2}>
+            {headerData.formatMatch ? (
+              <Tag color="green">匹配</Tag>
+            ) : (
+              <Tag color="red">不匹配</Tag>
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="完整性状态">
+            <Tag color={
+              headerData.integrityStatus === 'INTACT' ? 'green' :
+              headerData.integrityStatus === 'FORMAT_MISMATCH' ? 'red' :
+              headerData.integrityStatus === 'UNKNOWN_FORMAT' ? 'orange' : 'default'
+            }>
+              {headerData.integrityStatus}
+            </Tag>
+          </Descriptions.Item>
+          
+          {headerData.signatureHex && (
+            <Descriptions.Item label="文件签名" span={3}>
+              <Text copyable code style={{ fontSize: '12px' }}>
+                {headerData.signatureHex}
+              </Text>
+            </Descriptions.Item>
+          )}
+        </Descriptions>
+      </Panel>
+    );
+  }
+
+  // NEW: Container Analysis Panel
+  if (result.containerAnalysis && Object.keys(result.containerAnalysis).length > 0) {
+    panels.push(
+      <Panel 
+        header={
+          <Space>
+            <InfoCircleOutlined />
+            <Text>容器完整性分析</Text>
+            {result.containerAnalysis.status === 'PENDING_IMPLEMENTATION' && (
+              <Tag color="orange">开发中</Tag>
+            )}
+          </Space>
+        } 
+        key="container"
+      >
+        {result.containerAnalysis.message && (
+          <Alert
+            message={result.containerAnalysis.message}
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        
+        <Descriptions bordered size="small">
+          <Descriptions.Item label="完整性验证" span={2}>
+            {result.containerAnalysis.integrityVerified !== undefined ? (
+              <Tag color={result.containerAnalysis.integrityVerified ? 'green' : 'red'}>
+                {result.containerAnalysis.integrityVerified ? '已验证' : '未验证'}
+              </Tag>
+            ) : (
+              <Tag color="default">未检查</Tag>
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="分析状态">
+            <Tag color={result.containerAnalysis.status === 'PENDING_IMPLEMENTATION' ? 'orange' : 'blue'}>
+              {result.containerAnalysis.status || 'UNKNOWN'}
+            </Tag>
+          </Descriptions.Item>
+          
+          {result.containerAnalysis.analysisResults && (
+            <Descriptions.Item label="分析结果" span={3}>
+              <Text type="secondary" style={{ fontSize: '12px', whiteSpace: 'pre-wrap' }}>
+                {result.containerAnalysis.analysisResults}
+              </Text>
+            </Descriptions.Item>
+          )}
+        </Descriptions>
+      </Panel>
+    );
+  }
+
+  // NEW: Analysis Notes Panel (dedicated display)
+  if (result.suspicious?.analysisNotes) {
+    panels.push(
+      <Panel header="详细分析备注" key="analysisNotes">
+        <div style={{ 
+          padding: '12px', 
+          backgroundColor: '#f5f5f5', 
+          borderRadius: '6px',
+          fontSize: '13px',
+          lineHeight: '1.6',
+          whiteSpace: 'pre-wrap',
+          fontFamily: 'monospace'
+        }}>
+          {result.suspicious.analysisNotes}
+        </div>
+      </Panel>
+    );
+  }
+
+  // NEW: Raw Metadata Panel (complete technical data)
+  if (result.rawMetadata) {
+    panels.push(
+      <Panel 
+        header={
+          <Space>
+            <BarChartOutlined />
+            <Text>原始元数据</Text>
+            <Tag color="blue">完整技术数据</Tag>
+          </Space>
+        } 
+        key="rawMetadata"
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text type="secondary">
+            以下是从文件中提取的完整原始元数据，包含所有技术细节。这些数据对法证分析非常重要。
+          </Text>
+        </div>
+        
+        <div style={{ 
+          padding: '16px', 
+          backgroundColor: '#fafafa', 
+          border: '1px solid #d9d9d9',
+          borderRadius: '6px',
+          fontSize: '12px',
+          lineHeight: '1.5',
+          whiteSpace: 'pre-wrap',
+          fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+          maxHeight: '400px',
+          overflowY: 'auto'
+        }}>
+          {result.rawMetadata}
+        </div>
+        
+        <div style={{ marginTop: 12, textAlign: 'right' }}>
+          <Button 
+            size="small" 
+            onClick={() => {
+              const blob = new Blob([result.rawMetadata || ''], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `metadata_${new Date().getTime()}.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            下载原始数据
+          </Button>
+        </div>
+      </Panel>
+    );
+  }
+
+  // Parsed Metadata Tree Panel
   if ((result as any).parsedMetadata && Object.keys((result as any).parsedMetadata).length > 0) {
     panels.push(
-      <Panel header="Full Analysis" key="parsed">
+      <Panel header="结构化分析数据" key="parsed">
+        <div style={{ marginBottom: 16 }}>
+          <Text type="secondary">
+            解析后的结构化元数据，便于查看和分析各项技术参数。
+          </Text>
+        </div>
         <Tree defaultExpandAll treeData={renderMetadataTree((result as any).parsedMetadata)} />
       </Panel>
     );
   }
+
+  // Suspicious Analysis Panel (enhanced)
   if (result.suspicious) {
     panels.push(
       <Panel key="suspicious" header={(<Space><WarningOutlined /><Text>Suspicious Analysis</Text>{getRiskLevelTag(result.suspicious.riskScore)}</Space>)}>
@@ -308,9 +529,26 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
           <Col span={8}><Statistic title="Has Anomalies" value={result.suspicious.hasAnomalies ? 'Yes' : 'No'} valueStyle={{ color: result.suspicious.hasAnomalies ? '#cf1322' : '#3f8600' }} /></Col>
           <Col span={8}><Statistic title="Anomalies Found" value={result.suspicious.anomalies.length} /></Col>
         </Row>
+        
+        {result.suspicious.assessmentConclusion && (
+          <div style={{ marginTop: 16 }}>
+            <Title level={5}>法证评估结论:</Title>
+            <Alert
+              message={result.suspicious.assessmentConclusion}
+              type={
+                result.suspicious.riskScore >= 70 ? 'error' :
+                result.suspicious.riskScore >= 40 ? 'warning' :
+                result.suspicious.riskScore >= 20 ? 'info' : 'success'
+              }
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          </div>
+        )}
+        
         {result.suspicious.anomalies.length > 0 && (
           <div style={{ marginTop: 16 }}>
-            <Title level={5}>Detected Anomalies:</Title>
+            <Title level={5}>检测到的异常指标:</Title>
             <Timeline>
               {result.suspicious.anomalies.map((anomaly, index) => (
                 <Timeline.Item key={index} dot={<WarningOutlined style={{ color: '#ff4d4f' }} />}>
@@ -323,7 +561,8 @@ const renderMetadataAnalysisDetails = (analysis: MetadataAnalysis) => {
       </Panel>
     );
   }
-  return <Collapse defaultActiveKey={['suspicious']} ghost>{panels}</Collapse>;
+  
+  return <Collapse defaultActiveKey={['suspicious', 'fileHeader', 'analysisNotes']} ghost size="small">{panels}</Collapse>;
 };
 
 export const AnalysisDetails: React.FC<{ file?: UploadFile; record: AnalysisRecord }> = ({ record }) => {

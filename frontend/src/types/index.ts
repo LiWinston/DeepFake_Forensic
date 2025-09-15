@@ -168,7 +168,22 @@ export interface MetadataResult {
     hasAnomalies: boolean;
     anomalies: string[];
     riskScore: number;
+    assessmentConclusion?: string | null;
+    analysisNotes?: string | null;
   };
+  
+  // New Week 7 structured fields
+  fileHeaderAnalysis?: {
+    detectedFormat?: string;
+    expectedFormat?: string;
+    formatMatch?: boolean;
+    signatureHex?: string;
+    integrityStatus?: string;
+    summary?: string;
+    riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+  };
+  containerAnalysis?: Record<string, any>;
+  rawMetadata?: string;
 }
 
 // UI Component Types
