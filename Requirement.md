@@ -139,3 +139,46 @@ To develop a forensic tool for detecting and analysing deepfake, digitally alter
 
 - **Multimodal Analysis:** Explore building a multimodal transformer that can take inputs like audio, images, and metadata to analyze if content is edited, AI-generated, or real
 - **Video Transformer:** Research the use of a video transformer for analysis
+
+
+## Week 7 Client Meeting Notes (Thrusday 11/Sep)
+
+### For the UI:
+- the real impletation of the analysis page
+- No need to use Email, but how to reset the password without email (let us to discuss). However client want it to be totally local without outer system.
+
+### For the analysis page:
+- He want some button to export the result as pdf/csv/docx for the appoprate format.
+- For the page of setting the project, the date he want it to be (day/month/year) not (year/month/day)
+- It is better to have a progress bar, when backend algorithms etc is running. As for the latter application like the video one would cost a long time, without progress bar would be confused.
+- Also some method to make the result more smmoth like: Based on the analysis of the ** frames, lt is likely to have risk etc.(Very later work)
+
+### For the Backend:
+
+#### General:
+- All the result should give independently no need to calcultate the whole score.
+- For each Traditional tool/ AI tool , he want it to have the selection bar of the models for each one. Not just running all the algorithms the same time.
+
+#### For meta data analysis:
+- Some misunderstanding of the file header What are File Headers? (Signatures) - eDiscovery Software | eDiscovery Collection Software | Pinpoint Labs
+- There is an area called file header anaysis, want us to finish with that. (it is the Data header analysis in the pdf)
+- For file header & Container Metadata & Frame Hashing (Use tools to extract and verify structural integrity of video files e.g. FFmpeg.) (Still not finished):
+  - There can be a sentences to detect if there are anomonilies or not. Rather than just give the information.
+
+#### For traditional Method:
+- Some confusion(Maybe it is not calculated righ) about the cofidence score for Copy Move & lighting.
+- Moreover there are another methods left to implement.
+- But no need to calculate the ovrall score. He want it to be seperate scores for each individuals.
+- Also He wants to have the option to choose for which techniques he want to use.
+
+#### For NN:
+- No need to train the model ourselves. Very convenient to just use the exist One (CNN). And simply give the answer.
+- Also He wants to have the option to choose for which techniques he want to use.
+
+### Future:
+- It is definetly better to have the function to detect for Audio ones. And it is very similar to the video.
+
+### ref:
+- eDiscovery Software | eDiscovery Collection Software | Pinpoint Labs
+- https://pinpointlabs.com/what-are-file-headers-signatures/
+- Many file types can be identified by using what’s known as afile header. A file header is a ‘signature’ placed at the beginning of a file, so the operating system and other software know what to do with the following contents.
