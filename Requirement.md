@@ -146,6 +146,7 @@ To develop a forensic tool for detecting and analysing deepfake, digitally alter
 ### For the UI:
 - the real impletation of the analysis page
 - No need to use Email, but how to reset the password without email (let us to discuss). However client want it to be totally local without outer system.
+Re: Currently not dependent on email, pw reset is based on validating original and setting a new one.
 
 ### For the analysis page:
 - He want some button to export the result as pdf/csv/docx for the appoprate format.
