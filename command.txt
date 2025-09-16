@@ -1,0 +1,1 @@
+curl.exe -X POST "http://localhost:5000/predict/image" -d "image_url=https://httpbin.org/image/png"
