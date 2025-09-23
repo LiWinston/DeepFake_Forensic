@@ -146,21 +146,31 @@ The frontend should now be available at: http://localhost:3000/
 
 ## Testing
 
-### Backend unit tests (Maven + JUnit 5)
+### Backend unit tests (Maven + JUnit 5 + JaCoCo)
 
 Location:
-- Place tests under `backend/src/test/java` following the same package structure as the code. A dummy test exists at `backend/src/test/java/com/itproject/DummySmokeTest.java`.
+- Place tests under `backend/src/test/java` following the same package structure as the code.
+- Existing tests: `DummySmokeTest.java`, `FileTypeValidationServiceTest.java`, `JwtTokenUtilTest.java`, `NotificationUtilTest.java`
 
 Run tests locally:
 ```bash
 # from repo root
 cd backend
-mvn -U -q test
+mvn test                    # Run tests only
+mvn jacoco:report          # Generate coverage report
+mvn clean test jacoco:report # Clean, test, and generate report
 ```
 
+Coverage reports:
+- Coverage reports are generated in `backend/target/site/jacoco/` directory
+- Open `backend/target/site/jacoco/index.html` in browser to view detailed coverage
+- JaCoCo excludes entities, DTOs, config classes, and main application class
+
 Tips:
-- By default, unit tests should be plain JUnit 5 without Spring context (no DB required).
-- If you need DB-backed or context tests, create separate classes using `@SpringBootTest` or `@DataJpaTest`, and consider using a dedicated test profile or Testcontainers to avoid relying on local MySQL.
+- Tests focus on pure business logic (services, utilities, validators) without database dependencies
+- Uses Mockito for mocking dependencies (e.g., EmailService)
+- JWT token tests include expiration and validation scenarios
+- File validation tests cover various file types and edge cases
 
 ### Frontend unit tests (Vitest + jsdom)
 
@@ -176,9 +186,17 @@ npm install
 Run tests locally:
 ```bash
 cd frontend
-npm test
+npm test                    # Run tests without coverage
+npm run test:coverage      # Run tests with coverage report
+npm run test:ui            # Open Vitest UI in browser
 ```
+
+Coverage reports:
+- Coverage reports are generated in `frontend/coverage/` directory
+- Open `frontend/coverage/index.html` in browser to view detailed coverage
+- Coverage thresholds are set to 0% initially (can be adjusted in `vite.config.ts`)
 
 Notes:
 - The test environment is `jsdom` and configured in `frontend/vite.config.ts` under the `test` section.
+- Coverage excludes test files, config files, and main entry points to avoid 0% coverage on untested files.
 - Update the include pattern there if you prefer a different test folder layout.

@@ -1,85 +1,145 @@
 import { describe, it, expect } from 'vitest'
-
-// Mock type definitions that might exist in the project
-interface FileMetadata {
-  id: string
-  name: string
-  size: number
-  type: string
-  uploadDate: Date
-  hash: string
-}
-
-interface AnalysisResult {
-  fileId: string
-  riskScore: number
-  anomalies: string[]
-  isDeepfake: boolean
-  confidence: number
-}
-
-interface User {
-  id: string
-  email: string
-  name: string
-  role: 'admin' | 'user'
-  createdAt: Date
-}
+import type { 
+  ApiResponse, 
+  PaginationResponse, 
+  Project, 
+  ProjectType, 
+  ProjectStatus,
+  AnalysisTask,
+  AnalysisType,
+  TaskStatus,
+  UploadFile,
+  MetadataAnalysis,
+  MetadataResult,
+  TraditionalAnalysisResult,
+  AuthenticityAssessment
+} from '../src/types/index'
 
 describe('Type Definitions and Data Validation', () => {
-  describe('FileMetadata interface', () => {
-    it('should create valid FileMetadata objects', () => {
-      const metadata: FileMetadata = {
-        id: 'file-123',
-        name: 'test-image.jpg',
-        size: 1024000,
-        type: 'image/jpeg',
-        uploadDate: new Date('2024-01-01'),
-        hash: 'abc123def456'
+  describe('ApiResponse interface', () => {
+    it('should create valid ApiResponse objects', () => {
+      const response: ApiResponse<{ id: string }> = {
+        success: true,
+        data: { id: 'test-123' },
+        message: 'Success',
+        timestamp: Date.now()
       }
 
-      expect(metadata.id).toBe('file-123')
-      expect(metadata.name).toBe('test-image.jpg')
-      expect(metadata.size).toBe(1024000)
-      expect(metadata.type).toBe('image/jpeg')
-      expect(metadata.uploadDate).toBeInstanceOf(Date)
-      expect(metadata.hash).toBe('abc123def456')
-    })
-
-    it('should handle required properties', () => {
-      const requiredProps = ['id', 'name', 'size', 'type', 'uploadDate', 'hash']
-      const metadata: FileMetadata = {
-        id: 'test',
-        name: 'test',
-        size: 0,
-        type: 'test',
-        uploadDate: new Date(),
-        hash: 'test'
-      }
-
-      requiredProps.forEach(prop => {
-        expect(metadata).toHaveProperty(prop)
-      })
+      expect(response.success).toBe(true)
+      expect(response.data.id).toBe('test-123')
+      expect(response.message).toBe('Success')
+      expect(typeof response.timestamp).toBe('number')
     })
   })
 
-  describe('AnalysisResult interface', () => {
-    it('should create valid AnalysisResult objects', () => {
-      const result: AnalysisResult = {
-        fileId: 'file-123',
-        riskScore: 0.75,
-        anomalies: ['suspicious_metadata', 'unusual_compression'],
-        isDeepfake: true,
-        confidence: 0.85
+  describe('Project interface', () => {
+    it('should create valid Project objects', () => {
+      const project: Project = {
+        id: 1,
+        name: 'Test Project',
+        description: 'Test Description',
+        caseNumber: 'CASE-001',
+        clientName: 'Test Client',
+        projectType: 'CRIMINAL',
+        status: 'ACTIVE',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z'
       }
 
-      expect(result.fileId).toBe('file-123')
-      expect(result.riskScore).toBeGreaterThanOrEqual(0)
-      expect(result.riskScore).toBeLessThanOrEqual(1)
-      expect(Array.isArray(result.anomalies)).toBe(true)
-      expect(typeof result.isDeepfake).toBe('boolean')
-      expect(result.confidence).toBeGreaterThanOrEqual(0)
-      expect(result.confidence).toBeLessThanOrEqual(1)
+      expect(project.id).toBe(1)
+      expect(project.name).toBe('Test Project')
+      expect(project.projectType).toBe('CRIMINAL')
+      expect(project.status).toBe('ACTIVE')
+    })
+
+    it('should validate ProjectType enum values', () => {
+      const validTypes: ProjectType[] = ['GENERAL', 'CRIMINAL', 'CIVIL', 'CORPORATE', 'ACADEMIC_RESEARCH']
+      const testType: ProjectType = 'CRIMINAL'
+
+      expect(validTypes).toContain(testType)
+    })
+
+    it('should validate ProjectStatus enum values', () => {
+      const validStatuses: ProjectStatus[] = ['ACTIVE', 'COMPLETED', 'SUSPENDED', 'ARCHIVED']
+      const testStatus: ProjectStatus = 'ACTIVE'
+
+      expect(validStatuses).toContain(testStatus)
+    })
+  })
+
+  describe('AnalysisTask interface', () => {
+    it('should create valid AnalysisTask objects', () => {
+      const task: AnalysisTask = {
+        id: 1,
+        taskName: 'Test Analysis',
+        analysisType: 'METADATA_ANALYSIS',
+        status: 'PENDING',
+        projectId: 1,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z'
+      }
+
+      expect(task.id).toBe(1)
+      expect(task.taskName).toBe('Test Analysis')
+      expect(task.analysisType).toBe('METADATA_ANALYSIS')
+      expect(task.status).toBe('PENDING')
+    })
+
+    it('should validate AnalysisType enum values', () => {
+      const validTypes: AnalysisType[] = [
+        'METADATA_ANALYSIS', 'DEEPFAKE_DETECTION', 'EDIT_DETECTION',
+        'COMPRESSION_ANALYSIS', 'HASH_VERIFICATION', 'EXIF_ANALYSIS'
+      ]
+      const testType: AnalysisType = 'METADATA_ANALYSIS'
+
+      expect(validTypes).toContain(testType)
+    })
+
+    it('should validate TaskStatus enum values', () => {
+      const validStatuses: TaskStatus[] = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED', 'PAUSED']
+      const testStatus: TaskStatus = 'PENDING'
+
+      expect(validStatuses).toContain(testStatus)
+    })
+  })
+
+  describe('UploadFile interface', () => {
+    it('should create valid UploadFile objects', () => {
+      const file: UploadFile = {
+        id: 'file-123',
+        filename: 'test.jpg',
+        originalName: 'original.jpg',
+        fileType: 'image/jpeg',
+        fileSize: 1024000,
+        filePath: '/uploads/test.jpg',
+        uploadTime: '2024-01-01T00:00:00Z',
+        status: 'COMPLETED'
+      }
+
+      expect(file.id).toBe('file-123')
+      expect(file.filename).toBe('test.jpg')
+      expect(file.fileSize).toBe(1024000)
+      expect(file.status).toBe('COMPLETED')
+    })
+  })
+
+  describe('MetadataResult interface', () => {
+    it('should create valid MetadataResult objects', () => {
+      const result: MetadataResult = {
+        exifData: { camera: 'Test Camera' },
+        fileHeaders: { contentType: 'image/jpeg' },
+        hashData: { md5: 'abc123', sha256: 'def456' },
+        suspicious: {
+          hasAnomalies: true,
+          anomalies: ['suspicious_metadata'],
+          riskScore: 0.75
+        }
+      }
+
+      expect(result.exifData?.camera).toBe('Test Camera')
+      expect(result.hashData?.md5).toBe('abc123')
+      expect(result.suspicious?.hasAnomalies).toBe(true)
+      expect(result.suspicious?.riskScore).toBe(0.75)
     })
 
     it('should validate risk score range', () => {
@@ -98,28 +158,15 @@ describe('Type Definitions and Data Validation', () => {
     })
   })
 
-  describe('User interface', () => {
-    it('should create valid User objects', () => {
-      const user: User = {
-        id: 'user-123',
-        email: 'test@example.com',
-        name: 'Test User',
-        role: 'user',
-        createdAt: new Date('2024-01-01')
-      }
+  describe('AuthenticityAssessment enum', () => {
+    it('should validate AuthenticityAssessment values', () => {
+      const validAssessments: AuthenticityAssessment[] = [
+        'AUTHENTIC', 'LIKELY_AUTHENTIC', 'SUSPICIOUS', 
+        'LIKELY_MANIPULATED', 'MANIPULATED'
+      ]
+      const testAssessment: AuthenticityAssessment = 'AUTHENTIC'
 
-      expect(user.id).toBe('user-123')
-      expect(user.email).toContain('@')
-      expect(user.name).toBe('Test User')
-      expect(['admin', 'user']).toContain(user.role)
-      expect(user.createdAt).toBeInstanceOf(Date)
-    })
-
-    it('should validate role enum values', () => {
-      const validRoles: User['role'][] = ['admin', 'user']
-      const testRole: User['role'] = 'admin'
-
-      expect(validRoles).toContain(testRole)
+      expect(validAssessments).toContain(testAssessment)
     })
   })
 })

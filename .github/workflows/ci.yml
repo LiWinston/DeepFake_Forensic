@@ -40,6 +40,15 @@ jobs:
           cache: 'maven'
       - name: Run backend tests
         run: mvn -B -q -f backend/pom.xml test
+      - name: Generate backend coverage report
+        run: mvn -B -q -f backend/pom.xml jacoco:report
+      - name: Upload backend coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/target/site/jacoco/jacoco.xml
+          flags: backend
+          name: backend-coverage
 
   frontend:
     needs: changes
@@ -59,5 +68,13 @@ jobs:
       - name: Run frontend tests
         working-directory: frontend
         run: npm test --silent
-
-
+      - name: Run frontend tests with coverage
+        working-directory: frontend
+        run: npm run test:coverage --silent
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./frontend/coverage/lcov.info
+          flags: frontend
+          name: frontend-coverage

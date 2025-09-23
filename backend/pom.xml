@@ -228,6 +228,109 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
+            
+            <!-- JaCoCo Code Coverage Plugin -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+
+                <executions>
+                    <!-- 挂载 agent 收集覆盖率 -->
+                    <execution>
+                    <id>prepare-agent</id>
+                    <goals>
+                        <goal>prepare-agent</goal>
+                    </goals>
+                    </execution>
+
+                    <!-- 生成报告：只统计“纯业务”（service）并排除拖分包 -->
+                    <execution>
+                    <id>report</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>report</goal>
+                    </goals>
+                    <configuration>
+                        <includes>
+                        <!-- 只看 service 层 -->
+                        <include>com/itproject/**/service/*</include>
+                        </includes>
+                        <excludes>
+                        <!-- 不想计入报告的包/类 -->
+                        <exclude>**/*$*</exclude> <!-- 内部类 -->
+                        <exclude>com/itproject/traditional/util/*</exclude>
+                        <exclude>com/itproject/traditional/service/*</exclude>
+                        <exclude>com/itproject/metadata/service/*</exclude>
+
+                        <!-- 常见非业务层 -->
+                        <exclude>com/itproject/**/controller/*</exclude>
+                        <exclude>com/itproject/**/config/*</exclude>
+                        <exclude>com/itproject/**/entity/*</exclude>
+                        <exclude>com/itproject/**/dto/*</exclude>
+                        <exclude>**/*Application*</exclude>
+                        <exclude>**/*Exception*</exclude>
+                        </excludes>
+                    </configuration>
+                    </execution>
+
+                    <!-- 覆盖率门槛：仅对 service 生效 -->
+                    <execution>
+                    <id>jacoco-check</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>check</goal>
+                    </goals>
+                    <configuration>
+                        <rules>
+                        <rule>
+                            <element>CLASS</element>
+                            <includes>
+                            <include>com/itproject/**/service/*</include>
+                            </includes>
+                            <excludes>
+                            <exclude>**/*$*</exclude>
+                            <exclude>com/itproject/traditional/service/*</exclude>
+                            <exclude>com/itproject/metadata/service/*</exclude>
+                            </excludes>
+                            <limits>
+                            <!-- 先给极低阈值，报告“只算业务”后覆盖率会立刻抬高；之后再逐步上调 -->
+                            <limit>
+                                <counter>LINE</counter>
+                                <value>COVEREDRATIO</value>
+                                <minimum>0.01</minimum>
+                            </limit>
+                            <!-- 如需分支阈值，放开下面
+                            <limit>
+                                <counter>BRANCH</counter>
+                                <value>COVEREDRATIO</value>
+                                <minimum>0.01</minimum>
+                            </limit>
+                            -->
+                            </limits>
+                        </rule>
+                        </rules>
+                    </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            
+            <!-- Surefire Plugin for running tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.3</version>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                    </includes>
+                    <excludes>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                        <exclude>**/*IT.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

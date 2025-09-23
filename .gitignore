@@ -4,3 +4,4 @@
 /.vscode
 .DS_Store
 /frontend/package-lock.json
+/frontend/coverage

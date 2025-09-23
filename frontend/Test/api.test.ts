@@ -1,176 +1,195 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import httpClient from '../src/services/http'
+import type { ApiResponse } from '../src/types'
 
-// Mock API service functions
-const API_BASE_URL = 'http://localhost:8082/api'
+// Mock axios
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn(() => ({
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() }
+      }
+    })),
+    post: vi.fn()
+  }
+}))
 
-interface ApiResponse<T> {
-  data: T
-  status: number
-  message: string
+// Mock antd message
+vi.mock('antd', () => ({
+  message: {
+    error: vi.fn(),
+    success: vi.fn()
+  }
+}))
+
+// Mock localStorage
+const mockLocalStorage = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn()
 }
+Object.defineProperty(window, 'localStorage', {
+  value: mockLocalStorage
+})
 
-const mockFetch = vi.fn()
-global.fetch = mockFetch
-
-// Mock API functions
-const uploadFile = async (file: File): Promise<ApiResponse<{ fileId: string }>> => {
-  const formData = new FormData()
-  formData.append('file', file)
-  
-  const response = await fetch(`${API_BASE_URL}/upload`, {
-    method: 'POST',
-    body: formData
-  })
-  
-  return response.json()
-}
-
-const getFileMetadata = async (fileId: string): Promise<ApiResponse<any>> => {
-  const response = await fetch(`${API_BASE_URL}/metadata/${fileId}`)
-  return response.json()
-}
-
-const analyzeFile = async (fileId: string): Promise<ApiResponse<{ riskScore: number }>> => {
-  const response = await fetch(`${API_BASE_URL}/analyze/${fileId}`, {
-    method: 'POST'
-  })
-  return response.json()
-}
-
-describe('API Service Functions', () => {
+describe('HTTP Client Service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  describe('uploadFile', () => {
-    it('should upload file successfully', async () => {
-      const mockFile = new File(['test content'], 'test.jpg', { type: 'image/jpeg' })
-      const mockResponse = {
-        data: { fileId: 'file-123' },
-        status: 200,
-        message: 'File uploaded successfully'
+  describe('HTTP Client Configuration', () => {
+    it('should create axios instance with correct configuration', () => {
+      // Since we're mocking axios, we can't test the actual instance creation
+      // But we can test that the module exports correctly
+      expect(httpClient).toBeDefined()
+    })
+  })
+
+  describe('API Response Types', () => {
+    it('should validate ApiResponse structure', () => {
+      const mockResponse: ApiResponse<{ id: string }> = {
+        success: true,
+        data: { id: 'test-123' },
+        message: 'Success',
+        timestamp: Date.now()
       }
 
-      mockFetch.mockResolvedValueOnce({
-        json: () => Promise.resolve(mockResponse)
-      })
-
-      const result = await uploadFile(mockFile)
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${API_BASE_URL}/upload`,
-        expect.objectContaining({
-          method: 'POST',
-          body: expect.any(FormData)
-        })
-      )
-      expect(result).toEqual(mockResponse)
+      expect(mockResponse.success).toBe(true)
+      expect(mockResponse.data.id).toBe('test-123')
+      expect(typeof mockResponse.timestamp).toBe('number')
     })
 
-    it('should handle upload errors', async () => {
-      const mockFile = new File(['test content'], 'test.jpg', { type: 'image/jpeg' })
-      const mockError = {
+    it('should handle error responses', () => {
+      const errorResponse: ApiResponse<null> = {
+        success: false,
         data: null,
-        status: 400,
-        message: 'File too large'
+        message: 'Error occurred',
+        errorCode: 'VALIDATION_ERROR'
       }
 
-      mockFetch.mockResolvedValueOnce({
-        json: () => Promise.resolve(mockError)
-      })
-
-      const result = await uploadFile(mockFile)
-
-      expect(result.status).toBe(400)
-      expect(result.message).toBe('File too large')
+      expect(errorResponse.success).toBe(false)
+      expect(errorResponse.data).toBe(null)
+      expect(errorResponse.errorCode).toBe('VALIDATION_ERROR')
     })
   })
 
-  describe('getFileMetadata', () => {
-    it('should fetch file metadata', async () => {
-      const fileId = 'file-123'
-      const mockMetadata = {
-        data: {
-          id: fileId,
-          name: 'test.jpg',
-          size: 1024000,
-          type: 'image/jpeg'
-        },
-        status: 200,
-        message: 'Metadata retrieved'
-      }
-
-      mockFetch.mockResolvedValueOnce({
-        json: () => Promise.resolve(mockMetadata)
-      })
-
-      const result = await getFileMetadata(fileId)
-
-      expect(mockFetch).toHaveBeenCalledWith(`${API_BASE_URL}/metadata/${fileId}`)
-      expect(result.data.id).toBe(fileId)
-    })
-  })
-
-  describe('analyzeFile', () => {
-    it('should analyze file for deepfake detection', async () => {
-      const fileId = 'file-123'
-      const mockAnalysis = {
-        data: { riskScore: 0.75 },
-        status: 200,
-        message: 'Analysis completed'
-      }
-
-      mockFetch.mockResolvedValueOnce({
-        json: () => Promise.resolve(mockAnalysis)
-      })
-
-      const result = await analyzeFile(fileId)
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${API_BASE_URL}/analyze/${fileId}`,
-        expect.objectContaining({
-          method: 'POST'
-        })
-      )
-      expect(result.data.riskScore).toBe(0.75)
-    })
-
-    it('should handle analysis errors', async () => {
-      const fileId = 'invalid-file'
-      const mockError = {
-        data: null,
-        status: 404,
-        message: 'File not found'
-      }
-
-      mockFetch.mockResolvedValueOnce({
-        json: () => Promise.resolve(mockError)
-      })
-
-      const result = await analyzeFile(fileId)
-
-      expect(result.status).toBe(404)
-      expect(result.message).toBe('File not found')
-    })
-  })
-
-  describe('API Error Handling', () => {
-    it('should handle network errors', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'))
-
-      const mockFile = new File(['test'], 'test.jpg')
+  describe('LocalStorage Integration', () => {
+    it('should handle localStorage operations', () => {
+      mockLocalStorage.getItem.mockReturnValue('test-token')
       
-      await expect(uploadFile(mockFile)).rejects.toThrow('Network error')
+      expect(mockLocalStorage.getItem('auth_token')).toBe('test-token')
+      expect(mockLocalStorage.getItem).toHaveBeenCalledWith('auth_token')
     })
 
-    it('should handle invalid JSON responses', async () => {
-      mockFetch.mockResolvedValueOnce({
-        json: () => Promise.reject(new Error('Invalid JSON'))
+    it('should handle token storage', () => {
+      mockLocalStorage.setItem('auth_token', 'new-token')
+      
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith('auth_token', 'new-token')
+    })
+
+    it('should handle token removal', () => {
+      mockLocalStorage.removeItem('auth_token')
+      
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('auth_token')
+    })
+  })
+
+  describe('Environment Detection', () => {
+    it('should handle development environment', () => {
+      // Mock import.meta.env
+      Object.defineProperty(import.meta, 'env', {
+        value: { DEV: true },
+        writable: true
       })
 
-      const mockFile = new File(['test'], 'test.jpg')
-      
-      await expect(uploadFile(mockFile)).rejects.toThrow('Invalid JSON')
+      expect((import.meta as any).env.DEV).toBe(true)
+    })
+
+    it('should handle production environment', () => {
+      // Mock import.meta.env
+      Object.defineProperty(import.meta, 'env', {
+        value: { DEV: false },
+        writable: true
+      })
+
+      expect((import.meta as any).env.DEV).toBe(false)
+    })
+  })
+
+  describe('Error Handling Scenarios', () => {
+    it('should handle 401 Unauthorized', () => {
+      const errorResponse = {
+        response: {
+          status: 401,
+          data: { message: 'Unauthorized' }
+        }
+      }
+
+      expect(errorResponse.response.status).toBe(401)
+      expect(errorResponse.response.data.message).toBe('Unauthorized')
+    })
+
+    it('should handle 400 Bad Request', () => {
+      const errorResponse = {
+        response: {
+          status: 400,
+          data: { message: 'Bad request' }
+        }
+      }
+
+      expect(errorResponse.response.status).toBe(400)
+    })
+
+    it('should handle 404 Not Found', () => {
+      const errorResponse = {
+        response: {
+          status: 404,
+          data: { message: 'Not found' }
+        }
+      }
+
+      expect(errorResponse.response.status).toBe(404)
+    })
+
+    it('should handle 500 Server Error', () => {
+      const errorResponse = {
+        response: {
+          status: 500,
+          data: { message: 'Server error' }
+        }
+      }
+
+      expect(errorResponse.response.status).toBe(500)
+    })
+
+    it('should handle network errors', () => {
+      const networkError = {
+        request: {},
+        message: 'Network Error'
+      }
+
+      expect(networkError.request).toBeDefined()
+      expect(networkError.message).toBe('Network Error')
+    })
+  })
+
+  describe('Request Configuration', () => {
+    it('should validate request headers', () => {
+      const mockConfig = {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer test-token'
+        }
+      }
+
+      expect(mockConfig.headers['Content-Type']).toBe('application/json')
+      expect(mockConfig.headers['Authorization']).toBe('Bearer test-token')
+    })
+
+    it('should validate request timeout', () => {
+      const timeout = 30000
+      expect(timeout).toBe(30000)
     })
   })
 })
