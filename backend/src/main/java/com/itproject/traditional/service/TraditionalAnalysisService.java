@@ -4,8 +4,6 @@ import com.itproject.auth.entity.User;
 import com.itproject.auth.repository.UserRepository;
 import com.itproject.auth.security.SecurityUtils;
 import com.itproject.common.service.EmailService;
-import com.itproject.project.entity.Project;
-import com.itproject.project.repository.ProjectRepository;
 import com.itproject.upload.entity.MediaFile;
 import com.itproject.upload.repository.MediaFileRepository;
 import com.itproject.traditional.dto.TraditionalAnalysisResponse;
@@ -37,9 +35,13 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 
@@ -50,14 +52,30 @@ import javax.imageio.ImageIO;
 @Service
 public class TraditionalAnalysisService {
     
+    private enum TraditionalMethod {
+        ELA,
+        CFA,
+        COPY_MOVE,
+        LIGHTING;
+
+        static TraditionalMethod fromString(String value) {
+            if (value == null) {
+                return null;
+            }
+            String normalized = value.trim().toUpperCase().replace('-', '_');
+            try {
+                return TraditionalMethod.valueOf(normalized);
+            } catch (IllegalArgumentException ex) {
+                return null;
+            }
+        }
+    }
+
     @Autowired
     private TraditionalAnalysisResultRepository analysisRepository;
     
     @Autowired
     private MediaFileRepository mediaFileRepository;
-    
-    @Autowired
-    private ProjectRepository projectRepository;
     
     @Autowired
     private UserRepository userRepository;
@@ -99,18 +117,48 @@ public class TraditionalAnalysisService {
     
     @Value("${kafka.topics.traditional-analysis:traditional-analysis-tasks}")
     private String traditionalAnalysisTopic;
+
+    private Set<TraditionalMethod> resolveRequestedMethods(List<String> requestedMethods) {
+        if (requestedMethods == null || requestedMethods.isEmpty()) {
+            return EnumSet.allOf(TraditionalMethod.class);
+        }
+
+        EnumSet<TraditionalMethod> resolved = EnumSet.noneOf(TraditionalMethod.class);
+        for (String methodName : requestedMethods) {
+            TraditionalMethod method = TraditionalMethod.fromString(methodName);
+            if (method != null) {
+                resolved.add(method);
+            } else {
+                log.warn("Unsupported traditional method requested: {}. Ignoring this entry.", methodName);
+            }
+        }
+
+        if (resolved.isEmpty()) {
+            log.warn("No valid traditional methods resolved from request: {}. Falling back to full set.", requestedMethods);
+            return EnumSet.allOf(TraditionalMethod.class);
+        }
+
+        return resolved;
+    }
     
     /**
      * Manually trigger traditional analysis for a file
      */
     public boolean triggerTraditionalAnalysis(String fileMd5) {
-        return triggerTraditionalAnalysis(fileMd5, false);
+        return triggerTraditionalAnalysis(fileMd5, false, null);
     }
     
     /**
      * Manually trigger traditional analysis for a file with force option
      */
     public boolean triggerTraditionalAnalysis(String fileMd5, boolean force) {
+        return triggerTraditionalAnalysis(fileMd5, force, null);
+    }
+
+    /**
+     * Trigger traditional analysis with explicit method selection
+     */
+    public boolean triggerTraditionalAnalysis(String fileMd5, boolean force, List<String> methods) {
         try {
             // Check if file exists
             Optional<MediaFile> mediaFileOpt = mediaFileRepository.findByFileMd5(fileMd5);
@@ -120,7 +168,7 @@ public class TraditionalAnalysisService {
             }
             
             // Create task DTO
-            TraditionalAnalysisTaskDto task = new TraditionalAnalysisTaskDto(fileMd5, force);
+            TraditionalAnalysisTaskDto task = new TraditionalAnalysisTaskDto(fileMd5, force, methods);
             
             // Send Kafka message to trigger analysis with fileMd5 as key for compacted topic
             kafkaTemplate.send(traditionalAnalysisTopic, fileMd5, task);
@@ -176,7 +224,8 @@ public class TraditionalAnalysisService {
             }
             
             // Perform analysis
-            performTraditionalAnalysis(mediaFile);
+            Set<TraditionalMethod> methodsToRun = resolveRequestedMethods(task.getMethods());
+            performTraditionalAnalysis(mediaFile, methodsToRun);
             
         } catch (Exception e) {
             log.error("Error processing traditional analysis task: {}", task, e);
@@ -196,6 +245,11 @@ public class TraditionalAnalysisService {
      */
     @Transactional
     public void performTraditionalAnalysis(MediaFile mediaFile) {
+        performTraditionalAnalysis(mediaFile, EnumSet.allOf(TraditionalMethod.class));
+    }
+
+    @Transactional
+    public void performTraditionalAnalysis(MediaFile mediaFile, Set<TraditionalMethod> methodsToRun) {
         long startTime = System.currentTimeMillis();
         
         TraditionalAnalysisResult result = new TraditionalAnalysisResult();
@@ -233,51 +287,73 @@ public class TraditionalAnalysisService {
             final TraditionalAnalysisResult finalResult = result;
             final MediaFile finalMediaFile = mediaFile;
             
-            // Execute all four analyses in parallel using CompletableFuture with proper exception handling
-            CompletableFuture<Void> elaFuture = CompletableFuture.runAsync(() -> {
-                performELAAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
-            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
-                log.error("Error in ELA analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
-                finalResult.setElaConfidenceScore(0.0);
-                return null;
-            });
-            
-            CompletableFuture<Void> cfaFuture = CompletableFuture.runAsync(() -> {
-                performCFAAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
-            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
-                log.error("Error in CFA analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
-                finalResult.setCfaConfidenceScore(0.0);
-                return null;
-            });
-            
-            CompletableFuture<Void> copyMoveFuture = CompletableFuture.runAsync(() -> {
-                performCopyMoveAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
-            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
-                log.error("Error in Copy-Move analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
-                finalResult.setCopyMoveConfidenceScore(0.0);
-                return null;
-            });
-            
-            CompletableFuture<Void> lightingFuture = CompletableFuture.runAsync(() -> {
-                performLightingAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
-            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
-                log.error("Error in Lighting analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
-                finalResult.setLightingConfidenceScore(0.0);
-                return null;
-            });
-            
-            // Wait for all analyses to complete
-            CompletableFuture<Void> allAnalyses = CompletableFuture.allOf(
-                elaFuture, cfaFuture, copyMoveFuture, lightingFuture
-            );
-            
-            // Block until all analyses are complete
-            allAnalyses.join();
+            List<CompletableFuture<Void>> analysisFutures = new ArrayList<>();
+
+            if (methodsToRun.contains(TraditionalMethod.ELA)) {
+                analysisFutures.add(CompletableFuture.runAsync(() -> {
+                    performELAAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+                }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                    log.error("Error in ELA analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                    finalResult.setElaConfidenceScore(0.0);
+                    return null;
+                }));
+            } else {
+                finalResult.setElaConfidenceScore(null);
+                finalResult.setElaResultPath(null);
+                finalResult.setElaSuspiciousRegions(null);
+            }
+
+            if (methodsToRun.contains(TraditionalMethod.CFA)) {
+                analysisFutures.add(CompletableFuture.runAsync(() -> {
+                    performCFAAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+                }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                    log.error("Error in CFA analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                    finalResult.setCfaConfidenceScore(0.0);
+                    return null;
+                }));
+            } else {
+                finalResult.setCfaConfidenceScore(null);
+                finalResult.setCfaHeatmapPath(null);
+                finalResult.setCfaInterpolationAnomalies(null);
+            }
+
+            if (methodsToRun.contains(TraditionalMethod.COPY_MOVE)) {
+                analysisFutures.add(CompletableFuture.runAsync(() -> {
+                    performCopyMoveAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+                }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                    log.error("Error in Copy-Move analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                    finalResult.setCopyMoveConfidenceScore(0.0);
+                    return null;
+                }));
+            } else {
+                finalResult.setCopyMoveConfidenceScore(null);
+                finalResult.setCopyMoveResultPath(null);
+                finalResult.setCopyMoveSuspiciousBlocks(null);
+            }
+
+            if (methodsToRun.contains(TraditionalMethod.LIGHTING)) {
+                analysisFutures.add(CompletableFuture.runAsync(() -> {
+                    performLightingAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+                }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                    log.error("Error in Lighting analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                    finalResult.setLightingConfidenceScore(0.0);
+                    return null;
+                }));
+            } else {
+                finalResult.setLightingConfidenceScore(null);
+                finalResult.setLightingAnalysisPath(null);
+                finalResult.setLightingInconsistencies(null);
+            }
+
+            if (!analysisFutures.isEmpty()) {
+                CompletableFuture<Void> allAnalyses = CompletableFuture.allOf(analysisFutures.toArray(new CompletableFuture[0]));
+                allAnalyses.join();
+            }
             
             log.info("All parallel analyses completed for file: {}", finalMediaFile.getFileMd5());
             
             // Calculate overall results
-            calculateOverallResults(result);
+            calculateOverallResults(result, methodsToRun);
             
             // Update processing time and status
             result.setProcessingTimeMs(System.currentTimeMillis() - startTime);
@@ -401,20 +477,45 @@ public class TraditionalAnalysisService {
     /**
      * Calculate overall analysis results
      */
-    private void calculateOverallResults(TraditionalAnalysisResult result) {
-        // Calculate weighted average confidence score
-        double elaScore = result.getElaConfidenceScore() != null ? result.getElaConfidenceScore() : 0.0;
-        double cfaScore = result.getCfaConfidenceScore() != null ? result.getCfaConfidenceScore() : 0.0;
-        double copyMoveScore = result.getCopyMoveConfidenceScore() != null ? result.getCopyMoveConfidenceScore() : 0.0;
-        double lightingScore = result.getLightingConfidenceScore() != null ? result.getLightingConfidenceScore() : 0.0;
-        
-        // Weighted average (ELA and Copy-Move are more reliable indicators)
-        double overallScore = (elaScore * 0.35 + cfaScore * 0.25 + copyMoveScore * 0.30 + lightingScore * 0.10);
-        result.setOverallConfidenceScore(overallScore);
-        
-        // Determine authenticity assessment
+    private void calculateOverallResults(TraditionalAnalysisResult result, Set<TraditionalMethod> methodsUsed) {
+        Map<TraditionalMethod, Double> weightMap = Map.of(
+            TraditionalMethod.ELA, 0.35,
+            TraditionalMethod.CFA, 0.25,
+            TraditionalMethod.COPY_MOVE, 0.30,
+            TraditionalMethod.LIGHTING, 0.10
+        );
+
+        double weightedScoreSum = 0.0;
+        double weightSum = 0.0;
+
+        for (TraditionalMethod method : methodsUsed) {
+            Double weight = weightMap.getOrDefault(method, 0.0);
+            Double score = switch (method) {
+                case ELA -> result.getElaConfidenceScore();
+                case CFA -> result.getCfaConfidenceScore();
+                case COPY_MOVE -> result.getCopyMoveConfidenceScore();
+                case LIGHTING -> result.getLightingConfidenceScore();
+            };
+
+            if (score != null) {
+                weightSum += weight;
+                weightedScoreSum += score * weight;
+            }
+        }
+
+        double overallScore;
+        if (weightSum > 0) {
+            overallScore = weightedScoreSum / weightSum;
+            result.setOverallConfidenceScore(overallScore);
+        } else {
+            overallScore = 0.0;
+            result.setOverallConfidenceScore(null);
+        }
+
         TraditionalAnalysisResult.AuthenticityAssessment assessment;
-        if (overallScore < 15) {
+        if (weightSum == 0) {
+            assessment = TraditionalAnalysisResult.AuthenticityAssessment.INCONCLUSIVE;
+        } else if (overallScore < 15) {
             assessment = TraditionalAnalysisResult.AuthenticityAssessment.AUTHENTIC;
         } else if (overallScore < 30) {
             assessment = TraditionalAnalysisResult.AuthenticityAssessment.LIKELY_AUTHENTIC;
@@ -425,20 +526,39 @@ public class TraditionalAnalysisService {
         } else {
             assessment = TraditionalAnalysisResult.AuthenticityAssessment.MANIPULATED;
         }
-        
         result.setAuthenticityAssessment(assessment);
-        
-        // Generate analysis summary
+
         StringBuilder summary = new StringBuilder();
         summary.append("Traditional Forensic Analysis Summary:\n");
-        summary.append(String.format("Overall Confidence Score: %.2f/100\n", overallScore));
+        if (weightSum > 0) {
+            summary.append(String.format("Overall Confidence Score: %.2f/100\n", overallScore));
+        } else {
+            summary.append("Overall Confidence Score: N/A (no methods executed)\n");
+        }
         summary.append(String.format("Authenticity Assessment: %s\n\n", assessment));
-        summary.append(String.format("Individual Analysis Scores:\n"));
-        summary.append(String.format("- Error Level Analysis: %.2f/100\n", elaScore));
-        summary.append(String.format("- CFA Pattern Analysis: %.2f/100\n", cfaScore));
-        summary.append(String.format("- Copy-Move Detection: %.2f/100\n", copyMoveScore));
-        summary.append(String.format("- Lighting Consistency: %.2f/100\n", lightingScore));
-        
+        summary.append("Individual Analysis Scores:\n");
+
+        for (TraditionalMethod method : TraditionalMethod.values()) {
+            String label = getMethodDisplayName(method);
+            if (!methodsUsed.contains(method)) {
+                summary.append(String.format("- %s: Not selected\n", label));
+                continue;
+            }
+
+            Double score = switch (method) {
+                case ELA -> result.getElaConfidenceScore();
+                case CFA -> result.getCfaConfidenceScore();
+                case COPY_MOVE -> result.getCopyMoveConfidenceScore();
+                case LIGHTING -> result.getLightingConfidenceScore();
+            };
+
+            if (score == null) {
+                summary.append(String.format("- %s: Failed or unavailable\n", label));
+            } else {
+                summary.append(String.format("- %s: %.2f/100\n", label, score));
+            }
+        }
+
         result.setAnalysisSummary(summary.toString());
         
         // Generate detailed findings
@@ -466,6 +586,15 @@ public class TraditionalAnalysisService {
         }
         
         result.setDetailedFindings(findings.toString());
+    }
+
+    private String getMethodDisplayName(TraditionalMethod method) {
+        return switch (method) {
+            case ELA -> "Error Level Analysis";
+            case CFA -> "CFA Pattern Analysis";
+            case COPY_MOVE -> "Copy-Move Detection";
+            case LIGHTING -> "Lighting Consistency";
+        };
     }
     
     /**
