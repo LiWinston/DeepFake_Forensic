@@ -183,3 +183,92 @@ Re: Currently not dependent on email, pw reset is based on validating original a
 - eDiscovery Software | eDiscovery Collection Software | Pinpoint Labs
 - https://pinpointlabs.com/what-are-file-headers-signatures/
 - Many file types can be identified by using what’s known as afile header. A file header is a ‘signature’ placed at the beginning of a file, so the operating system and other software know what to do with the following contents.
+
+---
+
+# Latest Requirements Update - September 2025
+
+## Updated User & Stakeholder Profiles (Who/Do/Be/Feel)
+
+| Who | Do | Be | Feel |
+|---|---|---|---|
+| **Users** | Upload images/videos | High in quality, yet small in size | Confident (security, easy to use) |
+| **Users** | Log in securely | Quick and secure | Protected |
+| **Forensic Analysts / Model** | Extract metadata from uploaded media | Efficient and relatively quick | Dependable |
+| **Model** | Analyse metadata from uploaded media | Efficient and fast | Automatic |
+| **System** | Input uploaded media into our ML model (be it CNN etc.) | Scalable (situation where multiple people use our system) and relatively accurate | That it is accurate |
+| **System** | Generate Grad CAM heatmap of edited/generated media | Clear and detailed | More informable |
+| **Admin** | Low confidence classification (active learning) ? maybe | Good input to further train our model | Empowering |
+| **Users** | See history of media classified by our system | Storage efficient, yet detailed and useful | Secure (history is important) |
+
+## User Stories
+
+- As a user, I want to log into a system in a secure manner using email and password.
+- As a user, I want to be able to view my history of uploads linked to my account.
+- As a user, I want to be able to view my history of results linked to my account.
+- As a user, I want to be able to view a progress bar to know upload status of media to application.
+- As a user, I want to be able to upload a batch of multiple medias.
+- As a user, upon uploading media, I want the system to automatically extract its metadata.
+- As a user, I want my uploaded media to be classified as AI generated or not and authentic/edited.
+- As a user, I want the system to automatically extract metadata from my uploaded media.
+- As a user, I want to be able to view easily my media classification results for each individual media.
+- As a user, upon viewing media results, I want to be able to view both AI generated or not and authentic/edited in one view.
+- As a user, I want the system to generate a Grad CAM heatmap after classifying the media uploaded.
+- As a user, I want the Grad CAM results to be viewable in my history.
+- As a user, I want to see my results in a history tab for future use and analysis.
+
+### NEW USER STORIES:
+- As a user, I want to export analysis results as PDF, CSV, or DOCX.
+- As a user, I want the dates in project settings to be displayed as day/month/year format.
+- As a user, I want to be able to see a progress bar while algorithms are running in the background.
+- As a user, I want the system to provide a summary like results, so that findings are easily interpreted.
+- As a user, I want each result of each individual media to be reported individually.
+- As a user, I want to be able to select which models (traditional or deep learning) to run from a selection bar, so that I have a choice in which techniques is used.
+- As a user, I want the system to perform file header analysis, so that I can detect potential anomalies in file structure.
+- As a user, I want anomaly detection sentences (e.g., "Anomalies detected" / "No anomalies found"), so that I understand the outcome instead of just raw data.
+- As a user, I want additional traditional methods to be implemented, so that I can access a wider range of analysis techniques.
+- As a user, I want to see separate confidence scores for each method, so that I can evaluate results individually.
+- As a user, I want to choose which traditional methods to run, so that I don't waste time on unnecessary algorithms.
+- As a user, I want to choose which neural network models to run, so that I can tailor the analysis to my needs.
+
+## Admin Stories
+- As an admin, I want to see confidence levels of media uploads from users so I can continuously update and train the model.
+- As an admin, I want to be able to see user history (given permission) to be able to find edge cases and further improve the system.
+
+## Product Backlog
+
+| Title | User Story | Priority |
+|---|---|---|
+| Upload images/videos | As a user, I want to upload media to get it classified as real/fake. | High |
+| Log in with history | As a user, I want to log into a system that has a history of uploads and results in a secure manner linked to my account. | Medium |
+| Extract metadata from media | As a user, I want the system to automatically extract metadata from my uploaded media so that I can see if an image is edited or not. | High |
+| Classify edited or not | As a user, I want the system to automatically extract metadata from my uploaded media so that I can see if an image is edited or not. | High |
+| Generate Grad CAM heatmap | As a user, I want the system to generate a Grad CAM heatmap, so I am able to see which parts of my uploaded media have been classified as real/fake. | Medium |
+| Classify real/fake and edited/authentic | As a user, I want the system to combine results from classification and metadata so that I have a final answer of real/fake and edited/authentic. | High |
+| Review past uploads | As a user, I want to see my results in a history tab for future use and analysis. | Low |
+| Continuously train low confidence classification | As an admin, I want to see confidence levels of media uploads from users so I can continuously update and train the model. | Low |
+| Improve model upon edge cases | As an admin, I want to be able to see user history (given permission) to be able to find edge cases and further improve the system. | Low |
+
+### Additional Product Backlog
+
+| Title | User Story | Priority |
+|---|---|---|
+| Export results | As a user, I want to export analysis results as PDF, CSV, or DOCX. | High |
+| Date format settings | As a user, I want the dates in project settings to be displayed as day/month/year format. | Low |
+| Progress bar | As a user, I want to be able to see a progress bar while algorithms are running in the background. | High |
+| Summarized results | As a user, I want the system to provide a summary-like result, so that findings are easily interpreted. | Medium |
+| Independent results per media | As a user, I want each result of each individual media to be reported individually. | High |
+| Model selection | As a user, I want to be able to select which models (traditional or deep learning) to run from a selection bar, so that I have a choice in which techniques are used. | High |
+| File header analysis | As a user, I want the system to perform file header analysis, so that I can detect potential anomalies in file structure. | Medium |
+| Anomaly detection sentences | As a user, I want anomaly detection sentences (e.g., "Anomalies detected" / "No anomalies found"), so that I understand the outcome instead of just raw data. | Low |
+| Additional traditional methods | As a user, I want additional traditional methods to be implemented, so that I can access a wider range of analysis techniques. | Medium |
+| Separate confidence scores | As a user, I want to see separate confidence scores for each method, so that I can evaluate results individually. | Medium |
+| Traditional method selection | As a user, I want to choose which traditional methods to run, so that I don't waste time on unnecessary algorithms. | Medium |
+| Neural network model selection | As a user, I want to choose which neural network models to run, so that I can tailor the analysis to my needs. | Medium |
+
+---
+
+# Motivational Model
+
+motivational model(1).pdf  
+05 9 2025, 07:00 下午
