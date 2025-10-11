@@ -67,6 +67,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [analysisForm] = Form.useForm();
   const [lastUploaded, setLastUploaded] = useState<{ fileMd5: string; fileName: string; category: 'image'|'video'|'unknown' } | null>(null);
+  // Progress modal state
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressTaskId, setProgressTaskId] = useState<string | null>(null);
+  const [progressPercent, setProgressPercent] = useState<number>(0);
+  const [progressMessage, setProgressMessage] = useState<string>('');
+  const [progressTimer, setProgressTimer] = useState<any>(null);
   // Load projects on component mount
   useEffect(() => {
     // Projects are automatically loaded by ProjectContext
@@ -445,6 +451,33 @@ const FileUpload: React.FC<FileUploadProps> = ({
             const api = resp.data as any;
             if (api?.success) {
               message.success('Analysis started');
+              const taskId = api?.data?.taskId || lastUploaded.fileMd5;
+              if (taskId) {
+                setProgressTaskId(taskId);
+                setProgressPercent(0);
+                setProgressMessage('Queued');
+                setShowProgressModal(true);
+                // start polling
+                const t = setInterval(async () => {
+                  try {
+                    const res = await analysisService.progress(taskId);
+                    const progressApi = res.data as any;
+                    const data = progressApi?.data || {};
+                    const p = Number(data?.progress ?? 0);
+                    const m = String(data?.message ?? '');
+                    setProgressPercent(isNaN(p) ? 0 : p);
+                    setProgressMessage(m);
+                    if (!isNaN(p) && p >= 100) {
+                      clearInterval(t);
+                      setProgressTimer(null);
+                      setTimeout(() => setShowProgressModal(false), 1000);
+                    }
+                  } catch (e) {
+                    // ignore transient errors
+                  }
+                }, 1500);
+                setProgressTimer(t);
+              }
             } else {
               message.warning(api?.message || 'Failed to start analysis');
             }
@@ -511,6 +544,25 @@ const FileUpload: React.FC<FileUploadProps> = ({
             }}
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Analysis Progress Modal */}
+      <Modal
+        title="Analysis Progress"
+        open={showProgressModal}
+        onCancel={() => {
+          if (progressTimer) { clearInterval(progressTimer); setProgressTimer(null); }
+          setShowProgressModal(false);
+        }}
+        footer={null}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Progress percent={Math.min(100, Math.max(0, Math.round(progressPercent)))} status={progressPercent < 100 ? 'active' : 'normal'} />
+          <Text type="secondary">{progressMessage}</Text>
+          {progressTaskId && (
+            <Text code style={{ userSelect: 'all' }}>Task ID: {progressTaskId}</Text>
+          )}
+        </Space>
       </Modal>
     </div>
   );

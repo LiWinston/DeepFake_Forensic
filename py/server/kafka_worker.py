@@ -4,7 +4,9 @@ import json
 import time
 import threading
 from datetime import datetime
+from dotenv import load_dotenv
 
+load_dotenv()
 # Path adjustments for imports
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if os.path.join(BASE_DIR, '2dCNN') not in sys.path:
@@ -33,6 +35,23 @@ RESULT_TOPIC = os.environ.get('RESULT_TOPIC', 'analysis-results')
 
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', '6379'))
+
+# MinIO for artifact uploads (optional)
+MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT')
+MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY')
+MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY')
+MINIO_BUCKET = os.environ.get('MINIO_BUCKET')
+MINIO_SECURE = os.environ.get('MINIO_SECURE', 'false').lower() == 'true'
+minio_client = None
+if MINIO_ENDPOINT and MINIO_ACCESS_KEY and MINIO_SECRET_KEY and MINIO_BUCKET:
+    try:
+        from minio import Minio
+        minio_client = Minio(MINIO_ENDPOINT.replace('http://', '').replace('https://', ''),
+                             access_key=MINIO_ACCESS_KEY,
+                             secret_key=MINIO_SECRET_KEY,
+                             secure=MINIO_SECURE)
+    except Exception as _e:
+        print('MinIO client init failed:', _e)
 
 rds = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
@@ -116,14 +135,29 @@ def process_video_traditional(task: dict):
     results = analyze_noise_pattern(video_path, tmp_out, sample_frames=sample_frames, noise_sigma=noise_sigma)
 
     update_progress(task_id, 95, 'Video analysis completed')
+    artifacts = {
+        'temporal_plot': os.path.join(tmp_out, 'noise_temporal_plot.png'),
+        'distribution_plot': os.path.join(tmp_out, 'noise_distribution_plot.png'),
+        'visualization': os.path.join(tmp_out, 'noise_visualization.png')
+    }
+
+    # Try upload artifacts to MinIO if configured
+    uploaded = {}
+    if minio_client:
+        for k, path in artifacts.items():
+            try:
+                if os.path.exists(path):
+                    object_name = f"artifacts/{task_id}/{os.path.basename(path)}"
+                    minio_client.fput_object(MINIO_BUCKET, object_name, path)
+                    scheme = 'https' if MINIO_SECURE else 'http'
+                    uploaded[k] = f"{scheme}://{MINIO_ENDPOINT.strip('/').replace('http://','').replace('https://','')}/{MINIO_BUCKET}/{object_name}"
+            except Exception as e:
+                print('MinIO upload failed for', path, e)
+
     return {
         'taskId': task_id,
         'type': 'VIDEO_TRADITIONAL_NOISE',
-        'artifacts': {
-            'temporal_plot': os.path.join(tmp_out, 'noise_temporal_plot.png'),
-            'distribution_plot': os.path.join(tmp_out, 'noise_distribution_plot.png'),
-            'visualization': os.path.join(tmp_out, 'noise_visualization.png')
-        },
+        'artifacts': uploaded or artifacts,
         'result': results
     }
 

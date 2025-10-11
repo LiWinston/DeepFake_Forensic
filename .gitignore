@@ -5,3 +5,4 @@
 .DS_Store
 /frontend/package-lock.json
 /frontend/coverage
+/py/2dCNN/__pycache__

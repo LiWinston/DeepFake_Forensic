@@ -4,6 +4,7 @@ import json
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 from datetime import datetime
+from dotenv import load_dotenv
 
 # Adjust sys.path to import sibling modules when running as a standalone app
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +20,7 @@ from api import app as cnn_app, load_models  # type: ignore
 from video_noise_pattern import analyze_noise_pattern  # type: ignore
 # Future: optical_flow_analysis, temporal_inconsistency, video_copy_move, video_frequency_analysis
 
+load_dotenv()
 app = Flask(__name__)
 
 # Mount CNN blueprint-like under /ai path by forwarding requests
@@ -85,4 +87,6 @@ if __name__ == '__main__':
         load_models()
     except Exception as e:
         print('Warning loading models:', e)
-    app.run(host='0.0.0.0', port=7000)
+    host = os.environ.get('FLASK_HOST', '0.0.0.0')
+    port = int(os.environ.get('FLASK_PORT', '7000'))
+    app.run(host=host, port=port)
