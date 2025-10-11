@@ -1,12 +1,13 @@
 Write-Host "[py] Starting Flask app..." -ForegroundColor Cyan
-Set-Location -Path $PSScriptRoot
+$ErrorActionPreference = 'Stop'
+try { Set-Location -Path $PSScriptRoot } catch { Write-Error "Failed to set location to script root: $($_.Exception.Message)"; exit 1 }
 
 # Ensure server venv and CUDA-enabled PyTorch are set up (idempotent)
-Push-Location "server"
+Push-Location (Join-Path $PSScriptRoot "server")
 
 # Quick probe to decide if setup is needed
 $needsSetup = $true
-if (Test-Path ".venv\Scripts\python.exe") {
+if (Test-Path (Join-Path $PWD ".venv\Scripts\python.exe")) {
   $pyProbe = @'
 import json
 info = {"installed": False, "cuda_available": False, "vision": False}
@@ -32,14 +33,18 @@ if ($needsSetup) { & .\setup-venv.ps1 } else { Write-Host "[server] venv ready (
 Pop-Location
 
 # Activate venv (prefer server/.venv)
-if (Test-Path ".\server\.venv\Scripts\Activate.ps1") {
-  . .\server\.venv\Scripts\Activate.ps1
-} elseif (Test-Path ".\.venv\Scripts\Activate.ps1") {
-  . .\.venv\Scripts\Activate.ps1
+if (Test-Path (Join-Path $PSScriptRoot "server\.venv\Scripts\Activate.ps1")) {
+  . (Join-Path $PSScriptRoot "server\.venv\Scripts\Activate.ps1")
+} elseif (Test-Path (Join-Path $PSScriptRoot ".venv\Scripts\Activate.ps1")) {
+  . (Join-Path $PSScriptRoot ".venv\Scripts\Activate.ps1")
 }
 
-$env:PYTHONPATH=(Resolve-Path .).Path
-if (-not (Test-Path "server\.env")) { if (Test-Path "server\.env.example") { Copy-Item "server\.env.example" "server\.env" -Force } }
+$env:PYTHONPATH = (Resolve-Path $PSScriptRoot).Path
+if (-not (Test-Path (Join-Path $PSScriptRoot "server\.env"))) {
+  if (Test-Path (Join-Path $PSScriptRoot "server\.env.example")) {
+    Copy-Item (Join-Path $PSScriptRoot "server\.env.example") (Join-Path $PSScriptRoot "server\.env") -Force
+  }
+}
 
 # Print CUDA status
 $pyCheck = @'
@@ -51,5 +56,5 @@ if torch.cuda.is_available():
 '@
 python -c $pyCheck
 
-Set-Location -Path "server"
+Set-Location -Path (Join-Path $PSScriptRoot "server")
 python app.py
