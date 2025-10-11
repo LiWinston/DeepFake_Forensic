@@ -84,11 +84,15 @@ def load_models():
                 # Skip unknown model types for now
                 # Add ResNet50 and ViT loading here
                 continue            
-            model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+            state = torch.load(model_path, map_location=device)
+            # Allow older/newer checkpoints with partial key mismatch
+            missing, unexpected = model.load_state_dict(state, strict=False)
+            if missing or unexpected:
+                print(f"Warning: state_dict mismatch for {model_file}. Missing: {len(missing)}, Unexpected: {len(unexpected)}")
             model.eval()
-            # Set model to use mixed precision if GPU is available
+            # Use half precision for faster inference on GPU
             if torch.cuda.is_available():
-                model = model.half()  # Use FP16 for faster inference on GPU            
+                model = model.half()
             model_name = model_file.replace('.pth', '')
             models[model_name] = model            
             model_info[model_name] = {

@@ -9,3 +9,4 @@
 /py/.venv
 *.pyc
 /py/server/tmp_py
+/py/server/.venv
