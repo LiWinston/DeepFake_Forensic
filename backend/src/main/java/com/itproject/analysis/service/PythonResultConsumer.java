@@ -3,6 +3,8 @@ package com.itproject.analysis.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itproject.analysis.entity.AnalysisTask;
 import com.itproject.project.repository.AnalysisTaskRepository;
+import com.itproject.traditional.entity.VideoTraditionalAnalysisResult;
+import com.itproject.traditional.repository.VideoTraditionalAnalysisResultRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -17,6 +19,9 @@ public class PythonResultConsumer {
 
     @Autowired
     private AnalysisTaskRepository analysisTaskRepository;
+
+    @Autowired
+    private VideoTraditionalAnalysisResultRepository videoTradRepo;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -44,6 +49,27 @@ public class PythonResultConsumer {
                             }
                             task.setCompletedAt(LocalDateTime.now());
                             analysisTaskRepository.save(task);
+
+                            // Additionally, persist to video_traditional_analysis_results when applicable
+                            try {
+                                Object typeObj = data.get("type");
+                                String type = typeObj != null ? String.valueOf(typeObj) : "";
+                                if (type.startsWith("VIDEO_TRADITIONAL_")) {
+                                    VideoTraditionalAnalysisResult row = new VideoTraditionalAnalysisResult();
+                                    row.setAnalysisTask(task);
+                                    row.setUser(task.getUser());
+                                    row.setProject(task.getProject());
+                                    row.setFileMd5(String.valueOf(data.getOrDefault("fileMd5", "")));
+                                    row.setMethod(String.valueOf(data.getOrDefault("method", "")));
+                                    try { row.setArtifactsJson(mapper.writeValueAsString(data.get("artifacts"))); } catch (Exception ignore2) {}
+                                    try { row.setResultJson(mapper.writeValueAsString(data.get("result"))); } catch (Exception ignore3) {}
+                                    row.setSuccess(success);
+                                    if (!success) { row.setErrorMessage(task.getErrorMessage()); }
+                                    videoTradRepo.save(row);
+                                }
+                            } catch (Exception er) {
+                                log.warn("Failed to persist video traditional result row for task {}: {}", id, er.getMessage());
+                            }
                         });
                     } catch (NumberFormatException nfe) {
                         // taskId is not numeric; skip linking for now

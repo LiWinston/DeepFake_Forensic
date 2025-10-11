@@ -31,6 +31,7 @@ import io
 
 KAFKA_BOOTSTRAP = os.environ.get('KAFKA_BOOTSTRAP', 'localhost:9092')
 GROUP_ID = os.environ.get('KAFKA_GROUP_ID', 'py-analyzer-group')
+KAFKA_OFFSET_RESET = os.environ.get('KAFKA_OFFSET_RESET', 'latest')  # 'latest' by default to avoid replaying old messages
 
 TOPIC_IMAGE_AI = os.environ.get('TOPIC_IMAGE_AI', 'image-ai-analysis-tasks')
 TOPIC_VIDEO_TRAD = os.environ.get('TOPIC_VIDEO_TRAD', 'video-traditional-analysis-tasks')
@@ -305,7 +306,7 @@ def worker_loop():
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
         key_deserializer=lambda m: m.decode('utf-8') if m else None,
         enable_auto_commit=True,
-        auto_offset_reset='earliest'
+        auto_offset_reset=KAFKA_OFFSET_RESET
     )
     producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP,
                              value_serializer=lambda v: json.dumps(v).encode('utf-8'),
