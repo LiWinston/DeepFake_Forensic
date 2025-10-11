@@ -156,7 +156,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
           runVideoTraditional: category === 'video',
           runVideoAI: false,
           selectedImageModel: undefined,
-          selectedTraditionalMethods: []
+          selectedTraditionalMethods: [],
+          videoSelectedTraditionalMethods: category === 'video' ? ['NOISE','FLOW','FREQ','TEMPORAL','COPYMOVE'] : []
         });
         setShowAnalysisModal(true);
       }
@@ -563,16 +564,30 @@ const FileUpload: React.FC<FileUploadProps> = ({
               return (
                 <>
                   <Form.Item name="runVideoTraditional" valuePropName="checked" label="Video Traditional (Noise/Flow/Freq/Temporal/Copy-Move)">
-                    <Checkbox>Enable</Checkbox>
+                    <Checkbox onChange={(e) => {
+                      const enabled = e.target.checked;
+                      if (enabled) {
+                        analysisForm.setFieldsValue({ videoSelectedTraditionalMethods: ['NOISE','FLOW','FREQ','TEMPORAL','COPYMOVE'] });
+                      } else {
+                        analysisForm.setFieldsValue({ videoSelectedTraditionalMethods: [] });
+                      }
+                    }}>Enable</Checkbox>
                   </Form.Item>
-                  <Form.Item name="videoSelectedTraditionalMethods" label="Select video methods (optional)">
-                    <Select mode="multiple" allowClear placeholder="Default: Noise only">
-                      <Select.Option value="NOISE">Noise Pattern</Select.Option>
-                      <Select.Option value="FLOW">Optical Flow</Select.Option>
-                      <Select.Option value="FREQ">Frequency Domain</Select.Option>
-                      <Select.Option value="TEMPORAL">Temporal Inconsistency</Select.Option>
-                      <Select.Option value="COPYMOVE">Copy-Move</Select.Option>
-                    </Select>
+                  <Form.Item shouldUpdate noStyle>
+                    {() => {
+                      const enabled = analysisForm.getFieldValue('runVideoTraditional');
+                      return (
+                        <Form.Item name="videoSelectedTraditionalMethods" label="Select video methods">
+                          <Select mode="multiple" allowClear disabled={!enabled} placeholder={enabled ? 'All selected by default' : 'Enable above to select'}>
+                            <Select.Option value="NOISE">Noise Pattern</Select.Option>
+                            <Select.Option value="FLOW">Optical Flow</Select.Option>
+                            <Select.Option value="FREQ">Frequency Domain</Select.Option>
+                            <Select.Option value="TEMPORAL">Temporal Inconsistency</Select.Option>
+                            <Select.Option value="COPYMOVE">Copy-Move</Select.Option>
+                          </Select>
+                        </Form.Item>
+                      );
+                    }}
                   </Form.Item>
                   <Form.Item name="runVideoAI" valuePropName="checked" label="Video AI (coming soon)">
                     <Checkbox>Enable</Checkbox>

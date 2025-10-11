@@ -316,6 +316,12 @@ def worker_loop():
         task_type = task.get('type')
         task_id = task.get('taskId') or task.get('fileMd5')
         try:
+            # Deduplicate processing for the same taskId within a TTL window
+            if task_id:
+                dedupe_key = f"analysis:processed:{task_id}"
+                if rds.exists(dedupe_key):
+                    # Skip duplicate message
+                    continue
             if task_type == 'IMAGE_AI':
                 result = process_image_ai(task)
             elif task_type == 'VIDEO_TRADITIONAL_NOISE':
@@ -338,6 +344,12 @@ def worker_loop():
             # Publish result
             producer.send(RESULT_TOPIC, key=task_id, value={ 'success': True, 'data': result })
             update_progress(task_id, 100, 'Completed')
+            if task_id:
+                try:
+                    # Mark as processed for 24h
+                    rds.setex(f"analysis:processed:{task_id}", 24*3600, '1')
+                except Exception:
+                    pass
         except Exception as e:
             producer.send(RESULT_TOPIC, key=task_id, value={ 'success': False, 'error': str(e), 'task': task })
             update_progress(task_id, 100, f'Failed: {e}')

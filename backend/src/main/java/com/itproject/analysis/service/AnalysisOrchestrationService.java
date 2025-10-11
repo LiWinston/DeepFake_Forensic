@@ -119,7 +119,7 @@ public class AnalysisOrchestrationService {
             msg.put("model", req.getSelectedImageModel());
             msg.put("imageUrl", minioUrl);
             msg.put("parentTaskId", parentCorrelationId);
-            kafkaTemplate.send(imageAiAnalysisTopic, media.getFileMd5(), msg);
+            kafkaTemplate.send(imageAiAnalysisTopic, String.valueOf(child.getId()), msg);
             dispatched.add(Map.of("topic", imageAiAnalysisTopic, "payload", msg));
         subTasks.add(Map.of(
             "taskId", child.getId(),
@@ -143,7 +143,8 @@ public class AnalysisOrchestrationService {
 
         if (req.isRunVideoTraditional() && media.getMediaType() == MediaFile.MediaType.VIDEO) {
         List<String> methods = (req.getSelectedTraditionalMethods() != null && !req.getSelectedTraditionalMethods().isEmpty())
-            ? req.getSelectedTraditionalMethods() : java.util.Collections.singletonList("NOISE");
+            ? req.getSelectedTraditionalMethods()
+            : java.util.Arrays.asList("NOISE", "FLOW", "FREQ", "TEMPORAL", "COPYMOVE");
 
             for (String method : methods) {
                 String normalized = method.trim().toUpperCase();
@@ -172,7 +173,7 @@ public class AnalysisOrchestrationService {
                 // Optional params
                 msg.put("sampleFrames", 30);
                 msg.put("noiseSigma", 10.0);
-                kafkaTemplate.send(videoTraditionalAnalysisTopic, media.getFileMd5(), msg);
+                kafkaTemplate.send(videoTraditionalAnalysisTopic, String.valueOf(child.getId()), msg);
                 dispatched.add(Map.of("topic", videoTraditionalAnalysisTopic, "payload", msg));
                 subTasks.add(Map.of(
                         "taskId", child.getId(),
@@ -192,7 +193,7 @@ public class AnalysisOrchestrationService {
             msg.put("fileMd5", media.getFileMd5());
             msg.put("minioUrl", minioUrl);
             msg.put("parentTaskId", parentCorrelationId);
-            kafkaTemplate.send(videoAiAnalysisTopic, media.getFileMd5(), msg);
+            kafkaTemplate.send(videoAiAnalysisTopic, String.valueOf(child.getId()), msg);
             dispatched.add(Map.of("topic", videoAiAnalysisTopic, "payload", msg));
 
             subTasks.add(Map.of(
