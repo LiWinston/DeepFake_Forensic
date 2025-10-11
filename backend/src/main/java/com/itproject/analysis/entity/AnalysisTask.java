@@ -40,10 +40,10 @@ public class AnalysisTask {
     @Column(length = 1000)
     private String description;
     
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String parameters; // JSON format for analysis parameters
     
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String results; // JSON format for analysis results
     
     @Column(columnDefinition = "TEXT")
@@ -52,7 +52,7 @@ public class AnalysisTask {
     @Column
     private Double confidenceScore; // 置信度分数
     
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String errorMessage;
     
     @Column

@@ -96,13 +96,13 @@ public class TraditionalAnalysisResult {
     @Column(name = "authenticity_assessment")
     private AuthenticityAssessment authenticityAssessment;
     
-    @Column(name = "analysis_summary", columnDefinition = "TEXT")
+    @Column(name = "analysis_summary", columnDefinition = "MEDIUMTEXT")
     private String analysisSummary;
     
-    @Column(name = "detailed_findings", columnDefinition = "TEXT")
+    @Column(name = "detailed_findings", columnDefinition = "MEDIUMTEXT")
     private String detailedFindings;
     
-    @Column(name = "error_message", columnDefinition = "TEXT")
+    @Column(name = "error_message", columnDefinition = "MEDIUMTEXT")
     private String errorMessage;
     
     // Processing Metadata

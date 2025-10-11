@@ -29,16 +29,16 @@ public class VideoTraditionalAnalysisResult {
     @Column(nullable = false, length = 32)
     private String method; // NOISE/FLOW/FREQ/TEMPORAL/COPYMOVE
 
-    @Column(name = "artifacts_json", columnDefinition = "TEXT")
+    @Column(name = "artifacts_json", columnDefinition = "MEDIUMTEXT")
     private String artifactsJson; // JSON map of artifactName -> URL
 
-    @Column(name = "result_json", columnDefinition = "TEXT")
+    @Column(name = "result_json", columnDefinition = "MEDIUMTEXT")
     private String resultJson; // Raw metrics JSON
 
     @Column(name = "success")
     private Boolean success;
 
-    @Column(name = "error_message", columnDefinition = "TEXT")
+    @Column(name = "error_message", columnDefinition = "MEDIUMTEXT")
     private String errorMessage;
 
     @ManyToOne(fetch = FetchType.LAZY)
