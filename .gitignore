@@ -6,3 +6,4 @@
 /frontend/package-lock.json
 /frontend/coverage
 /py/2dCNN/__pycache__
+/py/.venv
