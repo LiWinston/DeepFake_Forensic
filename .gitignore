@@ -8,3 +8,4 @@
 /py/2dCNN/__pycache__
 /py/.venv
 *.pyc
+/py/server/tmp_py
