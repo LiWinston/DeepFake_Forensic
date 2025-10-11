@@ -269,6 +269,124 @@ const prettyMethod = (m?: string) => {
   return map[m] || m;
 };
 
+// Render video traditional analysis details
+const renderVideoTraditionalAnalysisDetails = (data: any) => {
+  const subtasks = data?.subtasks || [];
+  if (subtasks.length === 0) {
+    return <Alert message="No video traditional analysis results available" type="info" />;
+  }
+
+  return (
+    <Tabs defaultActiveKey="0" type="card">
+      {subtasks.map((st: any, idx: number) => (
+        <TabPane 
+          tab={
+            <Space>
+              <Tag color="geekblue">{prettyMethod(st.method)}</Tag>
+              {st.status === 'FAILED' && <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
+            </Space>
+          } 
+          key={String(idx)}
+        >
+          {st.status === 'FAILED' && st.errorMessage && (
+            <Alert 
+              message="Analysis Failed" 
+              description={st.errorMessage} 
+              type="error" 
+              showIcon 
+              style={{ marginBottom: 16 }} 
+            />
+          )}
+
+          {/* Display result metrics */}
+          {st.result && typeof st.result === 'object' && Object.keys(st.result).length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <Title level={5}>Analysis Metrics</Title>
+              <Descriptions bordered size="small" column={2}>
+                {Object.entries(st.result).map(([key, value]: [string, any]) => {
+                  // Skip complex nested objects and arrays for top-level display
+                  if (typeof value === 'object' && value !== null) {
+                    if (Array.isArray(value)) {
+                      return (
+                        <Descriptions.Item label={key} span={2} key={key}>
+                          <Text code style={{ fontSize: 12 }}>{JSON.stringify(value).substring(0, 100)}...</Text>
+                        </Descriptions.Item>
+                      );
+                    }
+                    return null; // Skip nested objects
+                  }
+                  
+                  // Format different value types
+                  let displayValue: React.ReactNode = String(value);
+                  if (typeof value === 'number') {
+                    displayValue = value.toFixed(6);
+                  } else if (typeof value === 'boolean') {
+                    displayValue = <Tag color={value ? 'green' : 'red'}>{String(value)}</Tag>;
+                  }
+                  
+                  return (
+                    <Descriptions.Item label={key} key={key}>
+                      <Text>{displayValue}</Text>
+                    </Descriptions.Item>
+                  );
+                })}
+              </Descriptions>
+            </div>
+          )}
+
+          {/* Display artifact images in grid */}
+          {st.artifacts && Object.keys(st.artifacts).length > 0 && (
+            <div>
+              <Title level={5}>Visual Artifacts</Title>
+              <Row gutter={[16, 16]}>
+                {Object.entries(st.artifacts).map(([name, url]: [string, any]) => (
+                  <Col xs={24} sm={12} md={8} key={name}>
+                    <Card
+                      size="small"
+                      title={<Text strong style={{ fontSize: 12 }}>{name.replace(/_/g, ' ').toUpperCase()}</Text>}
+                      hoverable
+                      cover={
+                        <Image
+                          src={String(url)}
+                          alt={name}
+                          style={{ 
+                            width: '100%', 
+                            height: 250, 
+                            objectFit: 'contain',
+                            backgroundColor: '#f5f5f5'
+                          }}
+                          fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                        />
+                      }
+                    >
+                      <Card.Meta 
+                        description={
+                          <a href={String(url)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>
+                            View Full Size
+                          </a>
+                        } 
+                      />
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            </div>
+          )}
+
+          {/* Fallback for no artifacts */}
+          {(!st.artifacts || Object.keys(st.artifacts).length === 0) && (
+            <Alert 
+              message="No visual artifacts generated" 
+              description="This analysis method did not produce visualization outputs." 
+              type="info" 
+            />
+          )}
+        </TabPane>
+      ))}
+    </Tabs>
+  );
+};
+
 const renderMetadataTree = (data: Record<string, any>, prefix = ''): any[] => {
   return Object.entries(data).map(([key, value]) => {
     const nodeKey = prefix ? `${prefix}.${key}` : key;
@@ -608,6 +726,7 @@ export const AnalysisDetails: React.FC<{ file?: UploadFile; record: AnalysisReco
       </Descriptions>
       {record.type === 'TRADITIONAL' && record.data && renderTraditionalAnalysisDetails(record.data as TraditionalAnalysisResult)}
       {record.type === 'METADATA' && record.data && renderMetadataAnalysisDetails(record.data as MetadataAnalysis)}
+      {record.type === 'VIDEO_TRADITIONAL' && record.data && renderVideoTraditionalAnalysisDetails(record.data)}
       {record.type === 'AI' && (
         <Alert message="AI Analysis" description="AI-based deepfake detection is not yet implemented." type="info" />
       )}
@@ -1153,37 +1272,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
               renderTraditionalAnalysisDetails(selectedAnalysis.data as TraditionalAnalysisResult)
             )}
             {selectedAnalysis.type === 'VIDEO_TRADITIONAL' && selectedAnalysis.data && (
-              <div>
-                <Title level={4}>Video Traditional Results</Title>
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  {(selectedAnalysis.data.subtasks || []).map((st: any) => (
-                    <Card key={st.id} size="small" title={<Space><Tag color="geekblue">{prettyMethod(st.method || st.type)}</Tag><Text type="secondary">Task #{st.id}</Text></Space>}>
-                      <Row gutter={[12,12]}>
-                        {Object.entries(st.artifacts || {}).map(([k, url]: any) => (
-                          <Col span={8} key={k}>
-                            <Card size="small" cover={<img alt={k} src={String(url)} style={{ width: '100%', objectFit: 'contain', maxHeight: 220 }} />}>
-                              <Card.Meta description={k} />
-                            </Card>
-                          </Col>
-                        ))}
-                        {/* fallback to local artifactPaths if URLs missing */}
-                        {(!st.artifacts || Object.keys(st.artifacts).length === 0) && st.artifactPaths && 
-                          Object.entries(st.artifactPaths).map(([k, path]: any) => (
-                            <Col span={8} key={k}>
-                              <Card size="small">
-                                <Card.Meta description={<Space direction="vertical"><Text>{k}</Text><Text code style={{ fontSize: 12, wordBreak: 'break-all' }}>{String(path)}</Text></Space>} />
-                              </Card>
-                            </Col>
-                          ))
-                        }
-                        {Object.keys(st.artifacts || {}).length === 0 && !st.artifactPaths && (
-                          <Col span={24}><Text type="secondary">No artifacts available</Text></Col>
-                        )}
-                      </Row>
-                    </Card>
-                  ))}
-                </Space>
-              </div>
+              renderVideoTraditionalAnalysisDetails(selectedAnalysis.data)
             )}
             
             {selectedAnalysis.type === 'METADATA' && selectedAnalysis.data && (
