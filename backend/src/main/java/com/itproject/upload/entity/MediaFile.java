@@ -1,5 +1,6 @@
 package com.itproject.upload.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.itproject.auth.entity.User;
 import com.itproject.project.entity.Project;
 import jakarta.persistence.*;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class MediaFile {
     
     @Id

@@ -1,5 +1,6 @@
 package com.itproject.analysis.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.itproject.auth.entity.User;
 import com.itproject.project.entity.Project;
 import com.itproject.upload.entity.MediaFile;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class AnalysisTask {
     
     @Id
