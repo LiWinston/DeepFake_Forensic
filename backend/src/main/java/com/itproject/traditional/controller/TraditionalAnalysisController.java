@@ -1,6 +1,7 @@
 package com.itproject.traditional.controller;
 
 import com.itproject.common.dto.Result;
+import com.itproject.traditional.dto.TraditionalAnalysisRequest;
 import com.itproject.traditional.dto.TraditionalAnalysisResponse;
 import com.itproject.traditional.service.TraditionalAnalysisService;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -101,9 +101,8 @@ public class TraditionalAnalysisController {
     @PostMapping("/trigger/{fileMd5}")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<Result<String>> triggerTraditionalAnalysis(
-        @PathVariable String fileMd5,
-        @RequestParam(defaultValue = "false") boolean force,
-        @RequestParam(name = "methods", required = false) List<String> methods) {
+            @PathVariable String fileMd5,
+            @RequestParam(defaultValue = "false") boolean force) {
         
         try {
             // Check if analysis already exists (only if not forcing)
@@ -115,7 +114,7 @@ public class TraditionalAnalysisController {
             }
             
             // Trigger the analysis with force parameter
-            boolean triggered = traditionalAnalysisService.triggerTraditionalAnalysis(fileMd5, force, methods);
+            boolean triggered = traditionalAnalysisService.triggerTraditionalAnalysis(fileMd5, force);
             
             if (triggered) {
                 String message = force ? 
