@@ -31,7 +31,7 @@ public class AnalysisOrchestrationController {
      * Start analysis with user-selected methods/models.
      */
     @PostMapping("/start")
-    @PreAuthorize("hasRole('USER')")
+//    @PreAuthorize("hasRole('USER')")
     public Result<Map<String, Object>> startAnalysis(@RequestBody StartAnalysisRequest req) {
         Map<String, Object> data = orchestrationService.start(req);
         return Result.success(data);

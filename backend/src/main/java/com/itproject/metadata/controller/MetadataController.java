@@ -23,7 +23,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/v1/metadata")
 @CrossOrigin(origins = "*", maxAge = 3600)
-@PreAuthorize("hasRole('USER')")
+//@PreAuthorize("hasRole('USER')")
 public class MetadataController {
     
     @Autowired

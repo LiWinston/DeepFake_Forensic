@@ -30,7 +30,7 @@ public class TraditionalAnalysisController {
      * Get traditional analysis result by file MD5
      */
     @GetMapping("/result/{fileMd5}")
-    @PreAuthorize("hasRole('USER')")
+//    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<Result<TraditionalAnalysisResponse>> getAnalysisResult(
             @PathVariable String fileMd5) {
         
@@ -53,7 +53,7 @@ public class TraditionalAnalysisController {
      * Get traditional analysis results for a project with pagination
      */
     @GetMapping("/project/{projectId}")
-    @PreAuthorize("hasRole('USER')")
+//    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<Result<Page<TraditionalAnalysisResponse>>> getProjectAnalysisResults(
             @PathVariable Long projectId,
             @RequestParam(defaultValue = "0") int page,
@@ -75,7 +75,7 @@ public class TraditionalAnalysisController {
      * Check analysis status for a file
      */
     @GetMapping("/status/{fileMd5}")
-    @PreAuthorize("hasRole('USER')")
+//    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<Result<String>> getAnalysisStatus(
             @PathVariable String fileMd5) {
         
@@ -99,7 +99,7 @@ public class TraditionalAnalysisController {
      * Manually trigger traditional analysis for a file
      */
     @PostMapping("/trigger/{fileMd5}")
-    @PreAuthorize("hasRole('USER')")
+//    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<Result<String>> triggerTraditionalAnalysis(
             @PathVariable String fileMd5,
             @RequestParam(defaultValue = "false") boolean force) {
@@ -135,7 +135,7 @@ public class TraditionalAnalysisController {
      * Get analysis summary for a file (lightweight version)
      */
     @GetMapping("/summary/{fileMd5}")
-    @PreAuthorize("hasRole('USER')")
+//    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<Result<AnalysisSummaryDto>> getAnalysisSummary(
             @PathVariable String fileMd5) {
         
@@ -170,7 +170,7 @@ public class TraditionalAnalysisController {
      * Get analysis comparison between multiple files
      */
     @PostMapping("/compare")
-    @PreAuthorize("hasRole('USER')")
+//    @PreAuthorize("hasRole('USER')")
     public ResponseEntity<Result<AnalysisComparisonDto>> compareAnalysisResults(
             @RequestBody CompareAnalysisRequest request) {
         
