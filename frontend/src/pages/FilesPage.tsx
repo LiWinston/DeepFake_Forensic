@@ -342,6 +342,11 @@ const FilesPage: React.FC = () => {
           <AnalysisOverview
             file={selectedFile}
             showFileInfo={false}
+            mediaKind={
+              selectedFile.originalName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff|heic|heif)$/)
+                ? 'image'
+                : 'video'
+            }
             onSelectAnalysis={(record) => {
               setSelectedRecord(record);
               setDetailOpen(true);

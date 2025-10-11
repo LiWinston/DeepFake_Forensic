@@ -79,6 +79,8 @@ export interface AnalysisOverviewProps {
   showFileInfo?: boolean;
   // When provided, clicking "Details" will call this instead of opening internal modal
   onSelectAnalysis?: (record: AnalysisRecord) => void;
+  // Prefer caller-provided media kind (list already knows image/video)
+  mediaKind?: 'image' | 'video';
 }
 
 export interface AnalysisRecord {
@@ -998,6 +1000,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
   file,
   showFileInfo = true,
   onSelectAnalysis,
+  mediaKind,
 }) => {
   const { 
     analyses: metadataAnalyses, 
@@ -1022,6 +1025,10 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
   // AI Detection from AnalysisTask
   const [aiDetection, setAiDetection] = useState<AnalysisTask | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  
+  // Resolve media kind with preference to prop from caller
+  const resolvedIsImage = mediaKind ? mediaKind === 'image' : isImageFile(file);
+  const resolvedIsVideo = mediaKind ? mediaKind === 'video' : isVideoFile(file);
 
   // Load traditional analysis
   const loadTraditionalAnalysis = useCallback(async (fileMd5: string) => {
@@ -1101,7 +1108,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       await loadMetadataAnalyses(fileMd5);
       
       // For images only: load photo traditional
-      if (isImageFile(file)) {
+      if (resolvedIsImage) {
         await loadTraditionalAnalysis(fileMd5);
       } else {
         setTraditionalAnalysis(null);
@@ -1111,7 +1118,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       if (file) {
         await loadVideoTraditional(file);
         // Load AI detection for images
-        if (isImageFile(file)) {
+        if (resolvedIsImage) {
           await loadAiDetection(file);
         } else {
           setAiDetection(null);
@@ -1176,7 +1183,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       });
     } else {
       // Only show placeholder for images; hide for videos
-      if (isImageFile(file)) {
+      if (resolvedIsImage) {
         analyses.push({
           id: 'traditional-placeholder',
           type: 'TRADITIONAL',
@@ -1217,7 +1224,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
         }
       });
     } else {
-      if (isVideoFile(file)) {
+      if (resolvedIsVideo) {
         analyses.push({
           id: 'video-traditional-placeholder',
           type: 'VIDEO_TRADITIONAL',
@@ -1232,7 +1239,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
 
     // AI Detection (for images only)
-    if (aiDetection && isImageFile(file)) {
+    if (aiDetection && resolvedIsImage) {
       analyses.push({
         id: `ai-${aiDetection.id}`,
         type: 'AI',
@@ -1245,7 +1252,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       });
     } else {
       // Show placeholder for images only
-      if (isImageFile(file)) {
+      if (resolvedIsImage) {
         analyses.push({
           id: 'ai-placeholder',
           type: 'AI',
