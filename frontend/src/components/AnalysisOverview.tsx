@@ -19,6 +19,7 @@ import {
   Timeline,
   Collapse,
   Tree,
+  Tooltip,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -33,6 +34,9 @@ import {
   ScanOutlined,
   WarningOutlined,
   RedoOutlined,
+  DashboardOutlined,
+  PictureOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useMetadataAnalysis } from '../hooks';
@@ -276,113 +280,215 @@ const renderVideoTraditionalAnalysisDetails = (data: any) => {
     return <Alert message="No video traditional analysis results available" type="info" />;
   }
 
+  // Helper: Render key metrics with smart formatting
+  const renderMetricValue = (key: string, value: any): React.ReactNode => {
+    // Boolean flags with semantic tags
+    if (typeof value === 'boolean' || key.includes('detected') || key.includes('manipulated')) {
+      const boolVal = typeof value === 'boolean' ? value : (value === 'true' || value === true);
+      return <Tag color={boolVal ? 'error' : 'success'} icon={boolVal ? <ExclamationCircleOutlined /> : <CheckCircleOutlined />}>
+        {boolVal ? 'Detected' : 'Clean'}
+      </Tag>;
+    }
+    
+    // Numeric scores/ratios with precision
+    if (typeof value === 'number') {
+      if (key.includes('score') || key.includes('ratio') || key.includes('consistency')) {
+        return <Text strong style={{ color: value > 0.5 ? '#ff4d4f' : '#52c41a' }}>{value.toFixed(6)}</Text>;
+      }
+      return <Text code>{value.toFixed(6)}</Text>;
+    }
+    
+    // File paths - show basename
+    if (typeof value === 'string' && (key.includes('path') || key.includes('file'))) {
+      const basename = value.split(/[/\\]/).pop() || value;
+      return <Tooltip title={value}><Text code style={{ fontSize: 11 }}>{basename}</Text></Tooltip>;
+    }
+    
+    return <Text>{String(value)}</Text>;
+  };
+
+  // Helper: Render complex nested object (like frame_statistics)
+  const renderNestedObject = (obj: any, title: string) => {
+    if (!obj || typeof obj !== 'object') return null;
+    
+    return (
+      <Collapse 
+        ghost 
+        size="small"
+        items={[{
+          key: '1',
+          label: <Text strong>{title}</Text>,
+          children: (
+            <Descriptions bordered size="small" column={2}>
+              {Object.entries(obj).map(([k, v]: [string, any]) => (
+                <Descriptions.Item label={k} key={k}>
+                  {typeof v === 'object' ? (
+                    <Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
+                      {JSON.stringify(v).substring(0, 80)}...
+                    </Text>
+                  ) : (
+                    renderMetricValue(k, v)
+                  )}
+                </Descriptions.Item>
+              ))}
+            </Descriptions>
+          )
+        }]}
+      />
+    );
+  };
+
   return (
     <Tabs defaultActiveKey="0" type="card">
-      {subtasks.map((st: any, idx: number) => (
-        <TabPane 
-          tab={
-            <Space>
-              <Tag color="geekblue">{prettyMethod(st.method)}</Tag>
-              {st.status === 'FAILED' && <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
-            </Space>
-          } 
-          key={String(idx)}
-        >
-          {st.status === 'FAILED' && st.errorMessage && (
-            <Alert 
-              message="Analysis Failed" 
-              description={st.errorMessage} 
-              type="error" 
-              showIcon 
-              style={{ marginBottom: 16 }} 
-            />
-          )}
+      {subtasks.map((st: any, idx: number) => {
+        const simpleMetrics: [string, any][] = [];
+        const complexMetrics: [string, any][] = [];
+        
+        // Categorize metrics
+        if (st.result && typeof st.result === 'object') {
+          Object.entries(st.result).forEach(([key, value]) => {
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+              complexMetrics.push([key, value]);
+            } else {
+              simpleMetrics.push([key, value]);
+            }
+          });
+        }
 
-          {/* Display result metrics */}
-          {st.result && typeof st.result === 'object' && Object.keys(st.result).length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <Title level={5}>Analysis Metrics</Title>
-              <Descriptions bordered size="small" column={2}>
-                {Object.entries(st.result).map(([key, value]: [string, any]) => {
-                  // Skip complex nested objects and arrays for top-level display
-                  if (typeof value === 'object' && value !== null) {
+        return (
+          <TabPane 
+            tab={
+              <Space>
+                <Tag color="geekblue">{prettyMethod(st.method)}</Tag>
+                {st.status === 'FAILED' && <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
+              </Space>
+            } 
+            key={String(idx)}
+          >
+            {st.status === 'FAILED' && st.errorMessage && (
+              <Alert 
+                message="Analysis Failed" 
+                description={st.errorMessage} 
+                type="error" 
+                showIcon 
+                style={{ marginBottom: 16 }} 
+              />
+            )}
+
+            {/* Key Metrics */}
+            {simpleMetrics.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <Title level={5}><DashboardOutlined /> Key Metrics</Title>
+                <Descriptions bordered size="small" column={2}>
+                  {simpleMetrics.map(([key, value]) => {
+                    // Skip array display in simple metrics
                     if (Array.isArray(value)) {
                       return (
                         <Descriptions.Item label={key} span={2} key={key}>
-                          <Text code style={{ fontSize: 12 }}>{JSON.stringify(value).substring(0, 100)}...</Text>
+                          <Text type="secondary" style={{ fontSize: 11 }}>
+                            Array ({value.length} items) - See raw data below
+                          </Text>
                         </Descriptions.Item>
                       );
                     }
-                    return null; // Skip nested objects
-                  }
-                  
-                  // Format different value types
-                  let displayValue: React.ReactNode = String(value);
-                  if (typeof value === 'number') {
-                    displayValue = value.toFixed(6);
-                  } else if (typeof value === 'boolean') {
-                    displayValue = <Tag color={value ? 'green' : 'red'}>{String(value)}</Tag>;
-                  }
-                  
-                  return (
-                    <Descriptions.Item label={key} key={key}>
-                      <Text>{displayValue}</Text>
-                    </Descriptions.Item>
-                  );
-                })}
-              </Descriptions>
-            </div>
-          )}
+                    
+                    return (
+                      <Descriptions.Item label={key} key={key}>
+                        {renderMetricValue(key, value)}
+                      </Descriptions.Item>
+                    );
+                  })}
+                </Descriptions>
+              </div>
+            )}
 
-          {/* Display artifact images in grid */}
-          {st.artifacts && Object.keys(st.artifacts).length > 0 && (
-            <div>
-              <Title level={5}>Visual Artifacts</Title>
-              <Row gutter={[16, 16]}>
-                {Object.entries(st.artifacts).map(([name, url]: [string, any]) => (
-                  <Col xs={24} sm={12} md={8} key={name}>
-                    <Card
-                      size="small"
-                      title={<Text strong style={{ fontSize: 12 }}>{name.replace(/_/g, ' ').toUpperCase()}</Text>}
-                      hoverable
-                      cover={
-                        <Image
-                          src={String(url)}
-                          alt={name}
-                          style={{ 
-                            width: '100%', 
-                            height: 250, 
-                            objectFit: 'contain',
-                            backgroundColor: '#f5f5f5'
-                          }}
-                          fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-                        />
-                      }
-                    >
-                      <Card.Meta 
-                        description={
-                          <a href={String(url)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>
-                            View Full Size
-                          </a>
-                        } 
-                      />
-                    </Card>
-                  </Col>
+            {/* Complex Nested Metrics (Collapsible) */}
+            {complexMetrics.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <Title level={5}><BarChartOutlined /> Detailed Statistics</Title>
+                {complexMetrics.map(([key, value]) => (
+                  <div key={key} style={{ marginBottom: 8 }}>
+                    {renderNestedObject(value, key.replace(/_/g, ' ').toUpperCase())}
+                  </div>
                 ))}
-              </Row>
-            </div>
-          )}
+              </div>
+            )}
 
-          {/* Fallback for no artifacts */}
-          {(!st.artifacts || Object.keys(st.artifacts).length === 0) && (
-            <Alert 
-              message="No visual artifacts generated" 
-              description="This analysis method did not produce visualization outputs." 
-              type="info" 
-            />
-          )}
-        </TabPane>
-      ))}
+            {/* Visual Artifacts */}
+            {st.artifacts && Object.keys(st.artifacts).length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <Title level={5}><PictureOutlined /> Visual Artifacts</Title>
+                <Row gutter={[16, 16]}>
+                  {Object.entries(st.artifacts).map(([name, url]: [string, any]) => (
+                    <Col xs={24} sm={12} md={8} key={name}>
+                      <Card
+                        size="small"
+                        title={<Text strong style={{ fontSize: 12 }}>{name.replace(/_/g, ' ').toUpperCase()}</Text>}
+                        hoverable
+                        cover={
+                          <Image
+                            src={String(url)}
+                            alt={name}
+                            style={{ 
+                              width: '100%', 
+                              height: 250, 
+                              objectFit: 'contain',
+                              backgroundColor: '#f5f5f5'
+                            }}
+                            fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                          />
+                        }
+                      >
+                        <Card.Meta 
+                          description={
+                            <a href={String(url)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11 }}>
+                              View Full Size
+                            </a>
+                          } 
+                        />
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              </div>
+            )}
+
+            {/* Raw Data (Collapsible) */}
+            {st.result && (
+              <Collapse 
+                ghost 
+                size="small"
+                items={[{
+                  key: 'raw',
+                  label: <Text type="secondary"><CodeOutlined /> Raw Analysis Data (JSON)</Text>,
+                  children: (
+                    <pre style={{ 
+                      backgroundColor: '#f5f5f5', 
+                      padding: 12, 
+                      borderRadius: 4,
+                      maxHeight: 400,
+                      overflow: 'auto',
+                      fontSize: 11,
+                      lineHeight: 1.4
+                    }}>
+                      {JSON.stringify(st.result, null, 2)}
+                    </pre>
+                  )
+                }]}
+              />
+            )}
+
+            {/* Fallback */}
+            {!st.result && (!st.artifacts || Object.keys(st.artifacts).length === 0) && (
+              <Alert 
+                message="No results available" 
+                description="This analysis did not produce any outputs." 
+                type="info" 
+              />
+            )}
+          </TabPane>
+        );
+      })}
     </Tabs>
   );
 };
