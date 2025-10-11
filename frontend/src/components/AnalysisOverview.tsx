@@ -273,6 +273,140 @@ const prettyMethod = (m?: string) => {
   return map[m] || m;
 };
 
+// Render AI Detection details
+const renderAiDetectionDetails = (task: AnalysisTask) => {
+  // Parse results JSON
+  let resultData: any = null;
+  try {
+    if (task.results) {
+      resultData = JSON.parse(task.results);
+    }
+  } catch (e) {
+    console.error('Failed to parse AI detection results:', e);
+  }
+
+  if (!resultData || !resultData.result) {
+    return <Alert message="No AI detection results available" type="info" />;
+  }
+
+  const { result, model, type } = resultData;
+  const prediction = result.prediction || 'Unknown';
+  const confidence = result.confidence || result.confidenceScore || 0;
+  const probabilities = result.probabilities || result.class_probabilities || {};
+
+  // Determine if it's AI-generated or real
+  const isAIGenerated = prediction.toLowerCase().includes('ai') || 
+                       prediction.toLowerCase().includes('fake') || 
+                       prediction.toLowerCase().includes('art');
+  
+  return (
+    <div>
+      {/* Main Result Card */}
+      <Card 
+        style={{ 
+          marginBottom: 16,
+          borderColor: isAIGenerated ? '#ff4d4f' : '#52c41a',
+          borderWidth: 2
+        }}
+      >
+        <Row gutter={[24, 16]} align="middle">
+          <Col span={12}>
+            <Statistic
+              title="Detection Result"
+              value={prediction}
+              valueStyle={{ 
+                color: isAIGenerated ? '#ff4d4f' : '#52c41a',
+                fontSize: 28,
+                fontWeight: 'bold'
+              }}
+              prefix={isAIGenerated ? <ExclamationCircleOutlined /> : <CheckCircleOutlined />}
+            />
+          </Col>
+          <Col span={12}>
+            <Statistic
+              title="Confidence Score"
+              value={(confidence * 100).toFixed(2)}
+              suffix="%"
+              valueStyle={{ fontSize: 28 }}
+            />
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Model Information */}
+      <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
+        <Descriptions.Item label="Model Used" span={2}>
+          <Tag color="blue">{model || 'Unknown'}</Tag>
+        </Descriptions.Item>
+        <Descriptions.Item label="Analysis Type">
+          <Text code>{type || 'IMAGE_AI'}</Text>
+        </Descriptions.Item>
+        <Descriptions.Item label="Task ID">
+          <Text code>#{task.id}</Text>
+        </Descriptions.Item>
+      </Descriptions>
+
+      {/* Class Probabilities */}
+      {Object.keys(probabilities).length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <Title level={5}><BarChartOutlined /> Class Probabilities</Title>
+          <Descriptions bordered size="small" column={1}>
+            {Object.entries(probabilities).map(([className, prob]: [string, any]) => (
+              <Descriptions.Item 
+                label={className} 
+                key={className}
+              >
+                <Space>
+                  <Text strong style={{ color: typeof prob === 'number' && prob > 0.5 ? '#ff4d4f' : '#52c41a' }}>
+                    {typeof prob === 'number' ? (prob * 100).toFixed(2) : prob}%
+                  </Text>
+                  <div style={{ 
+                    width: 200, 
+                    height: 20, 
+                    background: '#f0f0f0', 
+                    borderRadius: 4,
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{ 
+                      width: `${typeof prob === 'number' ? prob * 100 : 0}%`, 
+                      height: '100%', 
+                      background: typeof prob === 'number' && prob > 0.5 ? '#ff4d4f' : '#52c41a',
+                      transition: 'width 0.3s'
+                    }} />
+                  </div>
+                </Space>
+              </Descriptions.Item>
+            ))}
+          </Descriptions>
+        </div>
+      )}
+
+      {/* Raw Result Data (Collapsible) */}
+      <Collapse 
+        ghost 
+        size="small"
+        items={[{
+          key: 'raw',
+          label: <Text type="secondary"><CodeOutlined /> Raw Detection Data (JSON)</Text>,
+          children: (
+            <pre style={{ 
+              backgroundColor: '#f5f5f5', 
+              padding: 12, 
+              borderRadius: 4,
+              maxHeight: 400,
+              overflow: 'auto',
+              fontSize: 11,
+              lineHeight: 1.4
+            }}>
+              {JSON.stringify(resultData, null, 2)}
+            </pre>
+          )
+        }]}
+      />
+    </div>
+  );
+};
+
 // Render video traditional analysis details
 const renderVideoTraditionalAnalysisDetails = (data: any) => {
   const subtasks = data?.subtasks || [];
@@ -833,8 +967,9 @@ export const AnalysisDetails: React.FC<{ file?: UploadFile; record: AnalysisReco
       {record.type === 'TRADITIONAL' && record.data && renderTraditionalAnalysisDetails(record.data as TraditionalAnalysisResult)}
       {record.type === 'METADATA' && record.data && renderMetadataAnalysisDetails(record.data as MetadataAnalysis)}
       {record.type === 'VIDEO_TRADITIONAL' && record.data && renderVideoTraditionalAnalysisDetails(record.data)}
-      {record.type === 'AI' && (
-        <Alert message="AI Analysis" description="AI-based deepfake detection is not yet implemented." type="info" />
+      {record.type === 'AI' && record.data && renderAiDetectionDetails(record.data as AnalysisTask)}
+      {record.type === 'AI' && !record.data && (
+        <Alert message="AI Detection" description="No AI detection results available. Click 'Re-run' to start analysis." type="info" />
       )}
     </div>
   );
@@ -865,6 +1000,9 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
   // Video traditional subtasks (from AnalysisTask with JSON results)
   const [videoTradSubs, setVideoTradSubs] = useState<VideoTraditionalSubResult[]>([]);
   const [videoTradLoading, setVideoTradLoading] = useState(false);
+  // AI Detection from AnalysisTask
+  const [aiDetection, setAiDetection] = useState<AnalysisTask | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Load traditional analysis
   const loadTraditionalAnalysis = useCallback(async (fileMd5: string) => {
@@ -899,6 +1037,36 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
   }, []);
 
+  // Load AI Detection from AnalysisTask
+  const loadAiDetection = useCallback(async (file: UploadFile) => {
+    setAiLoading(true);
+    try {
+      if (!file?.projectId) {
+        setAiDetection(null);
+        return null;
+      }
+      const response = await analysisTaskApi.getProjectAnalysisTasks(file.projectId);
+      const tasks = response.data;
+      // Find the most recent AI detection task for this file
+      const aiTask = tasks
+        .filter((t: AnalysisTask) => 
+          t.analysisType === 'DEEPFAKE_DETECTION' && 
+          t.mediaFile?.md5Hash === file.md5Hash
+        )
+        .sort((a: AnalysisTask, b: AnalysisTask) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+      setAiDetection(aiTask || null);
+      return aiTask;
+    } catch (error) {
+      console.error('Error loading AI detection:', error);
+      setAiDetection(null);
+      return null;
+    } finally {
+      setAiLoading(false);
+    }
+  }, []);
+
   // Load all analysis types
   const loadAllAnalyses = useCallback(async (fileMd5?: string) => {
     if (!fileMd5) {
@@ -923,9 +1091,13 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       // Load video-traditional results (if file context available)
       if (file) {
         await loadVideoTraditional(file);
+        // Load AI detection for images
+        if (file.fileType?.startsWith('image')) {
+          await loadAiDetection(file);
+        } else {
+          setAiDetection(null);
+        }
       }
-
-      // TODO: Add AI analysis loading here when implemented
       
     } catch (error) {
       console.error('Error loading analyses:', error);
@@ -933,7 +1105,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [file, loadMetadataAnalyses, loadTraditionalAnalysis, loadVideoTraditional]);
+  }, [file, loadMetadataAnalyses, loadTraditionalAnalysis, loadVideoTraditional, loadAiDetection]);
 
   // Convert all analyses to AnalysisRecord format
   useEffect(() => {
@@ -1040,20 +1212,36 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       }
     }
 
-    // TODO: Add AI analysis here when implemented
-    analyses.push({
-      id: 'ai-placeholder',
-      type: 'AI',
-      status: 'NOT_AVAILABLE',
-      riskScore: undefined,
-      createdTime: '',
-      completedTime: undefined,
-      errorMessage: undefined,
-      data: undefined
-    });
+    // AI Detection (for images only)
+    if (aiDetection && file?.fileType?.startsWith('image')) {
+      analyses.push({
+        id: `ai-${aiDetection.id}`,
+        type: 'AI',
+        status: aiDetection.status as any,
+        riskScore: aiDetection.confidenceScore,
+        createdTime: aiDetection.createdAt,
+        completedTime: aiDetection.completedAt,
+        errorMessage: aiDetection.errorMessage,
+        data: aiDetection
+      });
+    } else {
+      // Show placeholder for images only
+      if (file?.fileType?.startsWith('image')) {
+        analyses.push({
+          id: 'ai-placeholder',
+          type: 'AI',
+          status: 'NOT_STARTED',
+          riskScore: undefined,
+          createdTime: '',
+          completedTime: undefined,
+          errorMessage: undefined,
+          data: undefined
+        });
+      }
+    }
 
     setAllAnalyses(analyses);
-  }, [file, metadataAnalyses, traditionalAnalysis, videoTradSubs]);
+  }, [file, metadataAnalyses, traditionalAnalysis, videoTradSubs, aiDetection]);
 
   // Load analyses when file changes
   useEffect(() => {
@@ -1315,7 +1503,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
           columns={columns}
           dataSource={allAnalyses}
           rowKey="id"
-          loading={loading || metadataLoading || traditionalLoading || videoTradLoading}
+          loading={loading || metadataLoading || traditionalLoading || videoTradLoading || aiLoading}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

@@ -70,6 +70,7 @@ export interface AnalysisTask {
   status: TaskStatus;
   description?: string;
   resultData?: string;
+  results?: string; // JSON string from Python worker
   confidenceScore?: number;
   notes?: string;
   startedAt?: string;
@@ -77,6 +78,8 @@ export interface AnalysisTask {
   createdAt: string;
   updatedAt: string;
   projectId: number;
+  mediaFile?: { md5Hash: string; fileName: string }; // Associated media file
+  errorMessage?: string;
 }
 
 export type AnalysisType = 
