@@ -78,6 +78,16 @@ public class TraditionalAnalysisResult {
     @Column(name = "lighting_inconsistencies")
     private Integer lightingInconsistencies;
     
+    // Noise Residual Analysis Results
+    @Column(name = "noise_confidence_score")
+    private Double noiseConfidenceScore;
+    
+    @Column(name = "noise_result_path")
+    private String noiseResultPath;
+    
+    @Column(name = "noise_suspicious_regions")
+    private Integer noiseSuspiciousRegions;
+    
     // Overall Analysis Results
     @Column(name = "overall_confidence_score")
     private Double overallConfidenceScore;

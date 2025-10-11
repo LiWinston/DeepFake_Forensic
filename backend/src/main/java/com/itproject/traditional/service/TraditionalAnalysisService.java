@@ -16,6 +16,7 @@ import com.itproject.traditional.util.CFAAnalysisUtil;
 import com.itproject.traditional.util.CopyMoveDetectionUtil;
 import com.itproject.traditional.util.ErrorLevelAnalysisUtil;
 import com.itproject.traditional.util.LightingAnalysisUtil;
+import com.itproject.traditional.util.NoiseAnalysisUtil;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -76,6 +77,9 @@ public class TraditionalAnalysisService {
     
     @Autowired
     private LightingAnalysisUtil lightingUtil;
+    
+    @Autowired
+    private NoiseAnalysisUtil noiseAnalysisUtil;
     
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
@@ -266,9 +270,17 @@ public class TraditionalAnalysisService {
                 return null;
             });
             
+            CompletableFuture<Void> noiseFuture = CompletableFuture.runAsync(() -> {
+                performNoiseAnalysis(finalResult, new ByteArrayInputStream(finalImageData));
+            }, traditionalAnalysisExecutor).exceptionally(throwable -> {
+                log.error("Error in Noise analysis for file: {}", finalMediaFile.getFileMd5(), throwable);
+                finalResult.setNoiseConfidenceScore(0.0);
+                return null;
+            });
+            
             // Wait for all analyses to complete
             CompletableFuture<Void> allAnalyses = CompletableFuture.allOf(
-                elaFuture, cfaFuture, copyMoveFuture, lightingFuture
+                elaFuture, cfaFuture, copyMoveFuture, lightingFuture, noiseFuture
             );
             
             // Block until all analyses are complete
@@ -399,6 +411,23 @@ public class TraditionalAnalysisService {
     }
     
     /**
+     * Perform Noise Residual Analysis
+     */
+    private void performNoiseAnalysis(TraditionalAnalysisResult result, InputStream imageStream) {
+        try {
+            NoiseAnalysisUtil.NoiseResult noise = noiseAnalysisUtil.performNoiseAnalysis(imageStream, 9, 10);
+            String path = uploadAnalysisResult(result.getFileMd5(), "noise", "png", noise.getResidualImageData());
+            result.setNoiseResultPath(path);
+            result.setNoiseConfidenceScore(noise.getConfidenceScore());
+            result.setNoiseSuspiciousRegions(noise.getSuspiciousRegions());
+            log.debug("Noise analysis completed for file: {}, confidence: {}", result.getFileMd5(), noise.getConfidenceScore());
+        } catch (Exception e) {
+            log.error("Error in Noise analysis for file: {}", result.getFileMd5(), e);
+            result.setNoiseConfidenceScore(0.0);
+        }
+    }
+    
+    /**
      * Calculate overall analysis results
      */
     private void calculateOverallResults(TraditionalAnalysisResult result) {
@@ -406,10 +435,11 @@ public class TraditionalAnalysisService {
         double elaScore = result.getElaConfidenceScore() != null ? result.getElaConfidenceScore() : 0.0;
         double cfaScore = result.getCfaConfidenceScore() != null ? result.getCfaConfidenceScore() : 0.0;
         double copyMoveScore = result.getCopyMoveConfidenceScore() != null ? result.getCopyMoveConfidenceScore() : 0.0;
-        double lightingScore = result.getLightingConfidenceScore() != null ? result.getLightingConfidenceScore() : 0.0;
+    double lightingScore = result.getLightingConfidenceScore() != null ? result.getLightingConfidenceScore() : 0.0;
+    double noiseScore = result.getNoiseConfidenceScore() != null ? result.getNoiseConfidenceScore() : 0.0;
         
-        // Weighted average (ELA and Copy-Move are more reliable indicators)
-        double overallScore = (elaScore * 0.35 + cfaScore * 0.25 + copyMoveScore * 0.30 + lightingScore * 0.10);
+    // Weighted average (ELA, Copy-Move and Noise are stronger)
+    double overallScore = (elaScore * 0.3 + cfaScore * 0.2 + copyMoveScore * 0.25 + lightingScore * 0.1 + noiseScore * 0.15);
         result.setOverallConfidenceScore(overallScore);
         
         // Determine authenticity assessment
@@ -437,7 +467,8 @@ public class TraditionalAnalysisService {
         summary.append(String.format("- Error Level Analysis: %.2f/100\n", elaScore));
         summary.append(String.format("- CFA Pattern Analysis: %.2f/100\n", cfaScore));
         summary.append(String.format("- Copy-Move Detection: %.2f/100\n", copyMoveScore));
-        summary.append(String.format("- Lighting Consistency: %.2f/100\n", lightingScore));
+    summary.append(String.format("- Lighting Consistency: %.2f/100\n", lightingScore));
+    summary.append(String.format("- Noise Residual Analysis: %.2f/100\n", noiseScore));
         
         result.setAnalysisSummary(summary.toString());
         
@@ -463,6 +494,10 @@ public class TraditionalAnalysisService {
         if (result.getLightingInconsistencies() != null && result.getLightingInconsistencies() > 0) {
             findings.append(String.format("Lighting: %d lighting inconsistencies detected\n", 
                           result.getLightingInconsistencies()));
+        }
+        if (result.getNoiseSuspiciousRegions() != null && result.getNoiseSuspiciousRegions() > 0) {
+            findings.append(String.format("Noise Residual: %d suspicious regions detected\n", 
+                          result.getNoiseSuspiciousRegions()));
         }
         
         result.setDetailedFindings(findings.toString());
@@ -592,6 +627,16 @@ public class TraditionalAnalysisService {
                 generatePresignedUrl(result.getLightingAnalysisPath()),
                 result.getLightingInconsistencies(),
                 "Lighting analysis completed successfully"
+            ));
+        }
+        
+        // Noise Analysis
+        if (result.getNoiseConfidenceScore() != null) {
+            response.setNoiseAnalysis(new TraditionalAnalysisResponse.NoiseAnalysisResult(
+                result.getNoiseConfidenceScore(),
+                generatePresignedUrl(result.getNoiseResultPath()),
+                result.getNoiseSuspiciousRegions(),
+                "Noise residual analysis completed successfully"
             ));
         }
         

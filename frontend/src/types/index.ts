@@ -227,6 +227,7 @@ export interface TraditionalAnalysisResult {
   cfaAnalysis?: CfaAnalysisResult;
   copyMoveAnalysis?: CopyMoveAnalysisResult;
   lightingAnalysis?: LightingAnalysisResult;
+  noiseAnalysis?: NoiseAnalysisResult;
 }
 
 export type TraditionalAnalysisStatus = 
@@ -267,5 +268,12 @@ export interface LightingAnalysisResult {
   confidenceScore: number;
   analysisImageUrl?: string;
   inconsistencies: number;
+  analysis: string;
+}
+
+export interface NoiseAnalysisResult {
+  confidenceScore: number;
+  resultImageUrl?: string;
+  suspiciousRegions: number;
   analysis: string;
 }

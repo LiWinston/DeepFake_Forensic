@@ -235,6 +235,26 @@ const renderTraditionalAnalysisDetails = (analysis: TraditionalAnalysisResult) =
           </Row>
         </TabPane>
       )}
+      {analysis.noiseAnalysis && (
+        <TabPane tab="Noise Residual" key="noise">
+          <Row gutter={[16, 16]} wrap>
+            <Col xs={24} lg={12}>
+              <Card title="Noise Residual Results" size="small">
+                <Statistic title="Confidence Score" value={analysis.noiseAnalysis.confidenceScore} suffix="%" style={{ marginBottom: 16 }} />
+                <Statistic title="Suspicious Regions" value={analysis.noiseAnalysis.suspiciousRegions} style={{ marginBottom: 16 }} />
+                <Text>{analysis.noiseAnalysis.analysis}</Text>
+              </Card>
+            </Col>
+            {analysis.noiseAnalysis.resultImageUrl && (
+              <Col xs={24} lg={12}>
+                <Card title="Noise Residual Visualization" size="small" bodyStyle={{ overflow: 'hidden' }}>
+                  <Image src={analysis.noiseAnalysis.resultImageUrl} alt="Noise Residual" style={{ width: '100%' }} />
+                </Card>
+              </Col>
+            )}
+          </Row>
+        </TabPane>
+      )}
     </Tabs>
   );
 };

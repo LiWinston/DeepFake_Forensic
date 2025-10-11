@@ -27,6 +27,7 @@ public class TraditionalAnalysisResponse {
     private CfaAnalysisResult cfaAnalysis;
     private CopyMoveAnalysisResult copyMoveAnalysis;
     private LightingAnalysisResult lightingAnalysis;
+    private NoiseAnalysisResult noiseAnalysis;
     
     // Overall Results
     private Double overallConfidenceScore;
@@ -81,6 +82,16 @@ public class TraditionalAnalysisResponse {
         private Double confidenceScore;
         private String analysisImageUrl;
         private Integer inconsistencies;
+        private String analysis;
+    }
+    
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class NoiseAnalysisResult {
+        private Double confidenceScore;
+        private String resultImageUrl;
+        private Integer suspiciousRegions;
         private String analysis;
     }
 }
