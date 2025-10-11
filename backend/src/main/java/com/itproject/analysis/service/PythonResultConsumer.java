@@ -30,14 +30,18 @@ public class PythonResultConsumer {
             if (data != null) {
                 String taskId = String.valueOf(data.getOrDefault("taskId", ""));
                 if (taskId != null && !taskId.isEmpty()) {
-                    // Try to find task by ID (numeric) if applicable
                     try {
                         Long id = Long.valueOf(taskId);
                         analysisTaskRepository.findById(id).ifPresent(task -> {
                             task.setStatus(success ? AnalysisTask.AnalysisStatus.COMPLETED : AnalysisTask.AnalysisStatus.FAILED);
                             try {
+                                // Persist full payload data to results (includes artifacts with MinIO URLs)
                                 task.setResults(mapper.writeValueAsString(data));
                             } catch (Exception ignore) {}
+                            if (!success) {
+                                Object err = payload.get("error");
+                                task.setErrorMessage(err != null ? err.toString() : "Python worker error");
+                            }
                             task.setCompletedAt(LocalDateTime.now());
                             analysisTaskRepository.save(task);
                         });

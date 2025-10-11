@@ -73,6 +73,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [progressMessage, setProgressMessage] = useState<string>('');
   const [progressTimer, setProgressTimer] = useState<any>(null);
+  // Subtasks & results
+  const [subTasks, setSubTasks] = useState<Array<{ taskId: number; type: string; method: string }>>([]);
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [resultsData, setResultsData] = useState<Record<number, any>>({});
   // Load projects on component mount
   useEffect(() => {
     // Projects are automatically loaded by ProjectContext
@@ -444,7 +448,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
             runVideoTraditional: values.runVideoTraditional ?? false,
             runVideoAI: values.runVideoAI ?? false,
             selectedImageModel: values.selectedImageModel,
-            selectedTraditionalMethods: values.selectedTraditionalMethods || []
+            selectedTraditionalMethods: (values.videoSelectedTraditionalMethods && values.videoSelectedTraditionalMethods.length > 0)
+              ? values.videoSelectedTraditionalMethods
+              : (values.selectedTraditionalMethods || [])
           };
           try {
             const resp = await analysisService.start(payload);
@@ -452,6 +458,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
             if (api?.success) {
               message.success('Analysis started');
               const taskId = api?.data?.taskId || lastUploaded.fileMd5;
+              const sts = (api?.data?.subTasks || []) as Array<{ taskId: number; type: string; method: string }>;
+              setSubTasks(sts);
               if (taskId) {
                 setProgressTaskId(taskId);
                 setProgressPercent(0);
@@ -470,7 +478,28 @@ const FileUpload: React.FC<FileUploadProps> = ({
                     if (!isNaN(p) && p >= 100) {
                       clearInterval(t);
                       setProgressTimer(null);
-                      setTimeout(() => setShowProgressModal(false), 1000);
+                      setTimeout(() => setShowProgressModal(false), 600);
+                      // fetch subtask results and show
+                      try {
+                        const results: Record<number, any> = {};
+                        const { analysisTaskApi } = await import('../services/project');
+                        for (const st of sts) {
+                          if (!st?.taskId) continue;
+                          try {
+                            const td = await analysisTaskApi.getAnalysisTask(st.taskId);
+                            const task = td.data as any;
+                            let parsed: any = null;
+                            try { parsed = task?.results ? JSON.parse(task.results) : null; } catch {}
+                            results[st.taskId] = parsed;
+                          } catch {}
+                        }
+                        setResultsData(results);
+                        if (Object.keys(results).length > 0) {
+                          setShowResultsModal(true);
+                        }
+                      } catch (e) {
+                        // ignore
+                      }
                     }
                   } catch (e) {
                     // ignore transient errors
@@ -533,8 +562,17 @@ const FileUpload: React.FC<FileUploadProps> = ({
               if (!isVideo) return null;
               return (
                 <>
-                  <Form.Item name="runVideoTraditional" valuePropName="checked" label="Video Traditional (Noise Pattern)">
+                  <Form.Item name="runVideoTraditional" valuePropName="checked" label="Video Traditional (Noise/Flow/Freq/Temporal/Copy-Move)">
                     <Checkbox>Enable</Checkbox>
+                  </Form.Item>
+                  <Form.Item name="videoSelectedTraditionalMethods" label="Select video methods (optional)">
+                    <Select mode="multiple" allowClear placeholder="Default: Noise only">
+                      <Select.Option value="NOISE">Noise Pattern</Select.Option>
+                      <Select.Option value="FLOW">Optical Flow</Select.Option>
+                      <Select.Option value="FREQ">Frequency Domain</Select.Option>
+                      <Select.Option value="TEMPORAL">Temporal Inconsistency</Select.Option>
+                      <Select.Option value="COPYMOVE">Copy-Move</Select.Option>
+                    </Select>
                   </Form.Item>
                   <Form.Item name="runVideoAI" valuePropName="checked" label="Video AI (coming soon)">
                     <Checkbox>Enable</Checkbox>
@@ -562,6 +600,42 @@ const FileUpload: React.FC<FileUploadProps> = ({
           {progressTaskId && (
             <Text code style={{ userSelect: 'all' }}>Task ID: {progressTaskId}</Text>
           )}
+        </Space>
+      </Modal>
+
+      {/* Analysis Results Modal */}
+      <Modal
+        title="Analysis Results"
+        open={showResultsModal}
+        onCancel={() => setShowResultsModal(false)}
+        footer={null}
+        width={900}
+      >
+        {subTasks.length === 0 && <Text type="secondary">No subtask results available.</Text>}
+        <Space direction="vertical" style={{ width: '100%' }}>
+          {subTasks.map(st => {
+            const r = resultsData[st.taskId] || {};
+            const artifacts = r?.artifacts || {};
+            const methodLabel = {
+              NOISE: 'Noise Pattern', FLOW: 'Optical Flow', FREQ: 'Frequency Domain', TEMPORAL: 'Temporal Inconsistency', COPYMOVE: 'Copy-Move'
+            } as any;
+            return (
+              <Card key={st.taskId} size="small" title={`${methodLabel[st.method] || st.method} (Task #${st.taskId})`}>
+                <Row gutter={[12,12]}>
+                  {Object.entries(artifacts).map(([k, url]) => (
+                    <Col span={8} key={k}>
+                      <Card size="small" cover={<img alt={k} src={String(url)} style={{ width: '100%', objectFit: 'contain', maxHeight: 220 }} />}>
+                        <Card.Meta description={k} />
+                      </Card>
+                    </Col>
+                  ))}
+                  {Object.keys(artifacts).length === 0 && (
+                    <Col span={24}><Text type="secondary">No artifacts available</Text></Col>
+                  )}
+                </Row>
+              </Card>
+            );
+          })}
         </Space>
       </Modal>
     </div>

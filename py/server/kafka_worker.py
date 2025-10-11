@@ -17,6 +17,10 @@ if os.path.join(BASE_DIR, 'VidTraditional') not in sys.path:
 # Import analyzers
 from api import load_models, models, model_info, get_image_transforms, predict_single_image, predict_multiple_images  # type: ignore
 from video_noise_pattern import analyze_noise_pattern  # type: ignore
+from optical_flow_analysis import analyze_optical_flow  # type: ignore
+from video_frequency_analysis import analyze_frequency_domain  # type: ignore
+from temporal_inconsistency import detect_temporal_inconsistency  # type: ignore
+from video_copy_move import detect_copy_move  # type: ignore
 from api_utils import download_video_from_url  # type: ignore
 
 # Kafka & Redis
@@ -112,17 +116,10 @@ def process_image_ai(task: dict):
     }
 
 
-def process_video_traditional(task: dict):
-    task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
+def _ensure_video_path(task: dict, task_id: str):
     video_path = task.get('localPath')
     url = task.get('url') or task.get('minioUrl')
-    sample_frames = int(task.get('sampleFrames', 30))
-    noise_sigma = float(task.get('noiseSigma', 10.0))
-
-    update_progress(task_id, 5, 'Task received')
-
     if (not video_path or not os.path.exists(video_path)) and url:
-        # download to temp
         try:
             update_progress(task_id, 10, 'Downloading video')
             video_path = download_video_from_url(url)
@@ -131,6 +128,38 @@ def process_video_traditional(task: dict):
             raise ValueError(f'Failed to download video from url: {e}')
     if not video_path or not os.path.exists(video_path):
         raise ValueError('localPath or downloadable url is required')
+    return video_path
+
+
+def _upload_artifacts(task_id: str, artifacts: dict):
+    uploaded = {}
+    if minio_client:
+        total = len(artifacts)
+        done = 0
+        for k, path in artifacts.items():
+            try:
+                if os.path.exists(path):
+                    object_name = f"artifacts/{task_id}/{os.path.basename(path)}"
+                    minio_client.fput_object(MINIO_BUCKET, object_name, path)
+                    scheme = 'https' if MINIO_SECURE else 'http'
+                    uploaded[k] = f"{scheme}://{MINIO_ENDPOINT.strip('/').replace('http://','').replace('https://','')}/{MINIO_BUCKET}/{object_name}"
+                    done += 1
+                    pct = 80 + int((done/total) * 15)
+                    update_progress(task_id, pct, f'Uploading artifacts ({done}/{total})')
+            except Exception as e:
+                print('MinIO upload failed for', path, e)
+    return uploaded
+
+
+def process_video_traditional(task: dict):
+    task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
+    file_md5 = task.get('fileMd5') or task_id
+    video_path = None
+    sample_frames = int(task.get('sampleFrames', 30))
+    noise_sigma = float(task.get('noiseSigma', 10.0))
+
+    update_progress(task_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id)
 
     tmp_out = os.path.join('tmp_py', task_id)
     os.makedirs(tmp_out, exist_ok=True)
@@ -150,30 +179,119 @@ def process_video_traditional(task: dict):
         'distribution_plot': os.path.join(tmp_out, 'noise_distribution_plot.png'),
         'visualization': os.path.join(tmp_out, 'noise_visualization.png')
     }
-
-    # Try upload artifacts to MinIO if configured
-    uploaded = {}
-    if minio_client:
-        total = len(artifacts)
-        done = 0
-        for k, path in artifacts.items():
-            try:
-                if os.path.exists(path):
-                    object_name = f"artifacts/{task_id}/{os.path.basename(path)}"
-                    minio_client.fput_object(MINIO_BUCKET, object_name, path)
-                    scheme = 'https' if MINIO_SECURE else 'http'
-                    uploaded[k] = f"{scheme}://{MINIO_ENDPOINT.strip('/').replace('http://','').replace('https://','')}/{MINIO_BUCKET}/{object_name}"
-                    done += 1
-                    # Map uploads progress from 80 -> 95
-                    pct = 80 + int((done/total) * 15)
-                    update_progress(task_id, pct, f'Uploading artifacts ({done}/{total})')
-            except Exception as e:
-                print('MinIO upload failed for', path, e)
+    uploaded = _upload_artifacts(task_id, artifacts)
     
     update_progress(task_id, 97, 'Finalizing results')
     return {
         'taskId': task_id,
+        'fileMd5': file_md5,
         'type': 'VIDEO_TRADITIONAL_NOISE',
+        'method': 'NOISE',
+        'artifacts': uploaded or artifacts,
+        'result': results
+    }
+
+
+def process_video_optical_flow(task: dict):
+    task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
+    file_md5 = task.get('fileMd5') or task_id
+    update_progress(task_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id)
+    out_dir = os.path.join('tmp_py', task_id, 'flow')
+    os.makedirs(out_dir, exist_ok=True)
+    update_progress(task_id, 20, 'Decoding & sampling frames')
+    results = analyze_optical_flow(video_path, out_dir, sample_frames=int(task.get('sampleFrames', 50)))
+    update_progress(task_id, 80, 'Optical flow analysis completed')
+    artifacts = {
+        'flow_visualization': os.path.join(out_dir, 'flow_visualization.png'),
+        'flow_magnitude_plot': os.path.join(out_dir, 'flow_magnitude_plot.png'),
+        'flow_anomaly_heatmap': os.path.join(out_dir, 'flow_anomaly_heatmap.png')
+    }
+    uploaded = _upload_artifacts(task_id, artifacts)
+    update_progress(task_id, 97, 'Finalizing results')
+    return {
+        'taskId': task_id,
+        'fileMd5': file_md5,
+        'type': 'VIDEO_TRADITIONAL_FLOW',
+        'method': 'FLOW',
+        'artifacts': uploaded or artifacts,
+        'result': results
+    }
+
+
+def process_video_frequency(task: dict):
+    task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
+    file_md5 = task.get('fileMd5') or task_id
+    update_progress(task_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id)
+    out_dir = os.path.join('tmp_py', task_id, 'freq')
+    os.makedirs(out_dir, exist_ok=True)
+    update_progress(task_id, 20, 'Decoding & sampling frames')
+    results = analyze_frequency_domain(video_path, out_dir, sample_frames=int(task.get('sampleFrames', 40)))
+    update_progress(task_id, 80, 'Frequency domain analysis completed')
+    artifacts = {
+        'frequency_spectrum': os.path.join(out_dir, 'frequency_spectrum.png'),
+        'frequency_analysis_plot': os.path.join(out_dir, 'frequency_analysis_plot.png'),
+        'frequency_heatmap': os.path.join(out_dir, 'frequency_heatmap.png')
+    }
+    uploaded = _upload_artifacts(task_id, artifacts)
+    update_progress(task_id, 97, 'Finalizing results')
+    return {
+        'taskId': task_id,
+        'fileMd5': file_md5,
+        'type': 'VIDEO_TRADITIONAL_FREQ',
+        'method': 'FREQUENCY',
+        'artifacts': uploaded or artifacts,
+        'result': results
+    }
+
+
+def process_video_temporal(task: dict):
+    task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
+    file_md5 = task.get('fileMd5') or task_id
+    update_progress(task_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id)
+    out_dir = os.path.join('tmp_py', task_id, 'temporal')
+    os.makedirs(out_dir, exist_ok=True)
+    update_progress(task_id, 20, 'Decoding & sampling frames')
+    results = detect_temporal_inconsistency(video_path, out_dir)
+    update_progress(task_id, 80, 'Temporal inconsistency analysis completed')
+    artifacts = {
+        'temporal_plot': os.path.join(out_dir, 'temporal_plot.png'),
+        'temporal_heatmap': os.path.join(out_dir, 'temporal_heatmap.png')
+    }
+    uploaded = _upload_artifacts(task_id, artifacts)
+    update_progress(task_id, 97, 'Finalizing results')
+    return {
+        'taskId': task_id,
+        'fileMd5': file_md5,
+        'type': 'VIDEO_TRADITIONAL_TEMPORAL',
+        'method': 'TEMPORAL',
+        'artifacts': uploaded or artifacts,
+        'result': results
+    }
+
+
+def process_video_copymove(task: dict):
+    task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
+    file_md5 = task.get('fileMd5') or task_id
+    update_progress(task_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id)
+    out_dir = os.path.join('tmp_py', task_id, 'copymove')
+    os.makedirs(out_dir, exist_ok=True)
+    update_progress(task_id, 20, 'Extracting keyframes')
+    results = detect_copy_move(video_path, out_dir)
+    update_progress(task_id, 80, 'Copy-move detection completed')
+    artifacts = {
+        'copy_move_heatmap': os.path.join(out_dir, 'copy_move_heatmap.png')
+    }
+    uploaded = _upload_artifacts(task_id, artifacts)
+    update_progress(task_id, 97, 'Finalizing results')
+    return {
+        'taskId': task_id,
+        'fileMd5': file_md5,
+        'type': 'VIDEO_TRADITIONAL_COPYMOVE',
+        'method': 'COPYMOVE',
         'artifacts': uploaded or artifacts,
         'result': results
     }
@@ -202,6 +320,14 @@ def worker_loop():
                 result = process_image_ai(task)
             elif task_type == 'VIDEO_TRADITIONAL_NOISE':
                 result = process_video_traditional(task)
+            elif task_type == 'VIDEO_TRADITIONAL_FLOW':
+                result = process_video_optical_flow(task)
+            elif task_type == 'VIDEO_TRADITIONAL_FREQ':
+                result = process_video_frequency(task)
+            elif task_type == 'VIDEO_TRADITIONAL_TEMPORAL':
+                result = process_video_temporal(task)
+            elif task_type == 'VIDEO_TRADITIONAL_COPYMOVE':
+                result = process_video_copymove(task)
             elif task_type == 'VIDEO_AI':
                 # Placeholder for future video AI
                 update_progress(task_id, 20, 'Video AI queued')
