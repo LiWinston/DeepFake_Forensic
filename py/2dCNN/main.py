@@ -22,8 +22,18 @@ np.random.seed(42)
 torch.manual_seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(42)
+    torch.cuda.manual_seed_all(42)  # For multi-GPU
+    # Enable cuDNN optimizations for faster training
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.deterministic = False  # For better performance
+    
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
+if torch.cuda.is_available():
+    print(f"GPU Name: {torch.cuda.get_device_name(0)}")
+    print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+    print(f"CUDA Version: {torch.version.cuda}")
 plt.style.use('default')
 sns.set_palette("husl")
 
@@ -117,8 +127,28 @@ class SubsetDataset(Dataset):
 train_dataset = SubsetDataset(full_dataset, train_idx, train_transform)
 val_dataset = SubsetDataset(full_dataset, val_idx, val_transform)
 batch_size = 32
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
+
+# Optimize DataLoader for GPU: use pin_memory and adjust num_workers
+# On Windows, num_workers > 0 can cause issues, use 0 for compatibility
+num_workers = 0 if os.name == 'nt' else 4  # Windows uses 0, others use 4
+pin_memory = torch.cuda.is_available()  # Enable pinned memory for faster GPU transfer
+
+train_loader = DataLoader(
+    train_dataset, 
+    batch_size=batch_size, 
+    shuffle=True, 
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=False  # Disable on Windows
+)
+val_loader = DataLoader(
+    val_dataset, 
+    batch_size=batch_size, 
+    shuffle=False, 
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    persistent_workers=False
+)
 
 print(f"Training samples: {len(train_dataset)}")
 print(f"Validation samples: {len(val_dataset)}")
@@ -268,11 +298,14 @@ except Exception as e:
 
 def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=1e-4):
     """
-    Train the model and return training history
+    Train the model with GPU optimization
     """
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+    
+    # Enable mixed precision training for faster GPU performance
+    scaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None
     
     train_losses = []
     train_accuracies = []
@@ -289,13 +322,23 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=1e
         train_total = 0
         
         for batch_idx, (data, target) in enumerate(train_loader):
-            data, target = data.to(device), target.to(device)
+            data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
             
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
-            loss.backward()
-            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
+            
+            # Use automatic mixed precision on GPU
+            if torch.cuda.is_available():
+                with torch.cuda.amp.autocast():
+                    output = model(data)
+                    loss = criterion(output, target)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                output = model(data)
+                loss = criterion(output, target)
+                loss.backward()
+                optimizer.step()
             
             train_loss += loss.item()
             _, predicted = torch.max(output.data, 1)
@@ -312,9 +355,16 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=1e
         
         with torch.no_grad():
             for data, target in val_loader:
-                data, target = data.to(device), target.to(device)
-                output = model(data)
-                loss = criterion(output, target)
+                data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
+                
+                # Use mixed precision for validation too
+                if torch.cuda.is_available():
+                    with torch.cuda.amp.autocast():
+                        output = model(data)
+                        loss = criterion(output, target)
+                else:
+                    output = model(data)
+                    loss = criterion(output, target)
                 
                 val_loss += loss.item()
                 _, predicted = torch.max(output.data, 1)

@@ -119,9 +119,20 @@ def predict_single_image(model, image, transform, device, class_names=['AI Art',
         if image.mode != 'RGB':
             image = image.convert('RGB')
         image_tensor = transform(image).unsqueeze(0).to(device)
+        
+        # Use FP16 if model is in half precision
+        if next(model.parameters()).dtype == torch.float16:
+            image_tensor = image_tensor.half()
+        
         model.eval()
         with torch.no_grad():
-            output = model(image_tensor)
+            # Enable autocast for mixed precision on GPU
+            if device.type == 'cuda':
+                with torch.cuda.amp.autocast():
+                    output = model(image_tensor)
+            else:
+                output = model(image_tensor)
+            
             probabilities = F.softmax(output, dim=1)[0].cpu().numpy()
             predicted_class = torch.argmax(output, dim=1).item()
             confidence = float(probabilities[predicted_class])
@@ -139,11 +150,52 @@ def predict_single_image(model, image, transform, device, class_names=['AI Art',
 
 def predict_multiple_images(model, images, transform, device, class_names=['AI Art', 'Real Art']):
     try:
+        # Batch processing for better GPU utilization
+        batch_size = 8  # Process multiple images at once
         results = []
-        for i, image in enumerate(images):
-            prediction = predict_single_image(model, image, transform, device, class_names)
-            prediction['frame_number'] = i
-            results.append(prediction)
+        
+        for i in range(0, len(images), batch_size):
+            batch_images = images[i:i+batch_size]
+            batch_tensors = []
+            
+            for image in batch_images:
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+                tensor = transform(image)
+                batch_tensors.append(tensor)
+            
+            # Stack into batch
+            batch_tensor = torch.stack(batch_tensors).to(device)
+            
+            # Use FP16 if model is in half precision
+            if next(model.parameters()).dtype == torch.float16:
+                batch_tensor = batch_tensor.half()
+            
+            model.eval()
+            with torch.no_grad():
+                # Enable autocast for mixed precision on GPU
+                if device.type == 'cuda':
+                    with torch.cuda.amp.autocast():
+                        output = model(batch_tensor)
+                else:
+                    output = model(batch_tensor)
+                
+                probabilities = F.softmax(output, dim=1).cpu().numpy()
+                predicted_classes = torch.argmax(output, dim=1).cpu().numpy()
+            
+            # Parse batch results
+            for j, (pred_class, probs) in enumerate(zip(predicted_classes, probabilities)):
+                frame_idx = i + j
+                results.append({
+                    'frame_number': frame_idx,
+                    'predicted_class': int(pred_class),
+                    'predicted_label': class_names[pred_class],
+                    'confidence': float(probs[pred_class]),
+                    'probabilities': {
+                        class_names[k]: float(prob) for k, prob in enumerate(probs)
+                    }
+                })
+        
         ai_predictions = sum(1 for r in results if r['predicted_class'] == 0)
         real_predictions = sum(1 for r in results if r['predicted_class'] == 1)
         total_frames = len(results)

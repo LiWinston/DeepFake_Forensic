@@ -22,7 +22,17 @@ from api_utils import (
 app = Flask(__name__)
 # Max upload size: 100MB (align with error handler below)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
+
+# GPU optimization configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if torch.cuda.is_available():
+    torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner for better performance
+    torch.backends.cudnn.enabled = True
+    print(f"GPU detected: {torch.cuda.get_device_name(0)}")
+    print(f"CUDA version: {torch.version.cuda}")
+else:
+    print("Warning: No GPU detected, running on CPU")
+
 models = {}
 transforms_dict = {}
 model_info = {}
@@ -74,8 +84,11 @@ def load_models():
                 # Skip unknown model types for now
                 # Add ResNet50 and ViT loading here
                 continue            
-            model.load_state_dict(torch.load(model_path, map_location=device))
-            model.eval()            
+            model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+            model.eval()
+            # Set model to use mixed precision if GPU is available
+            if torch.cuda.is_available():
+                model = model.half()  # Use FP16 for faster inference on GPU            
             model_name = model_file.replace('.pth', '')
             models[model_name] = model            
             model_info[model_name] = {
