@@ -37,11 +37,13 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useMetadataAnalysis } from '../hooks';
 import { traditionalAnalysisAPI } from '../services/traditional';
+import { analysisTaskApi } from '../services/project';
 import { formatDateTime } from '../utils';
 import type { 
   MetadataAnalysis, 
   UploadFile, 
-  TraditionalAnalysisResult
+  TraditionalAnalysisResult,
+  AnalysisTask
 } from '../types';
 
 const { Text, Title } = Typography;
@@ -57,7 +59,7 @@ export interface AnalysisOverviewProps {
 
 export interface AnalysisRecord {
   id: string;
-  type: 'METADATA' | 'TRADITIONAL' | 'AI';
+  type: 'METADATA' | 'TRADITIONAL' | 'VIDEO_TRADITIONAL' | 'AI';
   status: 'PENDING' | 'PROCESSING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'NOT_STARTED' | 'NOT_AVAILABLE';
   riskScore?: number;
   createdTime: string;
@@ -105,6 +107,7 @@ const getAnalysisTypeInfo = (type: string) => {
   const typeConfig = {
     METADATA: { color: 'blue', text: 'Metadata Analysis', icon: <ScanOutlined /> },
     TRADITIONAL: { color: 'purple', text: 'Traditional Forensics', icon: <ExperimentOutlined /> },
+    VIDEO_TRADITIONAL: { color: 'geekblue', text: 'Video Traditional', icon: <ExperimentOutlined /> },
     AI: { color: 'green', text: 'AI Detection', icon: <RobotOutlined /> },
   } as const;
   return (typeConfig as any)[type] || { color: 'default', text: type, icon: <InfoCircleOutlined /> };
@@ -257,6 +260,12 @@ const renderTraditionalAnalysisDetails = (analysis: TraditionalAnalysisResult) =
       )}
     </Tabs>
   );
+};
+
+const prettyMethod = (m?: string) => {
+  if (!m) return '';
+  const map: any = { NOISE: 'Noise Pattern', FLOW: 'Optical Flow', FREQ: 'Frequency Domain', FREQUENCY: 'Frequency Domain', TEMPORAL: 'Temporal Inconsistency', COPYMOVE: 'Copy-Move' };
+  return map[m] || m;
 };
 
 const renderMetadataTree = (data: Record<string, any>, prefix = ''): any[] => {
@@ -627,6 +636,9 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
   const [traditionalAnalysis, setTraditionalAnalysis] = useState<TraditionalAnalysisResult | null>(null);
   const [traditionalLoading, setTraditionalLoading] = useState(false);
   const [triggeringAnalysis, setTriggeringAnalysis] = useState(false);
+  // Video traditional subtasks (from AnalysisTask with JSON results)
+  const [videoTradTasks, setVideoTradTasks] = useState<Array<{ task: AnalysisTask; parsed: any }>>([]);
+  const [videoTradLoading, setVideoTradLoading] = useState(false);
 
   // Load traditional analysis
   const loadTraditionalAnalysis = useCallback(async (fileMd5: string) => {
@@ -644,11 +656,46 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
   }, []);
 
+  // Load video traditional analysis subtasks by project and fileMd5
+  const loadVideoTraditional = useCallback(async (file: UploadFile) => {
+    if (!file?.projectId) { setVideoTradTasks([]); return; }
+    setVideoTradLoading(true);
+    try {
+      const resp = await analysisTaskApi.getProjectAnalysisTasks(file.projectId);
+      const tasks: any[] = (resp?.data as any) || [];
+      const related: Array<{ task: AnalysisTask; parsed: any }> = [];
+      const targetMd5 = file.md5Hash || '';
+      const validTypes = new Set([
+        'NOISE_ANALYSIS', 'GEOMETRIC_ANALYSIS', 'FREQUENCY_DOMAIN_ANALYSIS', 'EDIT_DETECTION'
+      ]);
+      for (const t of tasks) {
+        if (!validTypes.has(t.analysisType)) continue;
+        let parsed: any = null;
+        try { parsed = t?.results ? JSON.parse(t.results) : (t?.resultData ? JSON.parse(t.resultData) : null); } catch {}
+        if (!parsed) continue;
+        const tt = String(parsed?.type || '');
+        const md5 = String(parsed?.fileMd5 || '');
+        if (!tt.startsWith('VIDEO_TRADITIONAL')) continue;
+        if (targetMd5 && md5 && targetMd5 !== md5) continue;
+        related.push({ task: t as AnalysisTask, parsed });
+      }
+      setVideoTradTasks(related);
+      return related;
+    } catch (e) {
+      console.error('Failed to load video traditional tasks', e);
+      setVideoTradTasks([]);
+      return [];
+    } finally {
+      setVideoTradLoading(false);
+    }
+  }, []);
+
   // Load all analysis types
   const loadAllAnalyses = useCallback(async (fileMd5?: string) => {
     if (!fileMd5) {
       setAllAnalyses([]);
       setTraditionalAnalysis(null);
+      setVideoTradTasks([]);
       return;
     }
 
@@ -660,6 +707,11 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       // Load traditional analysis
       await loadTraditionalAnalysis(fileMd5);
 
+      // Load video-traditional subtasks (if file context available)
+      if (file) {
+        await loadVideoTraditional(file);
+      }
+
       // TODO: Add AI analysis loading here when implemented
       
     } catch (error) {
@@ -668,7 +720,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [loadMetadataAnalyses, loadTraditionalAnalysis]);
+  }, [file, loadMetadataAnalyses, loadTraditionalAnalysis, loadVideoTraditional]);
 
   // Convert all analyses to AnalysisRecord format
   useEffect(() => {
@@ -706,7 +758,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       });
     }
 
-    // Always show traditional analysis (even if not available)
+    // Always show traditional analysis (even if not available) for images
     if (traditionalAnalysis) {
       analyses.push({
         id: `traditional-${traditionalAnalysis.id}`,
@@ -732,6 +784,47 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       });
     }
 
+    // Video Traditional (from AnalysisTask subtasks)
+    if (videoTradTasks.length > 0) {
+      // Compute aggregate status/time
+      const anyFailed = videoTradTasks.some(v => v.task.status === 'FAILED');
+      const anyRunning = videoTradTasks.some(v => v.task.status === 'RUNNING' || v.task.status === 'PENDING');
+      const allCompleted = videoTradTasks.every(v => v.task.status === 'COMPLETED');
+      const status = allCompleted ? 'COMPLETED' : (anyFailed ? 'FAILED' : (anyRunning ? 'IN_PROGRESS' : 'PENDING'));
+      const createdTimes = videoTradTasks.map(v => v.task.createdAt).filter(Boolean);
+      const completedTimes = videoTradTasks.map(v => v.task.completedAt).filter(Boolean);
+      analyses.push({
+        id: `video-traditional-${(videoTradTasks[0].task as any).mediaFileId || file?.md5Hash || 'x'}`,
+        type: 'VIDEO_TRADITIONAL',
+        status: status as any,
+        riskScore: undefined,
+        createdTime: createdTimes.sort()[0] || '',
+        completedTime: completedTimes.sort().slice(-1)[0] || undefined,
+        errorMessage: anyFailed ? 'Some subtasks failed' : undefined,
+        data: {
+          subtasks: videoTradTasks.map(v => ({
+            id: v.task.id,
+            type: v.parsed?.type,
+            method: v.parsed?.method,
+            artifacts: v.parsed?.artifacts || {},
+            result: v.parsed?.result || {},
+            status: v.task.status,
+          }))
+        }
+      });
+    } else {
+      analyses.push({
+        id: 'video-traditional-placeholder',
+        type: 'VIDEO_TRADITIONAL',
+        status: 'NOT_STARTED',
+        riskScore: undefined,
+        createdTime: '',
+        completedTime: undefined,
+        errorMessage: undefined,
+        data: undefined
+      });
+    }
+
     // TODO: Add AI analysis here when implemented
     analyses.push({
       id: 'ai-placeholder',
@@ -745,7 +838,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     });
 
     setAllAnalyses(analyses);
-  }, [metadataAnalyses, traditionalAnalysis, file?.md5Hash]);
+  }, [metadataAnalyses, traditionalAnalysis, videoTradTasks, file?.md5Hash]);
 
   // Load analyses when file changes
   useEffect(() => {
@@ -861,6 +954,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       filters: [
         { text: 'Metadata Analysis', value: 'METADATA' },
         { text: 'Traditional Forensics', value: 'TRADITIONAL' },
+        { text: 'Video Traditional', value: 'VIDEO_TRADITIONAL' },
         { text: 'AI Detection', value: 'AI' },
       ],
       onFilter: (value, record) => record.type === value,
@@ -908,7 +1002,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
         return (
           <Space>
             {/* Start Analysis Button - only for NOT_STARTED */}
-            {isNotStarted && (
+            {isNotStarted && (record.type === 'METADATA' || record.type === 'TRADITIONAL') && (
               <Button
                 type="primary"
                 size="small"
@@ -1006,7 +1100,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
           columns={columns}
           dataSource={allAnalyses}
           rowKey="id"
-          loading={loading || metadataLoading || traditionalLoading}
+          loading={loading || metadataLoading || traditionalLoading || videoTradLoading}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
@@ -1067,6 +1161,39 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
 
             {selectedAnalysis.type === 'TRADITIONAL' && selectedAnalysis.data && (
               renderTraditionalAnalysisDetails(selectedAnalysis.data as TraditionalAnalysisResult)
+            )}
+            {selectedAnalysis.type === 'VIDEO_TRADITIONAL' && selectedAnalysis.data && (
+              <div>
+                <Title level={4}>Video Traditional Results</Title>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {(selectedAnalysis.data.subtasks || []).map((st: any) => (
+                    <Card key={st.id} size="small" title={<Space><Tag color="geekblue">{prettyMethod(st.method || st.type)}</Tag><Text type="secondary">Task #{st.id}</Text></Space>}>
+                      <Row gutter={[12,12]}>
+                        {Object.entries(st.artifacts || {}).map(([k, url]: any) => (
+                          <Col span={8} key={k}>
+                            <Card size="small" cover={<img alt={k} src={String(url)} style={{ width: '100%', objectFit: 'contain', maxHeight: 220 }} />}>
+                              <Card.Meta description={k} />
+                            </Card>
+                          </Col>
+                        ))}
+                        {/* fallback to local artifactPaths if URLs missing */}
+                        {(!st.artifacts || Object.keys(st.artifacts).length === 0) && st.artifactPaths && (
+                          Object.entries(st.artifactPaths).map(([k, path]: any) => (
+                            <Col span={8} key={k}>
+                              <Card size="small">
+                                <Card.Meta description={<Space direction="vertical"><Text>{k}</Text><Text code style={{ fontSize: 12, wordBreak: 'break-all' }}>{String(path)}</Text></Space>} />
+                              </Card>
+                            </Col>
+                          ))
+                        )}
+                        {Object.keys(st.artifacts || {}).length === 0 && (
+                          <Col span={24}><Text type="secondary">No artifacts available</Text></Col>
+                        )}
+                      </Row>
+                    </Card>
+                  ))}
+                </Space>
+              </div>
             )}
             
             {selectedAnalysis.type === 'METADATA' && selectedAnalysis.data && (

@@ -189,6 +189,8 @@ def process_video_traditional(task: dict):
         'type': 'VIDEO_TRADITIONAL_NOISE',
         'method': 'NOISE',
         'artifacts': uploaded or artifacts,
+        'artifactPaths': artifacts,
+        'parentTaskId': task.get('parentTaskId'),
         'result': results
     }
 
@@ -216,6 +218,8 @@ def process_video_optical_flow(task: dict):
         'type': 'VIDEO_TRADITIONAL_FLOW',
         'method': 'FLOW',
         'artifacts': uploaded or artifacts,
+        'artifactPaths': artifacts,
+        'parentTaskId': task.get('parentTaskId'),
         'result': results
     }
 
@@ -243,6 +247,8 @@ def process_video_frequency(task: dict):
         'type': 'VIDEO_TRADITIONAL_FREQ',
         'method': 'FREQUENCY',
         'artifacts': uploaded or artifacts,
+        'artifactPaths': artifacts,
+        'parentTaskId': task.get('parentTaskId'),
         'result': results
     }
 
@@ -269,6 +275,8 @@ def process_video_temporal(task: dict):
         'type': 'VIDEO_TRADITIONAL_TEMPORAL',
         'method': 'TEMPORAL',
         'artifacts': uploaded or artifacts,
+        'artifactPaths': artifacts,
+        'parentTaskId': task.get('parentTaskId'),
         'result': results
     }
 
@@ -294,6 +302,8 @@ def process_video_copymove(task: dict):
         'type': 'VIDEO_TRADITIONAL_COPYMOVE',
         'method': 'COPYMOVE',
         'artifacts': uploaded or artifacts,
+        'artifactPaths': artifacts,
+        'parentTaskId': task.get('parentTaskId'),
         'result': results
     }
 
