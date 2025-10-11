@@ -41,7 +41,6 @@ public class AnalysisOrchestrationController {
      * Poll progress by taskId. Reads from Redis where workers write progress.
      */
     @GetMapping("/progress/{taskId}")
-    @PreAuthorize("hasRole('USER')")
     public Result<Map<String, Object>> getProgress(@PathVariable String taskId) {
         String key = "analysis:progress:" + taskId;
         Map<Object, Object> map = stringRedisTemplate.opsForHash().entries(key);
