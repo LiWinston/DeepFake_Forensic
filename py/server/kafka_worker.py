@@ -119,11 +119,15 @@ def process_video_traditional(task: dict):
     sample_frames = int(task.get('sampleFrames', 30))
     noise_sigma = float(task.get('noiseSigma', 10.0))
 
+    update_progress(task_id, 5, 'Task received')
+
     if (not video_path or not os.path.exists(video_path)) and url:
         # download to temp
         try:
+            update_progress(task_id, 10, 'Downloading video')
             video_path = download_video_from_url(url)
         except Exception as e:
+            update_progress(task_id, 100, f'Failed downloading video: {e}')
             raise ValueError(f'Failed to download video from url: {e}')
     if not video_path or not os.path.exists(video_path):
         raise ValueError('localPath or downloadable url is required')
@@ -131,10 +135,16 @@ def process_video_traditional(task: dict):
     tmp_out = os.path.join('tmp_py', task_id)
     os.makedirs(tmp_out, exist_ok=True)
 
-    update_progress(task_id, 10, 'Extracting noise patterns')
-    results = analyze_noise_pattern(video_path, tmp_out, sample_frames=sample_frames, noise_sigma=noise_sigma)
+    update_progress(task_id, 20, 'Decoding & sampling frames')
+    # The underlying analyzer performs frame sampling; we reflect staged progress for UX
+    # We can't hook into its internals without refactor, so we approximate time slices
+    t_start = time.time()
+    results = analyze_noise_pattern(video_path, tmp_out,
+                                    sample_frames=sample_frames, noise_sigma=noise_sigma)
+    t_analyze = time.time() - t_start
+    # After heavy analysis, move progress forward generously
+    update_progress(task_id, 80, 'Analyzing noise residuals completed')
 
-    update_progress(task_id, 95, 'Video analysis completed')
     artifacts = {
         'temporal_plot': os.path.join(tmp_out, 'noise_temporal_plot.png'),
         'distribution_plot': os.path.join(tmp_out, 'noise_distribution_plot.png'),
@@ -144,6 +154,8 @@ def process_video_traditional(task: dict):
     # Try upload artifacts to MinIO if configured
     uploaded = {}
     if minio_client:
+        total = len(artifacts)
+        done = 0
         for k, path in artifacts.items():
             try:
                 if os.path.exists(path):
@@ -151,9 +163,14 @@ def process_video_traditional(task: dict):
                     minio_client.fput_object(MINIO_BUCKET, object_name, path)
                     scheme = 'https' if MINIO_SECURE else 'http'
                     uploaded[k] = f"{scheme}://{MINIO_ENDPOINT.strip('/').replace('http://','').replace('https://','')}/{MINIO_BUCKET}/{object_name}"
+                    done += 1
+                    # Map uploads progress from 80 -> 95
+                    pct = 80 + int((done/total) * 15)
+                    update_progress(task_id, pct, f'Uploading artifacts ({done}/{total})')
             except Exception as e:
                 print('MinIO upload failed for', path, e)
-
+    
+    update_progress(task_id, 97, 'Finalizing results')
     return {
         'taskId': task_id,
         'type': 'VIDEO_TRADITIONAL_NOISE',

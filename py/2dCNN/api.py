@@ -20,7 +20,8 @@ from api_utils import (
 )
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 
+# Max upload size: 100MB (align with error handler below)
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 models = {}
 transforms_dict = {}
@@ -28,17 +29,39 @@ model_info = {}
 
 def load_models():
     global models, transforms_dict, model_info
-    
-    models_dir = 'models'
-    if not os.path.exists(models_dir):
-        print("Warning: Models directory not found. Create and train models first.")
-        return    
-    transforms_dict = get_image_transforms()    
-    model_files = [f for f in os.listdir(models_dir) if f.endswith('.pth')]
-    print(f"Found {len(model_files)} model files")
-    for model_file in model_files:
+
+    # Determine candidate model directories (env override first)
+    here = os.path.dirname(os.path.abspath(__file__))
+    env_dir = os.environ.get('MODEL_DIR')
+    candidates = []
+    if env_dir:
+        candidates.append(env_dir)
+    candidates.extend([
+        os.path.join(here, 'models'),
+        here,  # allow placing *.pth directly under py/2dCNN/
+    ])
+
+    # Gather model files from all existing candidate directories
+    searched = []
+    model_paths = []
+    for d in candidates:
+        if d and os.path.isdir(d):
+            searched.append(d)
+            for f in os.listdir(d):
+                if f.endswith('.pth'):
+                    model_paths.append(os.path.join(d, f))
+
+    if not model_paths:
+        print("Warning: No model files (.pth) found. You can set MODEL_DIR or place models under:")
+        for d in candidates:
+            print(f" - {d}")
+        return
+
+    transforms_dict = get_image_transforms()
+    print(f"Found {len(model_paths)} model files from: {searched}")
+    for model_path in model_paths:
+        model_file = os.path.basename(model_path)
         try:
-            model_path = os.path.join(models_dir, model_file)            
             if 'tiny' in model_file.lower():
                 model = TinyCNN(num_classes=2).to(device)
                 transform_key = 'tiny'
@@ -63,7 +86,7 @@ def load_models():
             }
             print(f"Loaded {model_type} model: {model_name}")
         except Exception as e:
-            print(f"Error loading model {model_file}: {e}")
+            print(f"Error loading model {model_file} from {model_path}: {e}")
     print(f"Successfully loaded {len(models)} models")
 
 @app.route('/health', methods=['GET'])

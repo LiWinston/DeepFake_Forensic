@@ -39,8 +39,10 @@ Configure via env vars if needed:
 - GROUP_ID (default py-analyzer-group)
 - TOPIC_IMAGE_AI, TOPIC_VIDEO_TRAD, TOPIC_VIDEO_AI, RESULT_TOPIC
 - MINIO_* for artifact uploads if enabled
+ - FLASK_HOST/FLASK_PORT for app.py
+ - MODEL_DIR for 2dCNN model discovery override
 
 ## Notes
-- CNN models should be placed under `py/2dCNN/models/` (e.g., `tiny_*.pth`, `nano_*.pth`).
+- CNN model search order: `MODEL_DIR` (if set) → `py/2dCNN/models/` → `py/2dCNN/`. Place `tiny_*.pth` or `nano_*.pth` accordingly.
 - For video analysis, provide local file path (when via Kafka) or upload video to the Flask endpoint.
 - You can configure the same settings in docker-compose by adding environment entries to a python service if you containerize this component later.
