@@ -52,6 +52,25 @@ import type {
 } from '../types';
 
 const { Text, Title } = Typography;
+
+// Helpers: robust media type detection (handles missing MIME by falling back to filename extension)
+const isImageFile = (file?: UploadFile | null): boolean => {
+  if (!file) return false;
+  const mime = (file.fileType || '').toLowerCase();
+  if (mime.startsWith('image/')) return true;
+  if (mime.startsWith('video/')) return false;
+  const name = (file.originalName || file.filename || '').toLowerCase();
+  return /\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff|heic|heif)$/.test(name);
+};
+
+const isVideoFile = (file?: UploadFile | null): boolean => {
+  if (!file) return false;
+  const mime = (file.fileType || '').toLowerCase();
+  if (mime.startsWith('video/')) return true;
+  if (mime.startsWith('image/')) return false;
+  const name = (file.originalName || file.filename || '').toLowerCase();
+  return /\.(mp4|avi|mov|wmv|flv|webm|mkv|m4v)$/.test(name);
+};
 const { TabPane } = Tabs;
 const { Panel } = Collapse;
 
@@ -1082,7 +1101,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       await loadMetadataAnalyses(fileMd5);
       
       // For images only: load photo traditional
-      if (file?.fileType?.startsWith('image')) {
+      if (isImageFile(file)) {
         await loadTraditionalAnalysis(fileMd5);
       } else {
         setTraditionalAnalysis(null);
@@ -1092,7 +1111,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       if (file) {
         await loadVideoTraditional(file);
         // Load AI detection for images
-        if (file.fileType?.startsWith('image')) {
+        if (isImageFile(file)) {
           await loadAiDetection(file);
         } else {
           setAiDetection(null);
@@ -1157,7 +1176,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       });
     } else {
       // Only show placeholder for images; hide for videos
-      if (file?.fileType?.startsWith('image')) {
+      if (isImageFile(file)) {
         analyses.push({
           id: 'traditional-placeholder',
           type: 'TRADITIONAL',
@@ -1198,7 +1217,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
         }
       });
     } else {
-      if (file?.fileType?.startsWith('video')) {
+      if (isVideoFile(file)) {
         analyses.push({
           id: 'video-traditional-placeholder',
           type: 'VIDEO_TRADITIONAL',
@@ -1213,7 +1232,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
 
     // AI Detection (for images only)
-    if (aiDetection && file?.fileType?.startsWith('image')) {
+    if (aiDetection && isImageFile(file)) {
       analyses.push({
         id: `ai-${aiDetection.id}`,
         type: 'AI',
@@ -1226,7 +1245,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       });
     } else {
       // Show placeholder for images only
-      if (file?.fileType?.startsWith('image')) {
+      if (isImageFile(file)) {
         analyses.push({
           id: 'ai-placeholder',
           type: 'AI',
@@ -1240,6 +1259,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
       }
     }
 
+    // Ensure at least metadata row exists; others conditionally added above
     setAllAnalyses(analyses);
   }, [file, metadataAnalyses, traditionalAnalysis, videoTradSubs, aiDetection]);
 
