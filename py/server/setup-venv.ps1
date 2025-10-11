@@ -45,18 +45,44 @@ if ([string]::IsNullOrWhiteSpace($CudaFlavor)) {
 Write-Host "CUDA wheel flavor: $CudaFlavor" -ForegroundColor Yellow
 $torchIndex = "https://download.pytorch.org/whl/$CudaFlavor"
 
-# Remove existing CPU-only torch if present
-try {
-  python -c "import torch, sys; sys.exit(0)" 2>$null
-  if ($LASTEXITCODE -eq 0) {
-    Write-Host "Removing any existing torch/vision..." -ForegroundColor DarkYellow
-    pip uninstall -y torch torchvision 2>$null | Out-Null
-  }
-} catch {}
+# Probe existing torch installation state
+$pyProbe = @'
+import json
+info = {"installed": False, "cuda_available": False, "torch_version": None, "cuda_version": None, "vision_installed": False}
+try:
+    import torch
+    info.update({
+        "installed": True,
+        "cuda_available": bool(torch.cuda.is_available()),
+        "torch_version": getattr(torch, "__version__", None),
+        "cuda_version": getattr(getattr(torch, "version", None), "cuda", None),
+    })
+    try:
+        import torchvision  # noqa: F401
+        info["vision_installed"] = True
+    except Exception:
+        pass
+except Exception:
+    pass
+print(json.dumps(info))
+'@
 
-# Install CUDA-enabled torch/vision first to avoid CPU wheels from requirements
-Write-Host "Installing PyTorch + TorchVision from $torchIndex" -ForegroundColor Yellow
-pip install torch torchvision --index-url $torchIndex
+$probeOut = python -c $pyProbe
+try { $torchInfo = $probeOut | ConvertFrom-Json } catch { $torchInfo = @{ installed = $false; cuda_available = $false; vision_installed = $false } }
+
+if ($torchInfo.installed -and $torchInfo.cuda_available -and $torchInfo.vision_installed) {
+  Write-Host "PyTorch with CUDA is already installed (Torch=$($torchInfo.torch_version), CUDA=$($torchInfo.cuda_version)). Skipping reinstall." -ForegroundColor Green
+} else {
+  if ($torchInfo.installed) {
+    Write-Host "Existing PyTorch detected but not CUDA-enabled or torchvision missing. Reinstalling..." -ForegroundColor DarkYellow
+    pip uninstall -y torch torchvision 2>$null | Out-Null
+  } else {
+    Write-Host "PyTorch not installed. Installing..." -ForegroundColor Yellow
+  }
+  # Install CUDA-enabled torch/vision first to avoid CPU wheels from requirements
+  Write-Host "Installing PyTorch + TorchVision from $torchIndex" -ForegroundColor Yellow
+  pip install torch torchvision --index-url $torchIndex
+}
 
 # Prepare trimmed requirements (exclude torch/torchvision lines)
 $reqFile = Join-Path $PSScriptRoot 'requirements.txt'
