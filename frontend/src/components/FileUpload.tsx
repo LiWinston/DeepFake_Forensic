@@ -15,6 +15,7 @@ import {
   Form,
   Modal,
   Input,
+  Checkbox,
   message,
 } from 'antd';
 import {
@@ -32,6 +33,8 @@ import { formatFileSize, isSupportedFileType, getFileCategory } from '../utils';
 import { SUPPORTED_FILE_EXTENSIONS, MAX_FILE_SIZE } from '../constants';
 import type { UploadFile as ApiUploadFile } from '../types';
 import { projectApi } from '../services/project';
+import { analysisService } from '../services/analysis';
+import type { StartAnalysisRequest } from '../services/analysis';
 
 const { Dragger } = Upload;
 const { Text, Title } = Typography;
@@ -60,6 +63,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>(defaultProjectId);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectForm] = Form.useForm();
+  // Analysis selection modal state
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [analysisForm] = Form.useForm();
+  const [lastUploaded, setLastUploaded] = useState<{ fileMd5: string; fileName: string; category: 'image'|'video'|'unknown' } | null>(null);
   // Load projects on component mount
   useEffect(() => {
     // Projects are automatically loaded by ProjectContext
@@ -128,6 +135,20 @@ const FileUpload: React.FC<FileUploadProps> = ({
       const result = await uploadFile(file, projectId);
       if (result) {
         onUploadSuccess?.(result);
+        // Open analysis selection modal
+        const category = getFileCategory(result.originalName || result.filename);
+        setLastUploaded({ fileMd5: result.md5Hash || String(result.id), fileName: result.originalName || result.filename, category });
+        // Initialize defaults based on category
+        analysisForm.setFieldsValue({
+          runMetadata: true,
+          runTraditionalImage: category === 'image',
+          runImageAI: category === 'image',
+          runVideoTraditional: category === 'video',
+          runVideoAI: false,
+          selectedImageModel: undefined,
+          selectedTraditionalMethods: []
+        });
+        setShowAnalysisModal(true);
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Upload failed';
@@ -396,6 +417,98 @@ const FileUpload: React.FC<FileUploadProps> = ({
               <Select.Option value="CORPORATE">Corporate Case</Select.Option>
               <Select.Option value="ACADEMIC_RESEARCH">Academic Research</Select.Option>
             </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Start Analysis Modal */}
+      <Modal
+        title="Start Analysis"
+        open={showAnalysisModal}
+        onCancel={() => setShowAnalysisModal(false)}
+        onOk={async () => {
+          const values = await analysisForm.validateFields();
+          if (!lastUploaded) { setShowAnalysisModal(false); return; }
+          const payload: StartAnalysisRequest = {
+            fileMd5: lastUploaded.fileMd5,
+            projectId: selectedProjectId || defaultProjectId,
+            runMetadata: values.runMetadata ?? true,
+            runTraditionalImage: values.runTraditionalImage ?? false,
+            runImageAI: values.runImageAI ?? false,
+            runVideoTraditional: values.runVideoTraditional ?? false,
+            runVideoAI: values.runVideoAI ?? false,
+            selectedImageModel: values.selectedImageModel,
+            selectedTraditionalMethods: values.selectedTraditionalMethods || []
+          };
+          try {
+            const resp = await analysisService.start(payload);
+            const api = resp.data as any;
+            if (api?.success) {
+              message.success('Analysis started');
+            } else {
+              message.warning(api?.message || 'Failed to start analysis');
+            }
+          } catch (e) {
+            message.error('Failed to start analysis');
+          } finally {
+            setShowAnalysisModal(false);
+          }
+        }}
+      >
+        <Form form={analysisForm} layout="vertical">
+          <Alert type="info" showIcon style={{ marginBottom: 12 }}
+                 message={lastUploaded ? `For file: ${lastUploaded.fileName}` : 'Select analyses to run'} />
+          <Form.Item name="runMetadata" valuePropName="checked" label="Metadata Analysis">
+            <Checkbox>Enable</Checkbox>
+          </Form.Item>
+          {/* Image options */}
+          <Form.Item shouldUpdate noStyle>
+            {() => {
+              const isImage = lastUploaded?.category === 'image';
+              if (!isImage) return null;
+              return (
+                <>
+                  <Form.Item name="runTraditionalImage" valuePropName="checked" label="Traditional Analyses (ELA/CFA/Copy-Move/Lighting/Noise)">
+                    <Checkbox>Enable</Checkbox>
+                  </Form.Item>
+                  <Form.Item name="selectedTraditionalMethods" label="Select methods (optional)">
+                    <Select mode="multiple" allowClear placeholder="All by default">
+                      <Select.Option value="ELA">ELA</Select.Option>
+                      <Select.Option value="CFA">CFA</Select.Option>
+                      <Select.Option value="COPY_MOVE">Copy-Move</Select.Option>
+                      <Select.Option value="LIGHTING">Lighting</Select.Option>
+                      <Select.Option value="NOISE">Noise</Select.Option>
+                    </Select>
+                  </Form.Item>
+                  <Form.Item name="runImageAI" valuePropName="checked" label="Image AI (2dCNN)">
+                    <Checkbox>Enable</Checkbox>
+                  </Form.Item>
+                  <Form.Item name="selectedImageModel" label="AI Model">
+                    <Select allowClear placeholder="Default model">
+                      <Select.Option value="tiny">Tiny CNN</Select.Option>
+                      <Select.Option value="nano">Nano CNN</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </>
+              );
+            }}
+          </Form.Item>
+          {/* Video options */}
+          <Form.Item shouldUpdate noStyle>
+            {() => {
+              const isVideo = lastUploaded?.category === 'video';
+              if (!isVideo) return null;
+              return (
+                <>
+                  <Form.Item name="runVideoTraditional" valuePropName="checked" label="Video Traditional (Noise Pattern)">
+                    <Checkbox>Enable</Checkbox>
+                  </Form.Item>
+                  <Form.Item name="runVideoAI" valuePropName="checked" label="Video AI (coming soon)">
+                    <Checkbox>Enable</Checkbox>
+                  </Form.Item>
+                </>
+              );
+            }}
           </Form.Item>
         </Form>
       </Modal>

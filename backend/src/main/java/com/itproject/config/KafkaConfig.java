@@ -86,6 +86,18 @@ public class KafkaConfig {
         return "traditional-analysis-tasks";
     }
     
+    @Bean("imageAiAnalysisTopic")
+    public String imageAiAnalysisTopic() { return "image-ai-analysis-tasks"; }
+    
+    @Bean("videoTraditionalAnalysisTopic")
+    public String videoTraditionalAnalysisTopic() { return "video-traditional-analysis-tasks"; }
+    
+    @Bean("videoAiAnalysisTopic")
+    public String videoAiAnalysisTopic() { return "video-ai-analysis-tasks"; }
+    
+    @Bean("analysisResultsTopic")
+    public String analysisResultsTopic() { return "analysis-results"; }
+    
     // Auto-create topics on application startup
     @Bean
     public NewTopic metadataAnalysisTopicCreate() {
@@ -112,5 +124,25 @@ public class KafkaConfig {
                 .replicas(1)
                 .compact()
                 .build();
+    }
+    
+    @Bean
+    public NewTopic imageAiAnalysisTopicCreate() {
+        return TopicBuilder.name("image-ai-analysis-tasks").partitions(3).replicas(1).compact().build();
+    }
+    
+    @Bean
+    public NewTopic videoTraditionalAnalysisTopicCreate() {
+        return TopicBuilder.name("video-traditional-analysis-tasks").partitions(3).replicas(1).compact().build();
+    }
+    
+    @Bean
+    public NewTopic videoAiAnalysisTopicCreate() {
+        return TopicBuilder.name("video-ai-analysis-tasks").partitions(3).replicas(1).compact().build();
+    }
+    
+    @Bean
+    public NewTopic analysisResultsTopicCreate() {
+        return TopicBuilder.name("analysis-results").partitions(3).replicas(1).compact().build();
     }
 }

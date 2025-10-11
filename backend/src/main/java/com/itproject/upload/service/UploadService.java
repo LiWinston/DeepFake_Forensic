@@ -354,23 +354,9 @@ public class UploadService {
             
             kafkaTemplate.send(metadataAnalysisTopic, mediaFile.getFileMd5(), analysisMessage);
             
-            // Send message for traditional analysis (for images only)
-            // Use consistent image type checking with FileTypeValidationService
-            if (MediaFile.MediaType.IMAGE.equals(mediaFile.getMediaType()) && "IMAGE".equals(mediaFile.getFileType())) {
-                try {
-                    // Create task DTO for automatic analysis (force=false)
-                    TraditionalAnalysisTaskDto task = new TraditionalAnalysisTaskDto(mediaFile.getFileMd5(), false);
-                    kafkaTemplate.send(traditionalAnalysisTopic, mediaFile.getFileMd5(), task);
-                    log.info("Traditional analysis task sent for file: {} (MD5: {})", 
-                            mediaFile.getFileName(), mediaFile.getFileMd5());
-                } catch (Exception e) {
-                    log.warn("Failed to send traditional analysis task for file: {} (MD5: {})", 
-                            mediaFile.getFileName(), mediaFile.getFileMd5(), e);
-                }
-            } else {
-                log.debug("Skipping traditional analysis for non-image file: {} (MediaType: {}, FileType: {})", 
-                         mediaFile.getFileName(), mediaFile.getMediaType(), mediaFile.getFileType());
-            }
+            // NOTE: Do not auto-trigger traditional/AI analysis here anymore.
+            // Users will select analysis methods via /api/v1/analysis/start and frontend UI after upload completes.
+            // We keep only metadata analysis automatic trigger for now.
             
             log.info("Upload completed for file: {} (MD5: {})", mediaFile.getFileName(), mediaFile.getFileMd5());
             
