@@ -77,4 +77,14 @@ public interface AnalysisTaskRepository extends JpaRepository<AnalysisTask, Long
            "(LOWER(at.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "LOWER(at.parameters) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     List<AnalysisTask> searchByKeyword(@Param("user") User user, @Param("keyword") String keyword);
+
+       /**
+        * Find the latest analysis task by media file MD5, user and analysis type.
+        * Used for quickly retrieving the most recent AI (deepfake) result for a file.
+        */
+       AnalysisTask findTopByMediaFile_FileMd5AndUserAndAnalysisTypeOrderByCompletedAtDesc(
+                     String fileMd5,
+                     User user,
+                     AnalysisTask.AnalysisType analysisType
+       );
 }
