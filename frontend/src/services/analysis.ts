@@ -18,5 +18,9 @@ export const analysisService = {
     httpClient.post('/analysis/start', payload),
 
   progress: (taskId: string) =>
-    httpClient.get(`/analysis/progress/${encodeURIComponent(taskId)}`)
+    httpClient.get(`/analysis/progress/${encodeURIComponent(taskId)}`),
+
+  // Get latest AI (image) result by fileMd5
+  getAiImageResultByMd5: (fileMd5: string) =>
+    httpClient.get(`/ai/image/result/${encodeURIComponent(fileMd5)}`)
 };

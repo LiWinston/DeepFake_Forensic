@@ -41,7 +41,8 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useMetadataAnalysis } from '../hooks';
 import { traditionalAnalysisAPI } from '../services/traditional';
-import { analysisTaskApi } from '../services/project';
+// import { analysisTaskApi } from '../services/project';
+import { analysisService } from '../services/analysis';
 import { videoTraditionalAPI, type VideoTraditionalSubResult } from '../services/videoTraditional';
 import { formatDateTime } from '../utils';
 import type { 
@@ -1063,27 +1064,18 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
   }, []);
 
-  // Load AI Detection from AnalysisTask
+  // Load AI Detection via new md5-based endpoint (no project-wide listing)
   const loadAiDetection = useCallback(async (file: UploadFile) => {
     setAiLoading(true);
     try {
-      if (!file?.projectId) {
+      if (!file?.md5Hash) {
         setAiDetection(null);
         return null;
       }
-      const response = await analysisTaskApi.getProjectAnalysisTasks(file.projectId);
-      const tasks = response.data;
-      // Find the most recent AI detection task for this file
-      const aiTask = tasks
-        .filter((t: AnalysisTask) => 
-          t.analysisType === 'DEEPFAKE_DETECTION' && 
-          t.mediaFile?.md5Hash === file.md5Hash
-        )
-        .sort((a: AnalysisTask, b: AnalysisTask) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )[0];
-      setAiDetection(aiTask || null);
-      return aiTask;
+      const resp = await analysisService.getAiImageResultByMd5(file.md5Hash);
+      const data = (resp.data as any)?.data as AnalysisTask | null;
+      setAiDetection(data || null);
+      return data;
     } catch (error) {
       console.error('Error loading AI detection:', error);
       setAiDetection(null);
