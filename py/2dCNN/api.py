@@ -24,13 +24,18 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
 # GPU optimization configuration
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-if torch.cuda.is_available():
+# Device detection: MPS (Apple Silicon) > CUDA (NVIDIA) > CPU
+if torch.backends.mps.is_available():
+    device = torch.device("mps")
+    print("GPU detected: Apple Silicon (MPS)")
+elif torch.cuda.is_available():
+    device = torch.device("cuda")
     torch.backends.cudnn.benchmark = True  # Enable cuDNN auto-tuner for better performance
     torch.backends.cudnn.enabled = True
     print(f"GPU detected: {torch.cuda.get_device_name(0)}")
     print(f"CUDA version: {torch.version.cuda}")
 else:
+    device = torch.device("cpu")
     print("Warning: No GPU detected, running on CPU")
 
 models = {}
@@ -101,7 +106,21 @@ def load_models():
                 'file_path': model_path,
                 'parameters': sum(p.numel() for p in model.parameters())
             }
-            print(f"Loaded {model_type} model: {model_name}")
+            
+            # Also add short name mapping for compatibility
+            if 'tiny' in model_file.lower():
+                short_name = 'tiny'
+            elif 'nano' in model_file.lower():
+                short_name = 'nano'
+            else:
+                short_name = None
+                
+            if short_name:
+                models[short_name] = model
+                model_info[short_name] = model_info[model_name].copy()
+                print(f"Loaded {model_type} model: {model_name} (also available as '{short_name}')")
+            else:
+                print(f"Loaded {model_type} model: {model_name}")
         except Exception as e:
             print(f"Error loading model {model_file} from {model_path}: {e}")
     print(f"Successfully loaded {len(models)} models")

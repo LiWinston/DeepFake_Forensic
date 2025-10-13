@@ -28,12 +28,19 @@ if torch.cuda.is_available():
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.deterministic = False  # For better performance
     
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"Using device: {device}")
-if torch.cuda.is_available():
+# Device detection: MPS (Apple Silicon) > CUDA (NVIDIA) > CPU
+if torch.backends.mps.is_available():
+    device = torch.device("mps")
+    print(f"Using device: {device} (Apple Silicon)")
+elif torch.cuda.is_available():
+    device = torch.device("cuda")
+    print(f"Using device: {device}")
     print(f"GPU Name: {torch.cuda.get_device_name(0)}")
     print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
     print(f"CUDA Version: {torch.version.cuda}")
+else:
+    device = torch.device("cpu")
+    print(f"Using device: {device}")
 plt.style.use('default')
 sns.set_palette("husl")
 

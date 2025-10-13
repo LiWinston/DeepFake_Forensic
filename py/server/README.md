@@ -31,6 +31,24 @@ $env:PYTHONPATH=(Resolve-Path ..).Path; python app.py
 
 # Start Kafka worker (Terminal 2)
 $env:PYTHONPATH=(Resolve-Path ..).Path; python kafka_worker.py
+
+# MAC
+cd py/server
+
+python3 -m venv .venv
+source .venv/bin/activate   # OR . .venv/bin/activate
+
+pip install -r requirements.txt
+
+cp -f .env.example .env
+
+# Start Flask API (Terminal 1)
+export PYTHONPATH="$(cd .. && pwd)"
+python app.py
+
+# Start Kafka worker (Terminal 2)
+export PYTHONPATH="$(cd .. && pwd)"
+python kafka_worker.py
 ```
 
 Configure via env vars if needed:
