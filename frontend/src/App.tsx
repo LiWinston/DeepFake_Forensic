@@ -18,7 +18,6 @@ import {
 import {
   HomeOutlined,
   FileTextOutlined,
-  BarChartOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   UserOutlined,
@@ -29,7 +28,6 @@ import {
 // Import pages
 import HomePage from './pages/HomePage';
 import FilesPage from './pages/FilesPage';
-import AnalysisPage from './pages/AnalysisPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import AuthPage from './pages/AuthPage';
@@ -192,11 +190,6 @@ const AppNavigation: React.FC = () => {
       icon: <FileTextOutlined />,
       label: 'File Management',
     },
-    {
-      key: '/analysis',
-      icon: <BarChartOutlined />,
-      label: 'Analysis',
-    },
   ];
 
   const handleMenuClick = ({ key }: { key: string }) => {
@@ -286,7 +279,6 @@ const AppNavigation: React.FC = () => {
               <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
               <Route path="/files" element={<FilesPage />} />
               <Route path="/files/:projectId" element={<FilesPage />} />
-              <Route path="/analysis" element={<AnalysisPage />} />
               <Route path="/account" element={<UserAccountPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

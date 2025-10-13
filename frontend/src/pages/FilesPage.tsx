@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layout,
@@ -14,6 +14,7 @@ import {
   Divider,
   Breadcrumb,
   Tag,
+  message,
 } from 'antd';
 import {
   FileTextOutlined,
@@ -22,6 +23,7 @@ import {
   HomeOutlined,
   ProjectOutlined,
   ArrowLeftOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import FilesList from '../components/FilesList';
 import FileUpload from '../components/FileUpload';
@@ -30,6 +32,11 @@ import type { AnalysisRecord } from '../components/AnalysisOverview';
 import type { UploadFile, Project } from '../types';
 import uploadService from '../services/upload';
 import { projectApi } from '../services/project';
+import { traditionalAnalysisAPI } from '../services/traditional';
+import { videoTraditionalAPI } from '../services/videoTraditional';
+import { analysisService } from '../services/analysis';
+import { useMetadataAnalysis } from '../hooks';
+import { generatePDFReport } from '../utils/reportGenerator';
 import '../styles/pages/FilesPage.css';
 
 const { Content } = Layout;
@@ -45,6 +52,10 @@ const FilesPage: React.FC = () => {
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  
+  // Use metadata analysis hook
+  const { analyses: metadataAnalyses, loadAnalyses: loadMetadataAnalyses } = useMetadataAnalysis();
 
   // Load project info if projectId is provided
   useEffect(() => {
@@ -94,6 +105,71 @@ const FilesPage: React.FC = () => {
   const handleUploadError = (error: string) => {
     console.error('Upload error:', error);
   };
+  
+  // Handle download report as PDF
+  const handleDownloadReport = useCallback(async () => {
+    if (!selectedFile || !selectedFile.md5Hash) {
+      message.error('No file selected or file analysis not completed');
+      return;
+    }
+
+    setDownloadingReport(true);
+    try {
+      // Determine if file is image or video
+      const isImage = selectedFile.originalName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp|tif|tiff|heic|heif)$/);
+      
+      // Load all analysis data
+      const [metadataData, traditionalData, videoTraditionalData, aiDetectionData] = await Promise.allSettled([
+        // Load metadata analysis
+        loadMetadataAnalyses(selectedFile.md5Hash).then(() => metadataAnalyses[0]),
+        
+        // Load traditional analysis (for images only)
+        isImage ? traditionalAnalysisAPI.getAnalysisResult(selectedFile.md5Hash).catch(() => null) : Promise.resolve(null),
+        
+        // Load video traditional analysis
+        videoTraditionalAPI.getResultsByFile(selectedFile.md5Hash).catch(() => []),
+        
+        // Load AI detection (for images only)
+        isImage ? analysisService.getAiImageResultByMd5(selectedFile.md5Hash)
+          .then(resp => (resp.data as any)?.data)
+          .catch(() => null) : Promise.resolve(null),
+      ]);
+
+      // Extract data from settled promises
+      const metadata = metadataData.status === 'fulfilled' ? metadataData.value : undefined;
+      const traditional = traditionalData.status === 'fulfilled' ? (traditionalData.value || undefined) : undefined;
+      const videoTradSubs = videoTraditionalData.status === 'fulfilled' ? videoTraditionalData.value : undefined;
+      const aiDetection = aiDetectionData.status === 'fulfilled' ? (aiDetectionData.value || undefined) : undefined;
+
+      // Generate and download PDF report
+      const filename = `forensic_report_${selectedFile.originalName.replace(/\.[^/.]+$/, '')}_${new Date().getTime()}.pdf`;
+      generatePDFReport({
+        file: selectedFile,
+        metadata,
+        traditional,
+        videoTraditional: videoTradSubs && videoTradSubs.length > 0 ? {
+          subtasks: videoTradSubs.map((v: any) => ({
+            id: v.id,
+            type: `VIDEO_TRADITIONAL_${v.method}`,
+            method: v.method,
+            artifacts: v.artifacts || {},
+            result: v.result || {},
+            status: v.success ? 'COMPLETED' : 'FAILED',
+            errorMessage: v.success ? undefined : 'Analysis failed'
+          }))
+        } : undefined,
+        aiDetection,
+      }, filename);
+      
+      message.success('PDF report downloaded successfully');
+    } catch (error) {
+      console.error('Error generating PDF report:', error);
+      message.error('Failed to generate PDF report');
+    } finally {
+      setDownloadingReport(false);
+    }
+  }, [selectedFile, metadataAnalyses, loadMetadataAnalyses]);
+  
   const shiftLevel = detailOpen ? 2 : resultsOpen ? 1 : 0;
 
   const handleBackdropClick = () => {
@@ -288,12 +364,21 @@ const FilesPage: React.FC = () => {
                     </Button>
                     <Button
                       type="primary"
+                      icon={<DownloadOutlined />}
+                      onClick={handleDownloadReport}
+                      disabled={selectedFile.status !== 'COMPLETED' || !selectedFile.md5Hash}
+                      loading={downloadingReport}
+                      block
+                    >
+                      Download Report
+                    </Button>
+                    <Button
                       icon={<BarChartOutlined />}
                       onClick={handleAnalyzeFile}
                       disabled={selectedFile.status !== 'COMPLETED' || !selectedFile.md5Hash}
                       block
                     >
-                      Load Results
+                      View Analysis
                     </Button>
                   </Space>
                 </div>
