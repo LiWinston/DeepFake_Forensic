@@ -137,6 +137,8 @@ def process_image_ai(task: dict):
         raise ValueError('No image content provided')
 
     update_progress(progress_id, 50, 'Running inference')
+    print(f"[DEBUG] Starting inference with model: {model_name}")
+    
     import torch
     # Device detection: MPS (Apple Silicon) > CUDA (NVIDIA) > CPU
     if torch.backends.mps.is_available():
@@ -145,15 +147,26 @@ def process_image_ai(task: dict):
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-    result = predict_single_image(model=model, image=img, transform=transform, device=device)
+    
+    print(f"[DEBUG] Using device: {device}")
+    try:
+        result = predict_single_image(model=model, image=img, transform=transform, device=device)
+        print(f"[DEBUG] Inference completed successfully. Result: {result}")
+    except Exception as e:
+        print(f"[ERROR] Inference failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
     update_progress(progress_id, 95, 'Inference completed')
-    return {
+    response = {
         'taskId': task_id,
         'type': 'IMAGE_AI',
         'model': model_name,
         'result': result
     }
+    print(f"[DEBUG] Returning response: {response}")
+    return response
 
 
 def _ensure_video_path(task: dict, task_id: str, progress_id: str = None):
@@ -381,15 +394,20 @@ def worker_loop():
         file_md5 = task.get('fileMd5') or task_id
         progress_id = task.get('parentTaskId') or file_md5
         
+        print(f"[INFO] Processing task: type={task_type}, taskId={task_id}, fileMd5={file_md5}")
+        
         try:
             # Deduplicate processing for the same taskId within a TTL window
             if task_id:
                 dedupe_key = f"analysis:processed:{task_id}"
                 if rds.exists(dedupe_key):
-                    # Skip duplicate message
+                    print(f"[INFO] Skipping duplicate task: {task_id}")
                     continue
+            
             if task_type == 'IMAGE_AI':
+                print(f"[INFO] Starting IMAGE_AI processing for task {task_id}")
                 result = process_image_ai(task)
+                print(f"[INFO] IMAGE_AI processing completed for task {task_id}")
             elif task_type == 'VIDEO_TRADITIONAL_NOISE':
                 result = process_video_traditional(task)
             elif task_type == 'VIDEO_TRADITIONAL_FLOW':
@@ -407,17 +425,35 @@ def worker_loop():
                 result = { 'taskId': task_id, 'type': 'VIDEO_AI', 'status': 'NOT_IMPLEMENTED' }
             else:
                 raise ValueError(f'Unknown task type: {task_type}')
+            
             # Publish result
-            producer.send(RESULT_TOPIC, key=task_id, value={ 'success': True, 'data': result })
+            result_payload = {'success': True, 'data': result}
+            print(f"[INFO] Publishing result to Kafka topic '{RESULT_TOPIC}' with key '{task_id}'")
+            print(f"[DEBUG] Result payload: {json.dumps(result_payload, indent=2)}")
+            
+            future = producer.send(RESULT_TOPIC, key=task_id, value=result_payload)
+            # Wait for the message to be sent
+            record_metadata = future.get(timeout=10)
+            print(f"[SUCCESS] Result published successfully to topic '{record_metadata.topic}' partition {record_metadata.partition} offset {record_metadata.offset}")
+            
             update_progress(progress_id, 100, 'Completed')
+            
             if task_id:
                 try:
                     # Mark as processed for 24h
                     rds.setex(f"analysis:processed:{task_id}", 24*3600, '1')
-                except Exception:
-                    pass
+                    print(f"[DEBUG] Marked task {task_id} as processed in Redis")
+                except Exception as redis_err:
+                    print(f"[WARN] Failed to mark task as processed in Redis: {redis_err}")
+                    
         except Exception as e:
-            producer.send(RESULT_TOPIC, key=task_id, value={ 'success': False, 'error': str(e), 'task': task })
+            print(f"[ERROR] Task processing failed for {task_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            error_payload = {'success': False, 'error': str(e), 'task': task}
+            print(f"[INFO] Publishing error result to Kafka")
+            producer.send(RESULT_TOPIC, key=task_id, value=error_payload)
             update_progress(progress_id, 100, f'Failed: {e}')
 
 

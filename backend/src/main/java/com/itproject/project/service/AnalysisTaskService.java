@@ -252,4 +252,17 @@ public class AnalysisTaskService {
         public long getCompletedTasks() { return completedTasks; }
         public long getFailedTasks() { return failedTasks; }
     }
+    
+    /**
+     * Find analysis task by file MD5, user and analysis type
+     */
+    @Transactional(readOnly = true)
+    public AnalysisTask findAnalysisTaskByFileMd5AndType(String fileMd5, AnalysisTask.AnalysisType analysisType, User user) {
+        try {
+            return analysisTaskRepository.findTopByMediaFile_FileMd5AndUserAndAnalysisTypeOrderByIdDesc(fileMd5, user, analysisType);
+        } catch (Exception e) {
+            log.error("Error finding analysis task for file: {} type: {} user: {}", fileMd5, analysisType, user.getUsername(), e);
+            return null;
+        }
+    }
 }

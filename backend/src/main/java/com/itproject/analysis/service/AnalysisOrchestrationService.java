@@ -101,9 +101,16 @@ public class AnalysisOrchestrationService {
         parent.setStartedAt(LocalDateTime.now());
         analysisTaskRepository.save(parent);
 
-        // Compute MinIO object path and a simple accessible URL (assumes MinIO is reachable)
-        String objectPath = media.getFileMd5() + "/" + media.getFileName();
+        // Use the stored file path directly from database (already includes md5/filename structure)
+        String objectPath = media.getFilePath();
+        if (objectPath == null || objectPath.isEmpty()) {
+            // Fallback to manual construction if filePath is not set
+            objectPath = media.getFileMd5() + "/" + media.getFileName();
+            log.warn("File path not set for {}, using constructed path: {}", media.getFileMd5(), objectPath);
+        }
         String minioUrl = buildMinioUrl(objectPath);
+        log.info("Built MinIO URL for AI analysis: {} (filePath: {}, fileName: {})", 
+                minioUrl, media.getFilePath(), media.getFileName());
 
     // Dispatch selected tasks
     List<Map<String, Object>> dispatched = new ArrayList<>();

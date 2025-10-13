@@ -81,8 +81,9 @@ public interface AnalysisTaskRepository extends JpaRepository<AnalysisTask, Long
        /**
         * Find the latest analysis task by media file MD5, user and analysis type.
         * Used for quickly retrieving the most recent AI (deepfake) result for a file.
+        * Orders by ID desc to get the most recently created task (handles null completedAt properly)
         */
-       AnalysisTask findTopByMediaFile_FileMd5AndUserAndAnalysisTypeOrderByCompletedAtDesc(
+       AnalysisTask findTopByMediaFile_FileMd5AndUserAndAnalysisTypeOrderByIdDesc(
                      String fileMd5,
                      User user,
                      AnalysisTask.AnalysisType analysisType

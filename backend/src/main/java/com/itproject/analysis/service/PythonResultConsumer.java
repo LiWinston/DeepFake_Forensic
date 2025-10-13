@@ -38,17 +38,23 @@ public class PythonResultConsumer {
                     try {
                         Long id = Long.valueOf(taskId);
                         analysisTaskRepository.findById(id).ifPresent(task -> {
+                            log.info("Updating task {} status to {}", id, success ? "COMPLETED" : "FAILED");
+                            
                             task.setStatus(success ? AnalysisTask.AnalysisStatus.COMPLETED : AnalysisTask.AnalysisStatus.FAILED);
                             try {
                                 // Persist full payload data to results (includes artifacts with MinIO URLs)
                                 task.setResults(mapper.writeValueAsString(data));
-                            } catch (Exception ignore) {}
+                                log.debug("Saved results for task {}: {}", id, mapper.writeValueAsString(data));
+                            } catch (Exception e) {
+                                log.warn("Failed to serialize results for task {}: {}", id, e.getMessage());
+                            }
                             if (!success) {
                                 Object err = payload.get("error");
                                 task.setErrorMessage(err != null ? err.toString() : "Python worker error");
                             }
                             task.setCompletedAt(LocalDateTime.now());
                             analysisTaskRepository.save(task);
+                            log.info("Task {} updated successfully", id);
 
                             // Additionally, persist to video_traditional_analysis_results when applicable
                             try {
