@@ -15,7 +15,8 @@ if os.path.join(BASE_DIR, 'VidTraditional') not in sys.path:
     sys.path.append(os.path.join(BASE_DIR, 'VidTraditional'))
 
 # Import analyzers
-from api import load_models, models, model_info, get_image_transforms, predict_single_image, predict_multiple_images  # type: ignore
+import api  # Import module instead of specific items to get dynamic updates
+from api import load_models, get_image_transforms, predict_single_image, predict_multiple_images  # type: ignore
 from video_noise_pattern import analyze_noise_pattern  # type: ignore
 from optical_flow_analysis import analyze_optical_flow  # type: ignore
 from video_frequency_analysis import analyze_frequency_domain  # type: ignore
@@ -84,25 +85,54 @@ def process_image_ai(task: dict):
     image_url = task.get('imageUrl')
 
     update_progress(progress_id, 5, 'Starting image AI analysis')
-    if not models:
+    
+    # Access models dynamically from the api module
+    if not api.models:
+        print(f"[WARN] Models not loaded, loading now...")
         load_models()
+    
+    # Debug: print available models
+    print(f"[DEBUG] Available models: {list(api.models.keys())}")
+    print(f"[DEBUG] Requested model: {model_name}")
+    
     if not model_name:
-        model_name = list(models.keys())[0]
-    if model_name not in models:
-        raise ValueError(f"Model {model_name} not found")
+        model_name = list(api.models.keys())[0]
+        print(f"[DEBUG] No model specified, using default: {model_name}")
+    
+    if model_name not in api.models:
+        # Try to find the model by partial match (e.g., 'tiny' matches 'tiny_cnn_art_detector')
+        matched_model = None
+        for key in api.models.keys():
+            if model_name in key.lower():
+                matched_model = key
+                print(f"[DEBUG] Partial match found: {model_name} -> {matched_model}")
+                break
+        
+        if matched_model:
+            model_name = matched_model
+        else:
+            available = ', '.join(api.models.keys())
+            raise ValueError(f"Model '{model_name}' not found. Available models: {available}")
 
-    model = models[model_name]
-    transform_key = model_info[model_name]['transform_key']
+    model = api.models[model_name]
+    transform_key = api.model_info[model_name]['transform_key']
     transforms = get_image_transforms()
     transform = transforms[transform_key]
 
     img = None
     if image_bytes_b64:
         import base64
+        print(f"[DEBUG] Loading image from base64 bytes")
         img = Image.open(io.BytesIO(base64.b64decode(image_bytes_b64))).convert('RGB')
     elif image_url:
         from api_utils import download_image_from_url
-        img = download_image_from_url(image_url)
+        print(f"[DEBUG] Downloading image from URL: {image_url}")
+        try:
+            img = download_image_from_url(image_url)
+            print(f"[DEBUG] Image downloaded successfully, size: {img.size}")
+        except Exception as e:
+            print(f"[ERROR] Failed to download image from {image_url}: {e}")
+            raise ValueError(f"Failed to download image from URL: {e}")
     else:
         raise ValueError('No image content provided')
 
@@ -392,10 +422,17 @@ def worker_loop():
 
 
 if __name__ == '__main__':
-    # Load models once
+    # Load models once at startup
+    print('Loading AI models...')
     try:
         load_models()
+        print(f'✓ Models loaded successfully: {list(api.models.keys())}')
     except Exception as e:
-        print('Model loading warning:', e)
+        print(f'✗ Model loading error: {e}')
+        import traceback
+        traceback.print_exc()
+    
     print('Starting Kafka worker...')
+    print(f'Listening to topics: {TOPIC_IMAGE_AI}, {TOPIC_VIDEO_TRAD}, {TOPIC_VIDEO_AI}')
+    print(f'Publishing results to: {RESULT_TOPIC}')
     worker_loop()
