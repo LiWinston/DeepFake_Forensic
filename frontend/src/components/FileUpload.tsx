@@ -626,6 +626,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
         footer={null}
         width={900}
       >
+        <Alert
+          message="Upload successful!"
+          description="Check File Detail for complete analysis results."
+          type="success"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
         {subTasks.length === 0 && <Text type="secondary">No subtask results available.</Text>}
         <Space direction="vertical" style={{ width: '100%' }}>
           {subTasks.map(st => {

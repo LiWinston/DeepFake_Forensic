@@ -76,11 +76,14 @@ def update_progress(task_id: str, percent: int, message: str = ''):
 
 def process_image_ai(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
+    file_md5 = task.get('fileMd5') or task_id
+    progress_id = task.get('parentTaskId') or file_md5
+    
     model_name = task.get('model')
     image_bytes_b64 = task.get('imageBytes')
     image_url = task.get('imageUrl')
 
-    update_progress(task_id, 5, 'Starting image AI analysis')
+    update_progress(progress_id, 5, 'Starting image AI analysis')
     if not models:
         load_models()
     if not model_name:
@@ -103,12 +106,18 @@ def process_image_ai(task: dict):
     else:
         raise ValueError('No image content provided')
 
-    update_progress(task_id, 50, 'Running inference')
+    update_progress(progress_id, 50, 'Running inference')
     import torch
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Device detection: MPS (Apple Silicon) > CUDA (NVIDIA) > CPU
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
     result = predict_single_image(model=model, image=img, transform=transform, device=device)
 
-    update_progress(task_id, 95, 'Inference completed')
+    update_progress(progress_id, 95, 'Inference completed')
     return {
         'taskId': task_id,
         'type': 'IMAGE_AI',
@@ -117,15 +126,17 @@ def process_image_ai(task: dict):
     }
 
 
-def _ensure_video_path(task: dict, task_id: str):
+def _ensure_video_path(task: dict, task_id: str, progress_id: str = None):
+    if progress_id is None:
+        progress_id = task_id
     video_path = task.get('localPath')
     url = task.get('url') or task.get('minioUrl')
     if (not video_path or not os.path.exists(video_path)) and url:
         try:
-            update_progress(task_id, 10, 'Downloading video')
+            update_progress(progress_id, 10, 'Downloading video')
             video_path = download_video_from_url(url)
         except Exception as e:
-            update_progress(task_id, 100, f'Failed downloading video: {e}')
+            update_progress(progress_id, 100, f'Failed downloading video: {e}')
             raise ValueError(f'Failed to download video from url: {e}')
     if not video_path or not os.path.exists(video_path):
         raise ValueError('localPath or downloadable url is required')
@@ -158,14 +169,17 @@ def process_video_traditional(task: dict):
     video_path = None
     sample_frames = int(task.get('sampleFrames', 30))
     noise_sigma = float(task.get('noiseSigma', 10.0))
+    
+    # Use parentTaskId (fileMd5) for progress tracking so frontend can poll it
+    progress_id = task.get('parentTaskId') or file_md5
 
-    update_progress(task_id, 5, 'Task received')
-    video_path = _ensure_video_path(task, task_id)
+    update_progress(progress_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id, progress_id)
 
     tmp_out = os.path.join('tmp_py', task_id)
     os.makedirs(tmp_out, exist_ok=True)
 
-    update_progress(task_id, 20, 'Decoding & sampling frames')
+    update_progress(progress_id, 20, 'Decoding & sampling frames')
     # The underlying analyzer performs frame sampling; we reflect staged progress for UX
     # We can't hook into its internals without refactor, so we approximate time slices
     t_start = time.time()
@@ -173,16 +187,16 @@ def process_video_traditional(task: dict):
                                     sample_frames=sample_frames, noise_sigma=noise_sigma)
     t_analyze = time.time() - t_start
     # After heavy analysis, move progress forward generously
-    update_progress(task_id, 80, 'Analyzing noise residuals completed')
+    update_progress(progress_id, 80, 'Analyzing noise residuals completed')
 
     artifacts = {
         'temporal_plot': os.path.join(tmp_out, 'noise_temporal_plot.png'),
         'distribution_plot': os.path.join(tmp_out, 'noise_distribution_plot.png'),
         'visualization': os.path.join(tmp_out, 'noise_visualization.png')
     }
-    uploaded = _upload_artifacts(task_id, artifacts)
+    uploaded = _upload_artifacts(progress_id, artifacts)
     
-    update_progress(task_id, 97, 'Finalizing results')
+    update_progress(progress_id, 97, 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -198,20 +212,22 @@ def process_video_traditional(task: dict):
 def process_video_optical_flow(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
-    update_progress(task_id, 5, 'Task received')
-    video_path = _ensure_video_path(task, task_id)
+    progress_id = task.get('parentTaskId') or file_md5
+    
+    update_progress(progress_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id, progress_id)
     out_dir = os.path.join('tmp_py', task_id, 'flow')
     os.makedirs(out_dir, exist_ok=True)
-    update_progress(task_id, 20, 'Decoding & sampling frames')
+    update_progress(progress_id, 20, 'Decoding & sampling frames')
     results = analyze_optical_flow(video_path, out_dir, sample_frames=int(task.get('sampleFrames', 50)))
-    update_progress(task_id, 80, 'Optical flow analysis completed')
+    update_progress(progress_id, 80, 'Optical flow analysis completed')
     artifacts = {
         'flow_visualization': os.path.join(out_dir, 'flow_visualization.png'),
         'flow_magnitude_plot': os.path.join(out_dir, 'flow_magnitude_plot.png'),
         'flow_anomaly_heatmap': os.path.join(out_dir, 'flow_anomaly_heatmap.png')
     }
-    uploaded = _upload_artifacts(task_id, artifacts)
-    update_progress(task_id, 97, 'Finalizing results')
+    uploaded = _upload_artifacts(progress_id, artifacts)
+    update_progress(progress_id, 97, 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -227,20 +243,22 @@ def process_video_optical_flow(task: dict):
 def process_video_frequency(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
-    update_progress(task_id, 5, 'Task received')
-    video_path = _ensure_video_path(task, task_id)
+    progress_id = task.get('parentTaskId') or file_md5
+    
+    update_progress(progress_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id, progress_id)
     out_dir = os.path.join('tmp_py', task_id, 'freq')
     os.makedirs(out_dir, exist_ok=True)
-    update_progress(task_id, 20, 'Decoding & sampling frames')
+    update_progress(progress_id, 20, 'Decoding & sampling frames')
     results = analyze_frequency_domain(video_path, out_dir, sample_frames=int(task.get('sampleFrames', 40)))
-    update_progress(task_id, 80, 'Frequency domain analysis completed')
+    update_progress(progress_id, 80, 'Frequency domain analysis completed')
     artifacts = {
         'frequency_spectrum': os.path.join(out_dir, 'frequency_spectrum.png'),
         'frequency_analysis_plot': os.path.join(out_dir, 'frequency_analysis_plot.png'),
         'frequency_heatmap': os.path.join(out_dir, 'frequency_heatmap.png')
     }
-    uploaded = _upload_artifacts(task_id, artifacts)
-    update_progress(task_id, 97, 'Finalizing results')
+    uploaded = _upload_artifacts(progress_id, artifacts)
+    update_progress(progress_id, 97, 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -256,19 +274,21 @@ def process_video_frequency(task: dict):
 def process_video_temporal(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
-    update_progress(task_id, 5, 'Task received')
-    video_path = _ensure_video_path(task, task_id)
+    progress_id = task.get('parentTaskId') or file_md5
+    
+    update_progress(progress_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id, progress_id)
     out_dir = os.path.join('tmp_py', task_id, 'temporal')
     os.makedirs(out_dir, exist_ok=True)
-    update_progress(task_id, 20, 'Decoding & sampling frames')
+    update_progress(progress_id, 20, 'Decoding & sampling frames')
     results = detect_temporal_inconsistency(video_path, out_dir)
-    update_progress(task_id, 80, 'Temporal inconsistency analysis completed')
+    update_progress(progress_id, 80, 'Temporal inconsistency analysis completed')
     artifacts = {
         'temporal_plot': os.path.join(out_dir, 'temporal_plot.png'),
         'temporal_heatmap': os.path.join(out_dir, 'temporal_heatmap.png')
     }
-    uploaded = _upload_artifacts(task_id, artifacts)
-    update_progress(task_id, 97, 'Finalizing results')
+    uploaded = _upload_artifacts(progress_id, artifacts)
+    update_progress(progress_id, 97, 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -284,18 +304,20 @@ def process_video_temporal(task: dict):
 def process_video_copymove(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
-    update_progress(task_id, 5, 'Task received')
-    video_path = _ensure_video_path(task, task_id)
+    progress_id = task.get('parentTaskId') or file_md5
+    
+    update_progress(progress_id, 5, 'Task received')
+    video_path = _ensure_video_path(task, task_id, progress_id)
     out_dir = os.path.join('tmp_py', task_id, 'copymove')
     os.makedirs(out_dir, exist_ok=True)
-    update_progress(task_id, 20, 'Extracting keyframes')
+    update_progress(progress_id, 20, 'Extracting keyframes')
     results = detect_copy_move(video_path, out_dir)
-    update_progress(task_id, 80, 'Copy-move detection completed')
+    update_progress(progress_id, 80, 'Copy-move detection completed')
     artifacts = {
         'copy_move_heatmap': os.path.join(out_dir, 'copy_move_heatmap.png')
     }
-    uploaded = _upload_artifacts(task_id, artifacts)
-    update_progress(task_id, 97, 'Finalizing results')
+    uploaded = _upload_artifacts(progress_id, artifacts)
+    update_progress(progress_id, 97, 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -326,6 +348,9 @@ def worker_loop():
         task = msg.value
         task_type = task.get('type')
         task_id = task.get('taskId') or task.get('fileMd5')
+        file_md5 = task.get('fileMd5') or task_id
+        progress_id = task.get('parentTaskId') or file_md5
+        
         try:
             # Deduplicate processing for the same taskId within a TTL window
             if task_id:
@@ -347,14 +372,14 @@ def worker_loop():
                 result = process_video_copymove(task)
             elif task_type == 'VIDEO_AI':
                 # Placeholder for future video AI
-                update_progress(task_id, 20, 'Video AI queued')
+                update_progress(progress_id, 20, 'Video AI queued')
                 time.sleep(1)
                 result = { 'taskId': task_id, 'type': 'VIDEO_AI', 'status': 'NOT_IMPLEMENTED' }
             else:
                 raise ValueError(f'Unknown task type: {task_type}')
             # Publish result
             producer.send(RESULT_TOPIC, key=task_id, value={ 'success': True, 'data': result })
-            update_progress(task_id, 100, 'Completed')
+            update_progress(progress_id, 100, 'Completed')
             if task_id:
                 try:
                     # Mark as processed for 24h
@@ -363,7 +388,7 @@ def worker_loop():
                     pass
         except Exception as e:
             producer.send(RESULT_TOPIC, key=task_id, value={ 'success': False, 'error': str(e), 'task': task })
-            update_progress(task_id, 100, f'Failed: {e}')
+            update_progress(progress_id, 100, f'Failed: {e}')
 
 
 if __name__ == '__main__':

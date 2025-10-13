@@ -87,7 +87,7 @@ export interface AnalysisOverviewProps {
 export interface AnalysisRecord {
   id: string;
   type: 'METADATA' | 'TRADITIONAL' | 'VIDEO_TRADITIONAL' | 'AI';
-  status: 'PENDING' | 'PROCESSING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'NOT_STARTED' | 'NOT_AVAILABLE';
+  status: 'PENDING' | 'QUEUED' | 'PROCESSING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'NOT_STARTED' | 'NOT_AVAILABLE';
   riskScore?: number;
   createdTime: string;
   completedTime?: string;
@@ -104,6 +104,7 @@ const getStatusIcon = (status: string) => {
       return <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />;
     case 'PROCESSING':
     case 'IN_PROGRESS':
+    case 'QUEUED':
       return <LoadingOutlined style={{ color: '#1890ff' }} />;
     case 'PENDING':
       return <InfoCircleOutlined style={{ color: '#faad14' }} />;
@@ -119,6 +120,7 @@ const getStatusIcon = (status: string) => {
 const getStatusTag = (status: string) => {
   const statusConfig = {
     PENDING: { color: 'orange', text: 'Pending' },
+    QUEUED: { color: 'blue', text: 'Processing' }, // 显示为 Processing 而不是 Queued
     PROCESSING: { color: 'blue', text: 'Processing' },
     IN_PROGRESS: { color: 'blue', text: 'Processing' },
     COMPLETED: { color: 'green', text: 'Completed' },
@@ -1026,6 +1028,8 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
   // AI Detection from AnalysisTask
   const [aiDetection, setAiDetection] = useState<AnalysisTask | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  // Polling state
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   
   // Resolve media kind with preference to prop from caller
   const resolvedIsImage = mediaKind ? mediaKind === 'image' : isImageFile(file);
@@ -1271,6 +1275,38 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
     }
   }, [file, loadAllAnalyses]);
 
+  // Polling function to refresh analysis status
+  const startPollingForUpdates = useCallback(() => {
+    // Clear existing polling interval
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+
+    // Poll every 10 seconds
+    const interval = setInterval(() => {
+      if (file?.md5Hash) {
+        loadAllAnalyses(file.md5Hash);
+      }
+    }, 10000); // 10 seconds
+
+    setPollingInterval(interval);
+
+    // Auto-stop polling after 5 minutes (traditional analysis should complete by then)
+    setTimeout(() => {
+      clearInterval(interval);
+      setPollingInterval(null);
+    }, 5 * 60 * 1000); // 5 minutes
+  }, [file, loadAllAnalyses, pollingInterval]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
+
 
   const handleViewDetails = (record: AnalysisRecord) => {
     if (onSelectAnalysis) {
@@ -1310,11 +1346,50 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
             content: 'Traditional analysis started! You will receive an email when it\'s complete.',
             duration: 5
           });
+          // Refresh analysis status immediately
+          await loadTraditionalAnalysis(file.md5Hash);
+          // Start polling to check for updates
+          startPollingForUpdates();
         } else {
           message.error(result.message);
         }
       } catch (error) {
         message.error('Failed to start traditional analysis');
+      } finally {
+        setTriggeringAnalysis(false);
+      }
+    } else if (record.type === 'AI') {
+      setTriggeringAnalysis(true);
+      try {
+        // Use the unified analysis orchestration API
+        const result = await analysisService.start({
+          fileMd5: file.md5Hash,
+          projectId: file.projectId,
+          runMetadata: false,
+          runTraditionalImage: false,
+          runImageAI: true,
+          runVideoTraditional: false,
+          runVideoAI: false,
+          selectedImageModel: 'tiny', // Default model
+        });
+        
+        if (result.data?.success !== false) {
+          message.success({
+            content: 'AI Detection started! This may take a few moments.',
+            duration: 5
+          });
+          // Refresh AI detection status
+          if (file) {
+            await loadAiDetection(file);
+          }
+          // Start polling to check for updates
+          startPollingForUpdates();
+        } else {
+          message.error(result.data?.message || 'Failed to start AI detection');
+        }
+      } catch (error: any) {
+        console.error('Failed to start AI detection:', error);
+        message.error(error?.response?.data?.message || 'Failed to start AI detection');
       } finally {
         setTriggeringAnalysis(false);
       }
@@ -1353,6 +1428,10 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
                 content: 'Traditional analysis started! You will receive an email when it\'s complete.',
                 duration: 5
               });
+              // Refresh analysis status immediately
+              await loadTraditionalAnalysis(file.md5Hash);
+              // Start polling to check for updates
+              startPollingForUpdates();
             } else {
               message.error(result.message);
             }
@@ -1363,6 +1442,41 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
           }
         },
       });
+    } else if (record.type === 'AI') {
+      setTriggeringAnalysis(true);
+      try {
+        // Re-run AI detection
+        const result = await analysisService.start({
+          fileMd5: file.md5Hash,
+          projectId: file.projectId,
+          runMetadata: false,
+          runTraditionalImage: false,
+          runImageAI: true,
+          runVideoTraditional: false,
+          runVideoAI: false,
+          selectedImageModel: 'tiny', // Default model
+        });
+        
+        if (result.data?.success !== false) {
+          message.success({
+            content: 'AI Detection re-started! This may take a few moments.',
+            duration: 5
+          });
+          // Refresh AI detection status
+          if (file) {
+            await loadAiDetection(file);
+          }
+          // Start polling to check for updates
+          startPollingForUpdates();
+        } else {
+          message.error(result.data?.message || 'Failed to re-run AI detection');
+        }
+      } catch (error: any) {
+        console.error('Failed to re-run AI detection:', error);
+        message.error(error?.response?.data?.message || 'Failed to re-run AI detection');
+      } finally {
+        setTriggeringAnalysis(false);
+      }
     }
   };
 
@@ -1419,20 +1533,27 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
         const isNotAvailable = record.status === 'NOT_AVAILABLE';
         const isCompleted = record.status === 'COMPLETED';
         const isFailed = record.status === 'FAILED';
-        const isProcessing = record.status === 'IN_PROGRESS' || record.status === 'PROCESSING' || record.status === 'PENDING';
+        const isProcessing = record.status === 'IN_PROGRESS' || record.status === 'PROCESSING' || record.status === 'PENDING' || record.status === 'QUEUED';
 
         return (
           <Space>
             {/* Start Analysis Button - only for NOT_STARTED */}
-            {isNotStarted && (record.type === 'METADATA' || record.type === 'TRADITIONAL') && (
+            {isNotStarted && (record.type === 'METADATA' || record.type === 'TRADITIONAL' || record.type === 'AI') && (
               <Button
                 type="primary"
                 size="small"
-                icon={record.type === 'METADATA' ? <ScanOutlined /> : <ExperimentOutlined />}
+                icon={
+                  record.type === 'METADATA' ? <ScanOutlined /> : 
+                  record.type === 'TRADITIONAL' ? <ExperimentOutlined /> :
+                  <RobotOutlined />
+                }
                 onClick={() => handleStartAnalysisAction(record)}
                 loading={record.type === 'METADATA' ? metadataLoading : triggeringAnalysis}
-                style={record.type === 'TRADITIONAL' ? 
-                  { background: '#722ed1', borderColor: '#722ed1' } : {}
+                style={
+                  record.type === 'TRADITIONAL' ? 
+                    { background: '#722ed1', borderColor: '#722ed1' } : 
+                  record.type === 'AI' ?
+                    { background: '#52c41a', borderColor: '#52c41a' } : {}
                 }
               >
                 Start
@@ -1440,7 +1561,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
             )}
 
             {/* Re-analyze Button - for completed/failed analyses */}
-            {(isCompleted || isFailed) && (
+            {(isCompleted || isFailed) && (record.type === 'METADATA' || record.type === 'TRADITIONAL' || record.type === 'AI') && (
               <Button
                 type="text"
                 size="small"
@@ -1487,7 +1608,7 @@ const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({
             {/* Processing Indicator */}
             {isProcessing && (
               <Text type="secondary" style={{ fontStyle: 'italic' }}>
-                Processing...
+                {record.status === 'PENDING' ? 'Pending...' : 'Processing...'}
               </Text>
             )}
           </Space>

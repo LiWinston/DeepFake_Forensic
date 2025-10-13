@@ -12,11 +12,18 @@ def check_gpu_availability():
     print("GPU Availability Check")
     print("=" * 60)
     
+    mps_available = torch.backends.mps.is_available()
     cuda_available = torch.cuda.is_available()
-    print(f"CUDA Available: {cuda_available}")
     
-    if cuda_available:
-        print(f"GPU Device Name: {torch.cuda.get_device_name(0)}")
+    print(f"MPS (Apple Silicon) Available: {mps_available}")
+    print(f"CUDA (NVIDIA) Available: {cuda_available}")
+    
+    if mps_available:
+        print("\n🍎 Apple Silicon GPU detected (MPS)")
+        print("Note: MPS does not provide detailed memory/device info like CUDA")
+        return True
+    elif cuda_available:
+        print(f"\nGPU Device Name: {torch.cuda.get_device_name(0)}")
         print(f"GPU Count: {torch.cuda.device_count()}")
         print(f"CUDA Version: {torch.version.cuda}")
         print(f"cuDNN Version: {torch.backends.cudnn.version()}")
@@ -31,9 +38,10 @@ def check_gpu_availability():
         print(f"GPU Memory - Reserved: {mem_reserved:.4f} GB")
         return True
     else:
-        print("WARNING: CUDA is not available. Running on CPU.")
-        print("\nTo install PyTorch with CUDA support, run:")
-        print("pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
+        print("\nWARNING: No GPU detected. Running on CPU.")
+        print("\nTo install PyTorch:")
+        print("  - For CUDA support: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118")
+        print("  - For Apple Silicon: pip install torch torchvision")
         return False
 
 def benchmark_inference(use_gpu=True):
@@ -42,7 +50,13 @@ def benchmark_inference(use_gpu=True):
     print(f"Inference Benchmark ({'GPU' if use_gpu else 'CPU'})")
     print("=" * 60)
     
-    device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
+    # Device detection: MPS > CUDA > CPU
+    if use_gpu and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif use_gpu and torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
     print(f"Device: {device}")
     
     # Create a simple model
@@ -50,8 +64,9 @@ def benchmark_inference(use_gpu=True):
     model = TinyCNN(num_classes=2).to(device)
     model.eval()
     
-    # Enable FP16 on GPU
-    if use_gpu and torch.cuda.is_available():
+    # Enable FP16 on CUDA GPU (MPS doesn't support .half() well)
+    is_cuda = use_gpu and torch.cuda.is_available()
+    if is_cuda:
         model = model.half()
         print("Model Precision: FP16")
     else:
@@ -60,7 +75,7 @@ def benchmark_inference(use_gpu=True):
     # Create dummy input (batch of 8 images, 64x64)
     batch_size = 8
     dummy_input = torch.randn(batch_size, 3, 64, 64).to(device)
-    if use_gpu and torch.cuda.is_available():
+    if is_cuda:
         dummy_input = dummy_input.half()
     
     # Warm up
@@ -73,7 +88,7 @@ def benchmark_inference(use_gpu=True):
     start_time = time.time()
     
     with torch.no_grad():
-        if use_gpu and torch.cuda.is_available():
+        if is_cuda:
             with torch.cuda.amp.autocast():
                 for _ in range(num_iterations):
                     _ = model(dummy_input)
@@ -81,7 +96,7 @@ def benchmark_inference(use_gpu=True):
             for _ in range(num_iterations):
                 _ = model(dummy_input)
     
-    if use_gpu and torch.cuda.is_available():
+    if is_cuda:
         torch.cuda.synchronize()  # Wait for GPU operations to complete
     
     end_time = time.time()
