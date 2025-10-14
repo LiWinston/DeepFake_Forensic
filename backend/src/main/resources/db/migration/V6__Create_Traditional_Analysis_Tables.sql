@@ -57,19 +57,6 @@ CREATE TABLE IF NOT EXISTS traditional_analysis_results (
     INDEX idx_authenticity_assessment (authenticity_assessment),
     INDEX idx_created_at (created_at),
     
-    -- Foreign key constraints
-    CONSTRAINT fk_traditional_analysis_user 
-        FOREIGN KEY (user_id) REFERENCES users(id) 
-        ON DELETE CASCADE,
-    
-    CONSTRAINT fk_traditional_analysis_project 
-        FOREIGN KEY (project_id) REFERENCES projects(id) 
-        ON DELETE CASCADE,
-    
-    CONSTRAINT fk_traditional_analysis_task 
-        FOREIGN KEY (analysis_task_id) REFERENCES analysis_tasks(id) 
-        ON DELETE SET NULL,
-    
     -- Unique constraint
     UNIQUE KEY uk_traditional_analysis_file_md5 (file_md5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

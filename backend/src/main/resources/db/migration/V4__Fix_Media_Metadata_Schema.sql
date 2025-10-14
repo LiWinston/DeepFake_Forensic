@@ -55,11 +55,6 @@ CREATE TABLE IF NOT EXISTS media_metadata (
     INDEX idx_media_metadata_extraction_status (extraction_status),
     INDEX idx_media_metadata_created_at (created_at),
     
-    -- Foreign Key Constraints
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (analysis_task_id) REFERENCES analysis_tasks(id) ON DELETE SET NULL,
-    
     -- Unique constraint for user-specific metadata
     UNIQUE KEY uk_metadata_file_user (file_md5, user_id)
 );

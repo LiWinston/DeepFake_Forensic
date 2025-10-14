@@ -25,6 +25,11 @@ public interface MediaMetadataRepository extends JpaRepository<MediaMetadata, Lo
      * Find metadata by file MD5
      */
     Optional<MediaMetadata> findByFileMd5(String fileMd5);
+
+    /**
+     * Delete metadata by file MD5
+     */
+    void deleteByFileMd5(String fileMd5);
     
     /**
      * Find metadata by user

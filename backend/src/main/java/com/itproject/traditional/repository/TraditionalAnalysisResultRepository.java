@@ -22,6 +22,11 @@ public interface TraditionalAnalysisResultRepository extends JpaRepository<Tradi
      * Find analysis result by file MD5 hash
      */
     Optional<TraditionalAnalysisResult> findByFileMd5(String fileMd5);
+
+        /**
+         * Delete traditional analysis results by file MD5
+         */
+        void deleteByFileMd5(String fileMd5);
     
     /**
      * Find all analysis results for a specific project

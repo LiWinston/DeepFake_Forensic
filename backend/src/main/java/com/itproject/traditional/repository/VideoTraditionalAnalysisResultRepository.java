@@ -7,4 +7,9 @@ import java.util.List;
 
 public interface VideoTraditionalAnalysisResultRepository extends JpaRepository<VideoTraditionalAnalysisResult, Long> {
     List<VideoTraditionalAnalysisResult> findByFileMd5(String fileMd5);
+
+    /**
+     * Delete all video traditional analysis results by file MD5
+     */
+    void deleteByFileMd5(String fileMd5);
 }

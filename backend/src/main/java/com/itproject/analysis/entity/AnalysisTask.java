@@ -5,6 +5,8 @@ import com.itproject.auth.entity.User;
 import com.itproject.project.entity.Project;
 import com.itproject.upload.entity.MediaFile;
 import jakarta.persistence.*;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.ConstraintMode;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -85,15 +87,15 @@ public class AnalysisTask {
     
     // Relationships
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
+    @JoinColumn(name = "project_id", nullable = false, foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private Project project;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "media_file_id", nullable = false)
+    @JoinColumn(name = "media_file_id", nullable = false, foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private MediaFile mediaFile;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private User user;
     
     public enum AnalysisType {

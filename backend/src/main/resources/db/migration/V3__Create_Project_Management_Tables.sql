@@ -21,9 +21,7 @@ CREATE TABLE projects (
     INDEX idx_projects_case_number (case_number),
     INDEX idx_projects_status (status),
     INDEX idx_projects_type (project_type),
-    INDEX idx_projects_created_at (created_at),
-    
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    INDEX idx_projects_created_at (created_at)
 );
 
 -- Create analysis_tasks table for different types of analysis
@@ -69,24 +67,17 @@ CREATE TABLE analysis_tasks (
     INDEX idx_analysis_tasks_user_id (user_id),
     INDEX idx_analysis_tasks_status (status),
     INDEX idx_analysis_tasks_type (analysis_type),
-    INDEX idx_analysis_tasks_created_at (created_at),
-    
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (media_file_id) REFERENCES media_files(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    INDEX idx_analysis_tasks_created_at (created_at)
 );
 
 -- Add project_id to media_files table
 ALTER TABLE media_files 
 ADD COLUMN project_id BIGINT NOT NULL AFTER user_id,
-ADD INDEX idx_media_files_project_id (project_id),
-ADD FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+ADD INDEX idx_media_files_project_id (project_id);
 
 -- Add project_id and analysis_task_id to media_metadata table
 ALTER TABLE media_metadata 
 ADD COLUMN project_id BIGINT NOT NULL AFTER user_id,
 ADD COLUMN analysis_task_id BIGINT AFTER project_id,
 ADD INDEX idx_media_metadata_project_id (project_id),
-ADD INDEX idx_media_metadata_analysis_task_id (analysis_task_id),
-ADD FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-ADD FOREIGN KEY (analysis_task_id) REFERENCES analysis_tasks(id) ON DELETE SET NULL;
+ADD INDEX idx_media_metadata_analysis_task_id (analysis_task_id);

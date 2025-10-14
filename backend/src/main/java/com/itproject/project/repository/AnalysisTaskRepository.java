@@ -88,4 +88,14 @@ public interface AnalysisTaskRepository extends JpaRepository<AnalysisTask, Long
                      User user,
                      AnalysisTask.AnalysisType analysisType
        );
+
+       /**
+        * Delete all analysis tasks that reference a specific media file.
+        */
+       void deleteByMediaFile(com.itproject.upload.entity.MediaFile mediaFile);
+
+       /**
+        * Delete all analysis tasks by media file MD5 for safety when entity not available.
+        */
+       void deleteByMediaFile_FileMd5(String fileMd5);
 }
