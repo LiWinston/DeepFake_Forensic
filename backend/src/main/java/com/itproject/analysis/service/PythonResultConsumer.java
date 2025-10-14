@@ -48,6 +48,28 @@ public class PythonResultConsumer {
                             } catch (Exception e) {
                                 log.warn("Failed to serialize results for task {}: {}", id, e.getMessage());
                             }
+                            
+                            // Calculate and set confidence score for AI detection tasks
+                            if (success && task.getAnalysisType() == AnalysisTask.AnalysisType.DEEPFAKE_DETECTION) {
+                                try {
+                                    Map<String, Object> result = (Map<String, Object>) data.get("result");
+                                    if (result != null) {
+                                        Map<String, Object> probabilities = (Map<String, Object>) result.get("probabilities");
+                                        if (probabilities != null) {
+                                            // Risk Score = probability of being AI-generated (Class 0 = "AI Art")
+                                            Object aiProb = probabilities.get("AI Art");
+                                            if (aiProb != null) {
+                                                double riskScore = ((Number) aiProb).doubleValue() * 100;
+                                                task.setConfidenceScore(riskScore);
+                                                log.info("Set risk score for AI detection task {}: {}", id, riskScore);
+                                            }
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    log.warn("Failed to extract confidence score for task {}: {}", id, e.getMessage());
+                                }
+                            }
+                            
                             if (!success) {
                                 Object err = payload.get("error");
                                 task.setErrorMessage(err != null ? err.toString() : "Python worker error");
