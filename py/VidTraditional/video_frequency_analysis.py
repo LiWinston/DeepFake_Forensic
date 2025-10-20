@@ -421,7 +421,8 @@ def generate_spectrum_comparison(magnitude_list: List[np.ndarray],
 
 def analyze_frequency_domain(video_path: str,
                              output_dir: str,
-                             sample_frames: int = 40) -> Dict:
+                             sample_frames: int = 40,
+                             progress_callback=None) -> Dict:
     """
     Main function to analyze frequency domain characteristics of video
     
@@ -459,6 +460,7 @@ def analyze_frequency_domain(video_path: str,
     freq_stats_list = []
     artifact_stats_list = []
     
+    processed = 0
     for idx in frame_indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
@@ -485,8 +487,15 @@ def analyze_frequency_domain(video_path: str,
             vis_path = freq_frames_dir / f"freq_{idx:04d}.png"
             cv2.imwrite(str(vis_path), spectrum_vis)
         
-        if len(magnitude_list) % 10 == 0:
+        processed += 1
+        if processed % 5 == 0:
             print(f"[INFO] Processed {len(magnitude_list)}/{len(frame_indices)} frames...")
+            if progress_callback:
+                local_pct = 25 + int(50 * (processed / max(1, len(frame_indices))))
+                try:
+                    progress_callback(local_pct, f"Frequency analysis processed {processed}/{len(frame_indices)} frames")
+                except Exception:
+                    pass
     
     cap.release()
     

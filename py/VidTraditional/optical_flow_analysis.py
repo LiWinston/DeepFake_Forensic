@@ -308,7 +308,8 @@ def generate_flow_plot(flow_stats: List[Dict],
 def analyze_optical_flow(video_path: str,
                          output_dir: str,
                          sample_frames: int = 50,
-                         anomaly_sensitivity: float = 2.5) -> Dict:
+                         anomaly_sensitivity: float = 2.5,
+                         progress_callback=None) -> Dict:
     """
     Main function to analyze optical flow in video
     
@@ -345,6 +346,7 @@ def analyze_optical_flow(video_path: str,
     
     flow_stats = []
     prev_frame = None
+    processed = 0
     
     for idx in frame_indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
@@ -370,8 +372,15 @@ def analyze_optical_flow(video_path: str,
             vis_path = flow_frames_dir / f"flow_{idx:04d}.png"
             cv2.imwrite(str(vis_path), flow_vis)
         
-        if len(flow_stats) % 10 == 0:
+        processed += 1
+        if processed % 5 == 0:
             print(f"[INFO] Processed {len(flow_stats)}/{len(frame_indices)} frame pairs...")
+            if progress_callback:
+                local_pct = 25 + int(50 * (processed / max(1, len(frame_indices))))
+                try:
+                    progress_callback(local_pct, f"Optical flow processed {processed}/{len(frame_indices)} pairs")
+                except Exception:
+                    pass
     
     cap.release()
     

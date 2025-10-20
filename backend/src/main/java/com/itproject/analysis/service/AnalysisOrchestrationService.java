@@ -153,7 +153,10 @@ public class AnalysisOrchestrationService {
             ? req.getSelectedTraditionalMethods()
             : java.util.Arrays.asList("NOISE", "FLOW", "FREQ", "TEMPORAL", "COPYMOVE");
 
+            final int totalSubtasks = methods.size();
+            int subIndex = 0;
             for (String method : methods) {
+                subIndex++;
                 String normalized = method.trim().toUpperCase();
                 String pyType;
                 if ("FLOW".equals(normalized)) {
@@ -177,6 +180,9 @@ public class AnalysisOrchestrationService {
                 msg.put("fileMd5", media.getFileMd5());
                 msg.put("minioUrl", minioUrl);
                 msg.put("parentTaskId", parentCorrelationId);
+                // Provide subtask index info for aggregated progress reporting in Python worker
+                msg.put("subtaskIndex", subIndex); // 1-based
+                msg.put("totalSubtasks", totalSubtasks);
                 // Optional params
                 msg.put("sampleFrames", 30);
                 msg.put("noiseSigma", 10.0);

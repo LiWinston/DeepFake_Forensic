@@ -310,7 +310,8 @@ def generate_difference_heatmap(video_path: str,
 def detect_temporal_inconsistency(video_path: str,
                                   output_dir: str,
                                   sample_rate: int = 1,
-                                  anomaly_sensitivity: float = 2.0) -> Dict:
+                                  anomaly_sensitivity: float = 2.0,
+                                  progress_callback=None) -> Dict:
     """
     Main function to detect temporal inconsistencies in video
     
@@ -369,6 +370,13 @@ def detect_temporal_inconsistency(video_path: str,
         
         if frame_count % 100 == 0:
             print(f"[INFO] Processed {frame_count}/{total_frames} frames...")
+        if progress_callback and frame_count % max(1, sample_rate*5) == 0:
+            try:
+                # Estimate local progress in [25..75]
+                local_pct = 25 + int(50 * (frame_count / max(1, total_frames)))
+                progress_callback(local_pct, f"Temporal analysis processed {frame_count}/{total_frames} frames")
+            except Exception:
+                pass
     
     cap.release()
     
