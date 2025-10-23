@@ -15,13 +15,11 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 为现有的 media_files 表添加 user_id 列（如果不存在）
 ALTER TABLE media_files 
-ADD COLUMN IF NOT EXISTS user_id BIGINT,
-ADD CONSTRAINT fk_media_files_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ADD COLUMN IF NOT EXISTS user_id BIGINT;
 
 -- 为现有的 media_metadata 表添加 user_id 列（如果不存在）
 ALTER TABLE media_metadata 
-ADD COLUMN IF NOT EXISTS user_id BIGINT,
-ADD CONSTRAINT fk_media_metadata_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ADD COLUMN IF NOT EXISTS user_id BIGINT;
 
 -- 创建索引以提高查询性能
 CREATE INDEX IF NOT EXISTS idx_media_files_user_id ON media_files(user_id);

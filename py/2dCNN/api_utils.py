@@ -30,17 +30,27 @@ def download_image_from_url(url, timeout=30):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         response = requests.get(url, headers=headers, timeout=timeout, stream=True)
-        response.raise_for_status()        
+        response.raise_for_status()
+        
+        # Note: MinIO and some storage systems return 'application/octet-stream' by default
+        # We'll try to open the image anyway and let PIL validate if it's actually an image
         content_type = response.headers.get('content-type', '')
-        if not content_type.startswith('image/'):
-            raise ValueError(f"URL does not point to an image. Content-Type: {content_type}")        
+        print(f"[DEBUG] Downloaded content with Content-Type: {content_type}")
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
             for chunk in response.iter_content(chunk_size=8192):
                 tmp_file.write(chunk)
             tmp_path = tmp_file.name
-        image = Image.open(tmp_path).convert('RGB')
-        os.unlink(tmp_path) 
-        return image
+        
+        try:
+            # PIL will raise an exception if this is not a valid image
+            image = Image.open(tmp_path).convert('RGB')
+            os.unlink(tmp_path)
+            return image
+        except Exception as img_err:
+            os.unlink(tmp_path)
+            raise ValueError(f"Downloaded file is not a valid image: {img_err}")
+            
     except requests.exceptions.RequestException as e:
         raise Exception(f"Failed to download image from URL: {str(e)}")
     except Exception as e:

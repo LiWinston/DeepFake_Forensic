@@ -92,6 +92,22 @@ public class ErrorLevelAnalysisUtil {
      * Recompress image with specified JPEG quality
      */
     private BufferedImage recompressImage(BufferedImage image, int quality) throws IOException {
+        // Convert to RGB format if necessary (JPEG doesn't support CMYK, grayscale with alpha, etc.)
+        BufferedImage rgbImage = image;
+        if (image.getType() != BufferedImage.TYPE_INT_RGB) {
+            log.debug("Converting image from type {} to TYPE_INT_RGB for JPEG compression", image.getType());
+            rgbImage = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D g = rgbImage.createGraphics();
+            
+            // Fill with white background (in case source has transparency)
+            g.setColor(java.awt.Color.WHITE);
+            g.fillRect(0, 0, image.getWidth(), image.getHeight());
+            
+            // Draw the original image
+            g.drawImage(image, 0, 0, null);
+            g.dispose();
+        }
+        
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         
         // Get JPEG writer
@@ -102,7 +118,7 @@ public class ErrorLevelAnalysisUtil {
         
         try (ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
             writer.setOutput(ios);
-            writer.write(null, new IIOImage(image, null, null), param);
+            writer.write(null, new IIOImage(rgbImage, null, null), param);
             writer.dispose();
         }
         

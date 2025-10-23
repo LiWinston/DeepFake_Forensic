@@ -4,6 +4,8 @@ import com.itproject.analysis.entity.AnalysisTask;
 import com.itproject.auth.entity.User;
 import com.itproject.project.entity.Project;
 import jakarta.persistence.*;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.ConstraintMode;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -42,15 +44,15 @@ public class VideoTraditionalAnalysisResult {
     private String errorMessage;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "analysis_task_id")
+    @JoinColumn(name = "analysis_task_id", foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private AnalysisTask analysisTask;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id")
+    @JoinColumn(name = "project_id", foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private Project project;
 
     @CreationTimestamp

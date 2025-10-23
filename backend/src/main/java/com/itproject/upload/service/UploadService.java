@@ -1,6 +1,10 @@
 package com.itproject.upload.service;
 
 import com.itproject.auth.entity.User;
+import com.itproject.metadata.repository.MediaMetadataRepository;
+import com.itproject.project.repository.AnalysisTaskRepository;
+import com.itproject.traditional.repository.TraditionalAnalysisResultRepository;
+import com.itproject.traditional.repository.VideoTraditionalAnalysisResultRepository;
 import com.itproject.auth.security.SecurityUtils;
 import com.itproject.project.entity.Project;
 import com.itproject.project.repository.ProjectRepository;
@@ -89,6 +93,19 @@ public class UploadService {
     
     @Autowired
     private FileTypeValidationService fileTypeValidationService;
+
+    // Additional repositories for deletion cascade (no physical FKs)
+    @Autowired
+    private MediaMetadataRepository mediaMetadataRepository;
+
+    @Autowired
+    private TraditionalAnalysisResultRepository traditionalAnalysisResultRepository;
+
+    @Autowired
+    private VideoTraditionalAnalysisResultRepository videoTraditionalAnalysisResultRepository;
+
+    @Autowired
+    private AnalysisTaskRepository analysisTaskRepository;
     
     private static final String CHUNK_CACHE_PREFIX = "chunk:";
     private static final String UPLOAD_PROGRESS_PREFIX = "progress:";
@@ -644,7 +661,7 @@ public class UploadService {
             
             MediaFile mediaFile = mediaFileOpt.get();
             
-            // Delete file from MinIO storage
+            // 1) Delete file object from MinIO storage (best-effort)
             try {
                 if (StringUtils.hasText(mediaFile.getFilePath())) {
                     minioClient.removeObject(RemoveObjectArgs.builder()
@@ -658,7 +675,28 @@ public class UploadService {
                 // Continue with database cleanup even if MinIO deletion fails
             }
             
-            // Delete related chunk info records
+            // 2) Delete related traditional/video analysis results and metadata by fileMd5
+            try {
+                String md5 = mediaFile.getFileMd5();
+                traditionalAnalysisResultRepository.deleteByFileMd5(md5);
+                videoTraditionalAnalysisResultRepository.deleteByFileMd5(md5);
+                mediaMetadataRepository.deleteByFileMd5(md5);
+                log.info("Deleted analysis results and metadata for fileMd5: {}", md5);
+            } catch (Exception depDelEx) {
+                log.warn("Failed to delete dependent analysis/metadata records: {}", mediaFile.getFileMd5(), depDelEx);
+            }
+
+            // 3) Delete analysis tasks referencing this media file
+            try {
+                analysisTaskRepository.deleteByMediaFile(mediaFile);
+                // Fallback by MD5 if necessary
+                analysisTaskRepository.deleteByMediaFile_FileMd5(mediaFile.getFileMd5());
+                log.info("Deleted analysis tasks for media file id={}, md5={}", mediaFile.getId(), mediaFile.getFileMd5());
+            } catch (Exception taskDelEx) {
+                log.warn("Failed to delete analysis tasks for media file {}: {}", mediaFile.getId(), taskDelEx.getMessage());
+            }
+
+            // 4) Delete related chunk info records
             try {
                 chunkInfoRepository.deleteByFileMd5(mediaFile.getFileMd5());
                 log.info("Deleted chunk info for file: {}", mediaFile.getFileMd5());
@@ -666,7 +704,7 @@ public class UploadService {
                 log.warn("Failed to delete chunk info: {}", mediaFile.getFileMd5(), chunkException);
             }
             
-            // Delete any remaining chunks from MinIO
+            // 5) Delete any remaining chunk objects from MinIO (best-effort)
             try {
                 List<ChunkInfo> chunks = chunkInfoRepository.findByFileMd5OrderByChunkIndex(mediaFile.getFileMd5());
                 for (ChunkInfo chunk : chunks) {
@@ -683,10 +721,10 @@ public class UploadService {
                 log.warn("Failed to clean up chunks for file: {}", mediaFile.getFileMd5(), e);
             }
             
-            // Delete file record from database
+            // 6) Delete file record from database
             mediaFileRepository.delete(mediaFile);
             
-            // Clear cached progress
+            // 7) Clear cached progress
             String progressKey = UPLOAD_PROGRESS_PREFIX + mediaFile.getFileMd5();
             String chunkCacheKey = CHUNK_CACHE_PREFIX + mediaFile.getFileMd5();
             try {

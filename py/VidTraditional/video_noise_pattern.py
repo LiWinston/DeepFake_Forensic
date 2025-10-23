@@ -382,7 +382,8 @@ def generate_distribution_plot(noise_list: List[np.ndarray],
 def analyze_noise_pattern(video_path: str,
                           output_dir: str,
                           sample_frames: int = 30,
-                          noise_sigma: float = 10.0) -> Dict:
+                          noise_sigma: float = 10.0,
+                          progress_callback=None) -> Dict:
     """
     Main function to analyze noise patterns in video
     
@@ -421,6 +422,7 @@ def analyze_noise_pattern(video_path: str,
     noise_stats_list = []
     freq_stats_list = []
     
+    processed = 0
     for idx in frame_indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
@@ -447,8 +449,16 @@ def analyze_noise_pattern(video_path: str,
             vis_path = noise_frames_dir / f"noise_{idx:04d}.png"
             cv2.imwrite(str(vis_path), noise_vis)
         
-        if len(noise_list) % 10 == 0:
-            print(f"[INFO] Processed {len(noise_list)}/{len(frame_indices)} frames...")
+        processed += 1
+        if processed % 5 == 0:
+            print(f"[INFO] Processed {processed}/{len(frame_indices)} frames...")
+            if progress_callback:
+                # Map within local analyzer [25..75] window to leave headroom for IO/plots
+                local_pct = 25 + int(50 * (processed / max(1, len(frame_indices))))
+                try:
+                    progress_callback(local_pct, f"Noise analysis processed {processed}/{len(frame_indices)} frames")
+                except Exception:
+                    pass
     
     cap.release()
     

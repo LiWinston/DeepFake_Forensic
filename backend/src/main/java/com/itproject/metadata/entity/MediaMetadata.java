@@ -4,6 +4,8 @@ import com.itproject.analysis.entity.AnalysisTask;
 import com.itproject.auth.entity.User;
 import com.itproject.project.entity.Project;
 import jakarta.persistence.*;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.ConstraintMode;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -146,17 +148,17 @@ public class MediaMetadata {
     
     // User relationship
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private User user;
     
     // Project relationship
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
+    @JoinColumn(name = "project_id", nullable = false, foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private Project project;
     
     // Analysis task relationship - this metadata belongs to a specific analysis task
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "analysis_task_id")
+    @JoinColumn(name = "analysis_task_id", foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
     private AnalysisTask analysisTask;
     
     public enum ExtractionStatus {

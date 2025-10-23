@@ -38,17 +38,45 @@ public class PythonResultConsumer {
                     try {
                         Long id = Long.valueOf(taskId);
                         analysisTaskRepository.findById(id).ifPresent(task -> {
+                            log.info("Updating task {} status to {}", id, success ? "COMPLETED" : "FAILED");
+                            
                             task.setStatus(success ? AnalysisTask.AnalysisStatus.COMPLETED : AnalysisTask.AnalysisStatus.FAILED);
                             try {
                                 // Persist full payload data to results (includes artifacts with MinIO URLs)
                                 task.setResults(mapper.writeValueAsString(data));
-                            } catch (Exception ignore) {}
+                                log.debug("Saved results for task {}: {}", id, mapper.writeValueAsString(data));
+                            } catch (Exception e) {
+                                log.warn("Failed to serialize results for task {}: {}", id, e.getMessage());
+                            }
+                            
+                            // Calculate and set confidence score for AI detection tasks
+                            if (success && task.getAnalysisType() == AnalysisTask.AnalysisType.DEEPFAKE_DETECTION) {
+                                try {
+                                    Map<String, Object> result = (Map<String, Object>) data.get("result");
+                                    if (result != null) {
+                                        Map<String, Object> probabilities = (Map<String, Object>) result.get("probabilities");
+                                        if (probabilities != null) {
+                                            // Risk Score = probability of being AI-generated (Class 0 = "AI Art")
+                                            Object aiProb = probabilities.get("AI Art");
+                                            if (aiProb != null) {
+                                                double riskScore = ((Number) aiProb).doubleValue() * 100;
+                                                task.setConfidenceScore(riskScore);
+                                                log.info("Set risk score for AI detection task {}: {}", id, riskScore);
+                                            }
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    log.warn("Failed to extract confidence score for task {}: {}", id, e.getMessage());
+                                }
+                            }
+                            
                             if (!success) {
                                 Object err = payload.get("error");
                                 task.setErrorMessage(err != null ? err.toString() : "Python worker error");
                             }
                             task.setCompletedAt(LocalDateTime.now());
                             analysisTaskRepository.save(task);
+                            log.info("Task {} updated successfully", id);
 
                             // Additionally, persist to video_traditional_analysis_results when applicable
                             try {

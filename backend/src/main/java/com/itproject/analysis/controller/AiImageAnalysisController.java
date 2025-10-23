@@ -42,11 +42,20 @@ public class AiImageAnalysisController {
             });
 
             AnalysisTask task = analysisTaskRepository
-                    .findTopByMediaFile_FileMd5AndUserAndAnalysisTypeOrderByCompletedAtDesc(
+                    .findTopByMediaFile_FileMd5AndUserAndAnalysisTypeOrderByIdDesc(
                             fileMd5,
                             user,
                             AnalysisTask.AnalysisType.DEEPFAKE_DETECTION
                     );
+            
+            // Log for debugging
+            if (task != null) {
+                log.info("Found AI task for file {}: id={}, status={}, completedAt={}", 
+                        fileMd5, task.getId(), task.getStatus(), task.getCompletedAt());
+            } else {
+                log.info("No AI task found for file {}", fileMd5);
+            }
+            
             return ResponseEntity.ok(Result.success(task));
         } catch (Exception e) {
             log.error("Failed to get AI image result for {}: {}", fileMd5, e.getMessage());

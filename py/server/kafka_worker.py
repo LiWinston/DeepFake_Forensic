@@ -15,7 +15,8 @@ if os.path.join(BASE_DIR, 'VidTraditional') not in sys.path:
     sys.path.append(os.path.join(BASE_DIR, 'VidTraditional'))
 
 # Import analyzers
-from api import load_models, models, model_info, get_image_transforms, predict_single_image, predict_multiple_images  # type: ignore
+import api  # Import module instead of specific items to get dynamic updates
+from api import load_models, get_image_transforms, predict_single_image, predict_multiple_images  # type: ignore
 from video_noise_pattern import analyze_noise_pattern  # type: ignore
 from optical_flow_analysis import analyze_optical_flow  # type: ignore
 from video_frequency_analysis import analyze_frequency_domain  # type: ignore
@@ -74,6 +75,31 @@ def update_progress(task_id: str, percent: int, message: str = ''):
     rds.expire(key, PROGRESS_TTL)
 
 
+def _calc_parent_progress(sub_idx: int, total: int, local_pct: float) -> int:
+    """
+    Map a subtask-local progress [0..100] into the parent task's global progress [0..100)
+    without reaching 100 until all subtasks are done. We reserve the final 100 for the
+    worker loop after publishing all results.
+
+    Each subtask occupies an equal window. Within a window, we map [0,100] -> [start,end],
+    but clamp the end below 100 (e.g., 99) to avoid premature completion in UI.
+    """
+    try:
+        sub_idx = max(1, int(sub_idx))
+        total = max(1, int(total))
+        local = max(0.0, min(100.0, float(local_pct))) / 100.0
+        # Reserve 1% headroom for finalization
+        max_parent = 99.0
+        span = max_parent / float(total)
+        start = span * (sub_idx - 1)
+        end = start + span
+        parent_progress = start + local * (end - start)
+        return int(round(parent_progress))
+    except Exception:
+        # Fallback: keep something reasonable
+        return int(min(99, max(0, local_pct)))
+
+
 def process_image_ai(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
@@ -84,29 +110,60 @@ def process_image_ai(task: dict):
     image_url = task.get('imageUrl')
 
     update_progress(progress_id, 5, 'Starting image AI analysis')
-    if not models:
+    
+    # Access models dynamically from the api module
+    if not api.models:
+        print(f"[WARN] Models not loaded, loading now...")
         load_models()
+    
+    # Debug: print available models
+    print(f"[DEBUG] Available models: {list(api.models.keys())}")
+    print(f"[DEBUG] Requested model: {model_name}")
+    
     if not model_name:
-        model_name = list(models.keys())[0]
-    if model_name not in models:
-        raise ValueError(f"Model {model_name} not found")
+        model_name = list(api.models.keys())[0]
+        print(f"[DEBUG] No model specified, using default: {model_name}")
+    
+    if model_name not in api.models:
+        # Try to find the model by partial match (e.g., 'tiny' matches 'tiny_cnn_art_detector')
+        matched_model = None
+        for key in api.models.keys():
+            if model_name in key.lower():
+                matched_model = key
+                print(f"[DEBUG] Partial match found: {model_name} -> {matched_model}")
+                break
+        
+        if matched_model:
+            model_name = matched_model
+        else:
+            available = ', '.join(api.models.keys())
+            raise ValueError(f"Model '{model_name}' not found. Available models: {available}")
 
-    model = models[model_name]
-    transform_key = model_info[model_name]['transform_key']
+    model = api.models[model_name]
+    transform_key = api.model_info[model_name]['transform_key']
     transforms = get_image_transforms()
     transform = transforms[transform_key]
 
     img = None
     if image_bytes_b64:
         import base64
+        print(f"[DEBUG] Loading image from base64 bytes")
         img = Image.open(io.BytesIO(base64.b64decode(image_bytes_b64))).convert('RGB')
     elif image_url:
         from api_utils import download_image_from_url
-        img = download_image_from_url(image_url)
+        print(f"[DEBUG] Downloading image from URL: {image_url}")
+        try:
+            img = download_image_from_url(image_url)
+            print(f"[DEBUG] Image downloaded successfully, size: {img.size}")
+        except Exception as e:
+            print(f"[ERROR] Failed to download image from {image_url}: {e}")
+            raise ValueError(f"Failed to download image from URL: {e}")
     else:
         raise ValueError('No image content provided')
 
     update_progress(progress_id, 50, 'Running inference')
+    print(f"[DEBUG] Starting inference with model: {model_name}")
+    
     import torch
     # Device detection: MPS (Apple Silicon) > CUDA (NVIDIA) > CPU
     if torch.backends.mps.is_available():
@@ -115,15 +172,26 @@ def process_image_ai(task: dict):
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-    result = predict_single_image(model=model, image=img, transform=transform, device=device)
+    
+    print(f"[DEBUG] Using device: {device}")
+    try:
+        result = predict_single_image(model=model, image=img, transform=transform, device=device)
+        print(f"[DEBUG] Inference completed successfully. Result: {result}")
+    except Exception as e:
+        print(f"[ERROR] Inference failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
     update_progress(progress_id, 95, 'Inference completed')
-    return {
+    response = {
         'taskId': task_id,
         'type': 'IMAGE_AI',
         'model': model_name,
         'result': result
     }
+    print(f"[DEBUG] Returning response: {response}")
+    return response
 
 
 def _ensure_video_path(task: dict, task_id: str, progress_id: str = None):
@@ -143,7 +211,7 @@ def _ensure_video_path(task: dict, task_id: str, progress_id: str = None):
     return video_path
 
 
-def _upload_artifacts(task_id: str, artifacts: dict):
+def _upload_artifacts(task_id: str, artifacts: dict, progress_mapper=None):
     uploaded = {}
     if minio_client:
         total = len(artifacts)
@@ -157,7 +225,8 @@ def _upload_artifacts(task_id: str, artifacts: dict):
                     uploaded[k] = f"{scheme}://{MINIO_ENDPOINT.strip('/').replace('http://','').replace('https://','')}/{MINIO_BUCKET}/{object_name}"
                     done += 1
                     pct = 80 + int((done/total) * 15)
-                    update_progress(task_id, pct, f'Uploading artifacts ({done}/{total})')
+                    mapped = progress_mapper(pct) if progress_mapper else pct
+                    update_progress(task_id, mapped, f'Uploading artifacts ({done}/{total})')
             except Exception as e:
                 print('MinIO upload failed for', path, e)
     return uploaded
@@ -172,31 +241,38 @@ def process_video_traditional(task: dict):
     
     # Use parentTaskId (fileMd5) for progress tracking so frontend can poll it
     progress_id = task.get('parentTaskId') or file_md5
+    sub_idx = int(task.get('subtaskIndex', 1))
+    total_sub = int(task.get('totalSubtasks', 1))
 
-    update_progress(progress_id, 5, 'Task received')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 5), 'Task received')
     video_path = _ensure_video_path(task, task_id, progress_id)
 
     tmp_out = os.path.join('tmp_py', task_id)
     os.makedirs(tmp_out, exist_ok=True)
 
-    update_progress(progress_id, 20, 'Decoding & sampling frames')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 20), 'Decoding & sampling frames')
     # The underlying analyzer performs frame sampling; we reflect staged progress for UX
     # We can't hook into its internals without refactor, so we approximate time slices
     t_start = time.time()
+    # Progress callback for local analyzer -> parent progress mapping
+    def _cb(local_pct: int, msg: str):
+        update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, local_pct), msg)
+
     results = analyze_noise_pattern(video_path, tmp_out,
-                                    sample_frames=sample_frames, noise_sigma=noise_sigma)
+                                    sample_frames=sample_frames, noise_sigma=noise_sigma,
+                                    progress_callback=_cb)
     t_analyze = time.time() - t_start
     # After heavy analysis, move progress forward generously
-    update_progress(progress_id, 80, 'Analyzing noise residuals completed')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 80), 'Analyzing noise residuals completed')
 
     artifacts = {
         'temporal_plot': os.path.join(tmp_out, 'noise_temporal_plot.png'),
         'distribution_plot': os.path.join(tmp_out, 'noise_distribution_plot.png'),
         'visualization': os.path.join(tmp_out, 'noise_visualization.png')
     }
-    uploaded = _upload_artifacts(progress_id, artifacts)
+    uploaded = _upload_artifacts(progress_id, artifacts, progress_mapper=lambda p: _calc_parent_progress(sub_idx, total_sub, p))
     
-    update_progress(progress_id, 97, 'Finalizing results')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 97), 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -213,21 +289,25 @@ def process_video_optical_flow(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
     progress_id = task.get('parentTaskId') or file_md5
+    sub_idx = int(task.get('subtaskIndex', 1))
+    total_sub = int(task.get('totalSubtasks', 1))
     
-    update_progress(progress_id, 5, 'Task received')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 5), 'Task received')
     video_path = _ensure_video_path(task, task_id, progress_id)
     out_dir = os.path.join('tmp_py', task_id, 'flow')
     os.makedirs(out_dir, exist_ok=True)
-    update_progress(progress_id, 20, 'Decoding & sampling frames')
-    results = analyze_optical_flow(video_path, out_dir, sample_frames=int(task.get('sampleFrames', 50)))
-    update_progress(progress_id, 80, 'Optical flow analysis completed')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 20), 'Decoding & sampling frames')
+    def _cb(local_pct: int, msg: str):
+        update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, local_pct), msg)
+    results = analyze_optical_flow(video_path, out_dir, sample_frames=int(task.get('sampleFrames', 50)), progress_callback=_cb)
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 80), 'Optical flow analysis completed')
     artifacts = {
         'flow_visualization': os.path.join(out_dir, 'flow_visualization.png'),
         'flow_magnitude_plot': os.path.join(out_dir, 'flow_magnitude_plot.png'),
         'flow_anomaly_heatmap': os.path.join(out_dir, 'flow_anomaly_heatmap.png')
     }
-    uploaded = _upload_artifacts(progress_id, artifacts)
-    update_progress(progress_id, 97, 'Finalizing results')
+    uploaded = _upload_artifacts(progress_id, artifacts, progress_mapper=lambda p: _calc_parent_progress(sub_idx, total_sub, p))
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 97), 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -244,21 +324,25 @@ def process_video_frequency(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
     progress_id = task.get('parentTaskId') or file_md5
+    sub_idx = int(task.get('subtaskIndex', 1))
+    total_sub = int(task.get('totalSubtasks', 1))
     
-    update_progress(progress_id, 5, 'Task received')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 5), 'Task received')
     video_path = _ensure_video_path(task, task_id, progress_id)
     out_dir = os.path.join('tmp_py', task_id, 'freq')
     os.makedirs(out_dir, exist_ok=True)
-    update_progress(progress_id, 20, 'Decoding & sampling frames')
-    results = analyze_frequency_domain(video_path, out_dir, sample_frames=int(task.get('sampleFrames', 40)))
-    update_progress(progress_id, 80, 'Frequency domain analysis completed')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 20), 'Decoding & sampling frames')
+    def _cb(local_pct: int, msg: str):
+        update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, local_pct), msg)
+    results = analyze_frequency_domain(video_path, out_dir, sample_frames=int(task.get('sampleFrames', 40)), progress_callback=_cb)
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 80), 'Frequency domain analysis completed')
     artifacts = {
         'frequency_spectrum': os.path.join(out_dir, 'frequency_spectrum.png'),
         'frequency_analysis_plot': os.path.join(out_dir, 'frequency_analysis_plot.png'),
         'frequency_heatmap': os.path.join(out_dir, 'frequency_heatmap.png')
     }
-    uploaded = _upload_artifacts(progress_id, artifacts)
-    update_progress(progress_id, 97, 'Finalizing results')
+    uploaded = _upload_artifacts(progress_id, artifacts, progress_mapper=lambda p: _calc_parent_progress(sub_idx, total_sub, p))
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 97), 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -275,20 +359,24 @@ def process_video_temporal(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
     progress_id = task.get('parentTaskId') or file_md5
+    sub_idx = int(task.get('subtaskIndex', 1))
+    total_sub = int(task.get('totalSubtasks', 1))
     
-    update_progress(progress_id, 5, 'Task received')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 5), 'Task received')
     video_path = _ensure_video_path(task, task_id, progress_id)
     out_dir = os.path.join('tmp_py', task_id, 'temporal')
     os.makedirs(out_dir, exist_ok=True)
-    update_progress(progress_id, 20, 'Decoding & sampling frames')
-    results = detect_temporal_inconsistency(video_path, out_dir)
-    update_progress(progress_id, 80, 'Temporal inconsistency analysis completed')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 20), 'Decoding & sampling frames')
+    def _cb(local_pct: int, msg: str):
+        update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, local_pct), msg)
+    results = detect_temporal_inconsistency(video_path, out_dir, progress_callback=_cb)
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 80), 'Temporal inconsistency analysis completed')
     artifacts = {
         'temporal_plot': os.path.join(out_dir, 'temporal_plot.png'),
         'temporal_heatmap': os.path.join(out_dir, 'temporal_heatmap.png')
     }
-    uploaded = _upload_artifacts(progress_id, artifacts)
-    update_progress(progress_id, 97, 'Finalizing results')
+    uploaded = _upload_artifacts(progress_id, artifacts, progress_mapper=lambda p: _calc_parent_progress(sub_idx, total_sub, p))
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 97), 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -305,19 +393,23 @@ def process_video_copymove(task: dict):
     task_id = task.get('taskId') or task.get('fileMd5') or str(int(time.time()))
     file_md5 = task.get('fileMd5') or task_id
     progress_id = task.get('parentTaskId') or file_md5
+    sub_idx = int(task.get('subtaskIndex', 1))
+    total_sub = int(task.get('totalSubtasks', 1))
     
-    update_progress(progress_id, 5, 'Task received')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 5), 'Task received')
     video_path = _ensure_video_path(task, task_id, progress_id)
     out_dir = os.path.join('tmp_py', task_id, 'copymove')
     os.makedirs(out_dir, exist_ok=True)
-    update_progress(progress_id, 20, 'Extracting keyframes')
-    results = detect_copy_move(video_path, out_dir)
-    update_progress(progress_id, 80, 'Copy-move detection completed')
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 20), 'Extracting keyframes')
+    def _cb(local_pct: int, msg: str):
+        update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, local_pct), msg)
+    results = detect_copy_move(video_path, out_dir, progress_callback=_cb)
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 80), 'Copy-move detection completed')
     artifacts = {
         'copy_move_heatmap': os.path.join(out_dir, 'copy_move_heatmap.png')
     }
-    uploaded = _upload_artifacts(progress_id, artifacts)
-    update_progress(progress_id, 97, 'Finalizing results')
+    uploaded = _upload_artifacts(progress_id, artifacts, progress_mapper=lambda p: _calc_parent_progress(sub_idx, total_sub, p))
+    update_progress(progress_id, _calc_parent_progress(sub_idx, total_sub, 97), 'Finalizing results')
     return {
         'taskId': task_id,
         'fileMd5': file_md5,
@@ -351,15 +443,20 @@ def worker_loop():
         file_md5 = task.get('fileMd5') or task_id
         progress_id = task.get('parentTaskId') or file_md5
         
+        print(f"[INFO] Processing task: type={task_type}, taskId={task_id}, fileMd5={file_md5}")
+        
         try:
             # Deduplicate processing for the same taskId within a TTL window
             if task_id:
                 dedupe_key = f"analysis:processed:{task_id}"
                 if rds.exists(dedupe_key):
-                    # Skip duplicate message
+                    print(f"[INFO] Skipping duplicate task: {task_id}")
                     continue
+            
             if task_type == 'IMAGE_AI':
+                print(f"[INFO] Starting IMAGE_AI processing for task {task_id}")
                 result = process_image_ai(task)
+                print(f"[INFO] IMAGE_AI processing completed for task {task_id}")
             elif task_type == 'VIDEO_TRADITIONAL_NOISE':
                 result = process_video_traditional(task)
             elif task_type == 'VIDEO_TRADITIONAL_FLOW':
@@ -377,25 +474,65 @@ def worker_loop():
                 result = { 'taskId': task_id, 'type': 'VIDEO_AI', 'status': 'NOT_IMPLEMENTED' }
             else:
                 raise ValueError(f'Unknown task type: {task_type}')
+            
             # Publish result
-            producer.send(RESULT_TOPIC, key=task_id, value={ 'success': True, 'data': result })
-            update_progress(progress_id, 100, 'Completed')
+            result_payload = {'success': True, 'data': result}
+            print(f"[INFO] Publishing result to Kafka topic '{RESULT_TOPIC}' with key '{task_id}'")
+            print(f"[DEBUG] Result payload: {json.dumps(result_payload, indent=2)}")
+            
+            future = producer.send(RESULT_TOPIC, key=task_id, value=result_payload)
+            # Wait for the message to be sent
+            record_metadata = future.get(timeout=10)
+            print(f"[SUCCESS] Result published successfully to topic '{record_metadata.topic}' partition {record_metadata.partition} offset {record_metadata.offset}")
+
+            # Determine whether to complete the parent progress or keep it below 100 for ongoing subtasks
+            sub_idx = int(task.get('subtaskIndex', 0) or 0)
+            total_sub = int(task.get('totalSubtasks', 0) or 0)
+            is_video_trad = isinstance(task_type, str) and task_type.startswith('VIDEO_TRADITIONAL_')
+            if is_video_trad and total_sub > 0:
+                if sub_idx >= total_sub:
+                    update_progress(progress_id, 100, 'Completed')
+                else:
+                    # Do not regress or complete; nudge to end of current window so UI sees progress
+                    try:
+                        pct = _calc_parent_progress(sub_idx, total_sub, 100)
+                        update_progress(progress_id, pct, f'Subtask {sub_idx}/{total_sub} completed')
+                    except Exception:
+                        pass
+            else:
+                update_progress(progress_id, 100, 'Completed')
+            
             if task_id:
                 try:
                     # Mark as processed for 24h
                     rds.setex(f"analysis:processed:{task_id}", 24*3600, '1')
-                except Exception:
-                    pass
+                    print(f"[DEBUG] Marked task {task_id} as processed in Redis")
+                except Exception as redis_err:
+                    print(f"[WARN] Failed to mark task as processed in Redis: {redis_err}")
+                    
         except Exception as e:
-            producer.send(RESULT_TOPIC, key=task_id, value={ 'success': False, 'error': str(e), 'task': task })
+            print(f"[ERROR] Task processing failed for {task_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            error_payload = {'success': False, 'error': str(e), 'task': task}
+            print(f"[INFO] Publishing error result to Kafka")
+            producer.send(RESULT_TOPIC, key=task_id, value=error_payload)
             update_progress(progress_id, 100, f'Failed: {e}')
 
 
 if __name__ == '__main__':
-    # Load models once
+    # Load models once at startup
+    print('Loading AI models...')
     try:
         load_models()
+        print(f'✓ Models loaded successfully: {list(api.models.keys())}')
     except Exception as e:
-        print('Model loading warning:', e)
+        print(f'✗ Model loading error: {e}')
+        import traceback
+        traceback.print_exc()
+    
     print('Starting Kafka worker...')
+    print(f'Listening to topics: {TOPIC_IMAGE_AI}, {TOPIC_VIDEO_TRAD}, {TOPIC_VIDEO_AI}')
+    print(f'Publishing results to: {RESULT_TOPIC}')
     worker_loop()

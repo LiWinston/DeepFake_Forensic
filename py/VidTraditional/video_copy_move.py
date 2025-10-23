@@ -203,7 +203,8 @@ def detect_copy_move(video_path: str,
                      output_dir: str,
                      num_keyframes: int = 30,
                      min_matches: int = 10,
-                     similarity_threshold: float = 0.8) -> Dict:
+                     similarity_threshold: float = 0.8,
+                     progress_callback=None) -> Dict:
     """
     Main function to detect copy-move forgery in video
     
@@ -252,6 +253,13 @@ def detect_copy_move(video_path: str,
             # Save visualization for suspicious frames
             output_frame_path = frames_dir / f"frame_{idx:04d}.png"
             cv2.imwrite(str(output_frame_path), vis_frame)
+
+        if progress_callback and (idx + 1) % max(1, num_keyframes // 6) == 0:
+            try:
+                local_pct = 25 + int(50 * ((idx + 1) / max(1, len(frames))))
+                progress_callback(local_pct, f"Copy-move analyzed {idx + 1}/{len(frames)} frames")
+            except Exception:
+                pass
     
     # Calculate detection score
     num_forged = sum(1 for r in detection_results if r['is_forged'])

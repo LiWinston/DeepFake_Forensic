@@ -314,14 +314,15 @@ const renderAiDetectionDetails = (task: AnalysisTask) => {
   }
 
   const { result, model, type } = resultData;
-  const prediction = result.prediction || 'Unknown';
+  const prediction = result.predicted_label || result.prediction || 'Unknown';
   const confidence = result.confidence || result.confidenceScore || 0;
   const probabilities = result.probabilities || result.class_probabilities || {};
+  const predictedClass = result.predicted_class;
 
   // Determine if it's AI-generated or real
-  const isAIGenerated = prediction.toLowerCase().includes('ai') || 
-                       prediction.toLowerCase().includes('fake') || 
-                       prediction.toLowerCase().includes('art');
+  // Class 0 = 'AI Art' (AI-generated), Class 1 = 'Real Art' (Authentic)
+  const isAIGenerated = predictedClass === 0 || 
+                       (prediction.toLowerCase().includes('ai') && !prediction.toLowerCase().includes('real'));
   
   return (
     <div>
@@ -375,32 +376,46 @@ const renderAiDetectionDetails = (task: AnalysisTask) => {
         <div style={{ marginBottom: 16 }}>
           <Title level={5}><BarChartOutlined /> Class Probabilities</Title>
           <Descriptions bordered size="small" column={1}>
-            {Object.entries(probabilities).map(([className, prob]: [string, any]) => (
-              <Descriptions.Item 
-                label={className} 
-                key={className}
-              >
-                <Space>
-                  <Text strong style={{ color: typeof prob === 'number' && prob > 0.5 ? '#ff4d4f' : '#52c41a' }}>
-                    {typeof prob === 'number' ? (prob * 100).toFixed(2) : prob}%
-                  </Text>
-                  <div style={{ 
-                    width: 200, 
-                    height: 20, 
-                    background: '#f0f0f0', 
-                    borderRadius: 4,
-                    overflow: 'hidden'
-                  }}>
+            {Object.entries(probabilities).map(([className, prob]: [string, any]) => {
+              // AI/Fake classes should be red when high probability
+              const isAIClass = className.toLowerCase().includes('ai') && !className.toLowerCase().includes('real');
+              const probValue = typeof prob === 'number' ? prob : 0;
+              const isHighProb = probValue > 0.5;
+              
+              // Color logic: AI class with high prob = red (danger), Real class with high prob = green (safe)
+              const textColor = isHighProb 
+                ? (isAIClass ? '#ff4d4f' : '#52c41a')
+                : '#8c8c8c';
+              const barColor = isAIClass ? '#ff4d4f' : '#52c41a';
+              
+              return (
+                <Descriptions.Item 
+                  label={className} 
+                  key={className}
+                >
+                  <Space>
+                    <Text strong style={{ color: textColor }}>
+                      {(probValue * 100).toFixed(2)}%
+                    </Text>
                     <div style={{ 
-                      width: `${typeof prob === 'number' ? prob * 100 : 0}%`, 
-                      height: '100%', 
-                      background: typeof prob === 'number' && prob > 0.5 ? '#ff4d4f' : '#52c41a',
-                      transition: 'width 0.3s'
-                    }} />
-                  </div>
-                </Space>
-              </Descriptions.Item>
-            ))}
+                      width: 200, 
+                      height: 20, 
+                      background: '#f0f0f0', 
+                      borderRadius: 4,
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{ 
+                        width: `${probValue * 100}%`, 
+                        height: '100%', 
+                        background: barColor,
+                        opacity: isHighProb ? 1 : 0.5,
+                        transition: 'width 0.3s'
+                      }} />
+                    </div>
+                  </Space>
+                </Descriptions.Item>
+              );
+            })}
           </Descriptions>
         </div>
       )}
