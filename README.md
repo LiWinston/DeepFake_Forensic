@@ -1,6 +1,82 @@
 # DeepFake Forensic Tool
 
-This repo runs infra (MySQL/Redis/Kafka/MinIO) in Docker and the backend locally with Java 17. The frontend runs with Node (npm). Follow these steps in order.
+A comprehensive forensic tool for detecting and analyzing deepfake, digitally altered, and synthetic media.
+
+## Architecture and Startup
+
+This project uses a hybrid deployment architecture with four main components:
+
+### Component Overview
+
+**1. Docker Infrastructure**
+- MySQL 8 (Database) on localhost:3306
+- Redis 7 (Cache) on localhost:6379
+- Kafka 3.9 (Message Queue) on localhost:9092
+- MinIO (Object Storage) on localhost:9000 (Console: localhost:9001)
+
+**2. Backend (Java 17 + Spring Boot)**
+- Runs locally on port 8082
+- Handles file uploads, authentication, metadata analysis
+
+**3. Frontend (React + TypeScript + Vite)**
+- Runs locally on port 3000
+- Provides user interface
+
+**4. Python Analysis Service (Flask + Kafka Worker)**
+- Flask API runs locally on port 7000
+- Kafka Worker consumes analysis tasks
+- Provides AI model inference and traditional video analysis
+
+### Complete Startup Steps
+
+**Step 1: Start Docker Infrastructure**
+```powershell
+# Windows PowerShell
+.\start-docker.ps1
+
+# Or clean start
+.\start-docker.ps1 -Clean
+
+# Check status
+.\status-docker.ps1
+```
+
+**Step 2: Start Backend**
+```powershell
+cd backend
+mvn clean compile
+
+# Set database password (must match Docker)
+$env:MYSQL_ROOT_PASSWORD="changeme"
+
+mvn spring-boot:run
+```
+
+Backend runs at: http://localhost:8082
+
+**Step 3: Start Frontend**
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend runs at: http://localhost:3000
+
+**Step 4: Start Python Analysis Service (Optional, for AI analysis)**
+```powershell
+# Terminal 1: Start Flask API
+cd py
+.\run-app.ps1
+
+# Terminal 2: Start Kafka Worker
+cd py
+.\run-worker.ps1
+```
+
+Python service runs at: http://localhost:7000
+
+---
 
 ## Backend
 
@@ -200,3 +276,9 @@ Notes:
 - The test environment is `jsdom` and configured in `frontend/vite.config.ts` under the `test` section.
 - Coverage excludes test files, config files, and main entry points to avoid 0% coverage on untested files.
 - Update the include pattern there if you prefer a different test folder layout.
+
+## License and Copyright
+
+This project is developed as part of an academic program. All intellectual property rights are subject to university and industry partner agreements. 
+
+For academic and educational purposes only. Unauthorized commercial use or redistribution is prohibited.
