@@ -51,6 +51,13 @@ graph TD
     subgraph Backend_Layer [后端层]
         SpringBoot[Spring Boot Core]:::backend
         
+        subgraph Core_Modules [通用业务模块]
+            direction TB
+            M_Auth[用户认证/JWT]:::subcomponent
+            M_Proj[多项目隔离管理]:::subcomponent
+            M_File[文件上传/分块]:::subcomponent
+        end
+
         subgraph Java_Analysis [Java 图像分析组件]
             direction TB
             J_Meta[元数据/文件头]:::subcomponent
@@ -79,9 +86,11 @@ graph TD
 
     %% 布局辅助 (强制顺序: 左->右)
     MinIO ~~~ Redis ~~~ Kafka ~~~ MySQL
+    SpringBoot ~~~ Core_Modules
     
     %% 垂直对齐辅助
     PyWorker ~~~ MinIO
+    Core_Modules ~~~ Java_Analysis
     Java_Analysis ~~~ MySQL
 
     %% 交互流
