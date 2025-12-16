@@ -34,45 +34,75 @@
 
 ```mermaid
 graph TD
-    User[用户浏览器]
-    
+    %% 样式配置
+    classDef actor fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
+    classDef frontend fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef backend fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#000
+    classDef ai fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
+    classDef data fill:#fffde7,stroke:#fbc02d,stroke-width:2px,color:#000
+    classDef subcomponent fill:#ffffff,stroke:#666,stroke-dasharray: 5 5,color:#333
+
+    User((用户/浏览器)):::actor
+
     subgraph Frontend_Layer [前端层]
-        ReactApp[React + Vite 应用]
-    end
-    
-    subgraph Backend_Layer [后端层]
-        SpringBoot[Spring Boot 后端服务]
-    end
-    
-    subgraph Data_Layer [数据与消息层]
-        MySQL[(MySQL 数据库)]
-        Redis[(Redis 缓存)]
-        Kafka{Kafka 消息队列}
-        MinIO[(MinIO 对象存储)]
-    end
-    
-    subgraph AI_Layer [AI 分析层]
-        PyWorker[Python Kafka Worker]
-        PyAPI[Python Flask API]
-        Models[AI 模型与算法]
+        ReactApp[React + Vite SPA]:::frontend
     end
 
-    User -->|用户交互| ReactApp
-    ReactApp -->|REST API| SpringBoot
+    subgraph Backend_Layer [后端层]
+        SpringBoot[Spring Boot Core]:::backend
+        
+        subgraph Java_Analysis [Java 图像分析组件]
+            direction LR
+            J_Meta[元数据/文件头]:::subcomponent
+            J_ELA[ELA/哈希校验]:::subcomponent
+        end
+    end
+
+    subgraph Data_Layer [数据与消息中间件]
+        direction LR
+        MySQL[(MySQL)]:::data
+        Redis[(Redis)]:::data
+        Kafka{Kafka MQ}:::data
+        MinIO[(MinIO)]:::data
+    end
+
+    subgraph AI_Layer [AI 分析层]
+        PyWorker[Python Worker]:::ai
+        PyAPI[Flask API]:::ai
+        
+        subgraph Models [分析引擎]
+            direction LR
+            AI_DL[深度学习模型<br/>Tiny/Nano CNN]:::subcomponent
+            AI_Trad[传统视频算法<br/>噪声/光流/频域/时序]:::subcomponent
+        end
+    end
+
+    %% 交互流
+    User ==> ReactApp
+    ReactApp ==>|REST| SpringBoot
     
-    SpringBoot -->|元数据读写| MySQL
-    SpringBoot -->|缓存/进度查询| Redis
-    SpringBoot -->|文件上传| MinIO
-    SpringBoot -->|发布分析任务| Kafka
-    SpringBoot -->|消费分析结果| Kafka
+    %% 核心数据流
+    SpringBoot -->|元数据/结果持久化| MySQL
+    SpringBoot -->|缓存/进度| Redis
+    SpringBoot -->|文件存储| MinIO
+    SpringBoot ==>|生产分析任务| Kafka
     
-    Kafka -->|消费任务| PyWorker
-    PyWorker -->|发布结果| Kafka
+    %% Java 内部异步流 (修正: 明确消费与入库)
+    Kafka ==>|消费任务| Java_Analysis
+    Java_Analysis -->|分析结果直接入库| MySQL
+    
+    %% Python 异步流 (修正: 明确结果回传路径)
+    Kafka ==>|消费任务| PyWorker
+    PyWorker -->|下载文件| MinIO
+    PyWorker --> Models
     PyWorker -->|更新进度| Redis
-    PyWorker -->|获取文件| MinIO
-    PyWorker -->|模型推理| Models
+    PyWorker -->|分析结果回传| Kafka
     
-    PyAPI -.->|直接 API 调用 可选| SpringBoot
+    %% 结果回收
+    Kafka -.->|消费 Python 结果| SpringBoot
+    
+    %% 辅助连接
+    PyAPI -.-> SpringBoot
 ```
 
 ### 架构说明
