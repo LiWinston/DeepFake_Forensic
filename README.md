@@ -52,7 +52,7 @@ graph TD
         SpringBoot[Spring Boot Core]:::backend
         
         subgraph Java_Analysis [Java 图像分析组件]
-            direction LR
+            direction TB
             J_Meta[元数据/文件头]:::subcomponent
             J_ELA[ELA/哈希校验]:::subcomponent
         end
@@ -60,10 +60,10 @@ graph TD
 
     subgraph Data_Layer [数据与消息中间件]
         direction LR
-        MySQL[(MySQL)]:::data
+        MinIO[(MinIO)]:::data
         Redis[(Redis)]:::data
         Kafka{Kafka MQ}:::data
-        MinIO[(MinIO)]:::data
+        MySQL[(MySQL)]:::data
     end
 
     subgraph AI_Layer [AI 分析层]
@@ -71,32 +71,39 @@ graph TD
         PyAPI[Flask API]:::ai
         
         subgraph Models [分析引擎]
-            direction LR
+            direction TB
             AI_DL[深度学习模型<br/>Tiny/Nano CNN]:::subcomponent
             AI_Trad[传统视频算法<br/>噪声/光流/频域/时序]:::subcomponent
         end
     end
 
+    %% 布局辅助 (强制顺序: 左->右)
+    MinIO ~~~ Redis ~~~ Kafka ~~~ MySQL
+    
+    %% 垂直对齐辅助
+    PyWorker ~~~ MinIO
+    Java_Analysis ~~~ MySQL
+
     %% 交互流
     User ==> ReactApp
     ReactApp ==>|REST| SpringBoot
     
-    %% 核心数据流
-    SpringBoot -->|元数据/结果持久化| MySQL
-    SpringBoot -->|缓存/进度| Redis
+    %% Spring Boot -> Data Layer
     SpringBoot -->|文件存储| MinIO
+    SpringBoot -->|缓存/进度| Redis
     SpringBoot ==>|生产分析任务| Kafka
+    SpringBoot -->|元数据/结果持久化| MySQL
     
-    %% Java 内部异步流 (修正: 明确消费与入库)
+    %% Java Analysis (右侧流)
     Kafka ==>|消费任务| Java_Analysis
     Java_Analysis -->|分析结果直接入库| MySQL
     
-    %% Python 异步流 (修正: 明确结果回传路径)
+    %% Python Worker (左侧流)
     Kafka ==>|消费任务| PyWorker
     PyWorker -->|下载文件| MinIO
-    PyWorker --> Models
     PyWorker -->|更新进度| Redis
     PyWorker -->|分析结果回传| Kafka
+    PyWorker --> Models
     
     %% 结果回收
     Kafka -.->|消费 Python 结果| SpringBoot
