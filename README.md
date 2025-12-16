@@ -6,6 +6,49 @@ A comprehensive forensic tool for detecting and analyzing deepfake, digitally al
 
 This project uses a hybrid deployment architecture with four main components:
 
+```mermaid
+graph TD
+    User[User / Browser]
+    
+    subgraph Frontend_Layer [Frontend Layer]
+        ReactApp[React + Vite App]
+    end
+    
+    subgraph Backend_Layer [Backend Layer]
+        SpringBoot[Spring Boot Backend]
+    end
+    
+    subgraph Data_Layer [Data & Messaging]
+        MySQL[(MySQL Database)]
+        Redis[(Redis Cache)]
+        Kafka{Kafka Message Broker}
+        MinIO[(MinIO Object Storage)]
+    end
+    
+    subgraph AI_Layer [AI Analysis Layer]
+        PyWorker[Python Kafka Worker]
+        PyAPI[Python Flask API]
+        Models[AI Models & Algorithms]
+    end
+
+    User -->|Interacts| ReactApp
+    ReactApp -->|REST API| SpringBoot
+    
+    SpringBoot -->|Read/Write Metadata| MySQL
+    SpringBoot -->|Cache/Progress| Redis
+    SpringBoot -->|Upload Files| MinIO
+    SpringBoot -->|Publish Tasks| Kafka
+    SpringBoot -->|Consume Results| Kafka
+    
+    Kafka -->|Consume Tasks| PyWorker
+    PyWorker -->|Publish Results| Kafka
+    PyWorker -->|Update Progress| Redis
+    PyWorker -->|Fetch Files| MinIO
+    PyWorker -->|Inference| Models
+    
+    PyAPI -.->|"Direct API (Optional)"| SpringBoot
+```
+
 ### Component Overview
 
 **1. Docker Infrastructure**
